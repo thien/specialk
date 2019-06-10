@@ -1,0 +1,4 @@
+{
+    "_comment:" : "glove_path: location of the glove file (unzipped) to use.",
+    "glove_path" : "/media/data/Datasets/glove/glove.6B.50d.txt"
+}

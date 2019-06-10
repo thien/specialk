@@ -254,8 +254,6 @@ class Metrics:
     # content preservation
     # naturalness
 
-    @staticmethod
-
 
 
 if __name__ == "__main__":

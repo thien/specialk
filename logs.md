@@ -2,7 +2,7 @@
 
 - Downloaded 40K Guardian articles.
 - Started refactoring Back Translation code since it was built for an earlier version of PyTorch. Currently working on porting the OpenMNT parts of the code (for now, translation). 
-
+- Retraining models to get french political data. (They're not provided in the datasets).
 
 ## 6/10
 

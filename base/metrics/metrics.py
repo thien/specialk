@@ -7,9 +7,20 @@ class Metrics:
     def __init__(self):
         self.running = True
 
+    def load(self):
+        self.load_config()
+        self.load_glove()
+        self.load_spacy()
+        self.load_syllables_dict()
+        return self
+
     def load_config(self):
+        """
+        Loads config file.
+        """
         with open("../config.json", "r") as file:
             self.config = json.load(file)
+        return self
 
     def load_glove(self):
         """
@@ -19,6 +30,7 @@ class Metrics:
         # also does not require creating a new file.
         df = pd.read_csv(config['glove_path'], sep=" ", quoting=3, header=None, index_col=0)
         self.glove = {key: val.values for key, val in df.T.items()}
+        return self
 
     def load_spacy(self):
         # load spacy model if it isn't in memory yet.
@@ -27,10 +39,12 @@ class Metrics:
             self.sentencizer = self.spacy.create_pipe("sentencizer")
             self.spacy.add_pipe(self.sentencizer)
             self.tokenizer = self.spacy.create_pipe("tokenizer")
+        return self
 
-    def load_syllable_dict(self):
+    def load_syllables_dict(self):
         from nltk.corpus import cmudict
         self.cmudict = cmudict.dict()
+        return self
 
     def word_movers_distance(self, document1, document2):
         """
@@ -143,7 +157,7 @@ class Metrics:
             matches: None if nothing is found,
                     [(match pairs)] otherwise.
         """
-         if type(tokens) != spacy.tokens.doc.Doc:
+        if type(tokens) != spacy.tokens.doc.Doc:
             print("Warning: this is not a spacy processed input sequence. Manually processing..")
             tokens = self.spacy(tokens)
 
@@ -257,3 +271,4 @@ class Metrics:
 
 
 if __name__ == "__main__":
+    print("You shouldn't be running this directly.")

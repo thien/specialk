@@ -1,3 +1,9 @@
+## 7/10
+
+- Downloaded 40K Guardian articles.
+- Started refactoring Back Translation code since it was built for an earlier version of PyTorch. Currently working on porting the OpenMNT parts of the code (for now, translation). 
+
+
 ## 6/10
 
 - Added readability scores, word mover's distance, and mechanisms to load SpaCy and GloVe datasets.

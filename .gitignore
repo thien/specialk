@@ -1,2 +1,5 @@
 .pytest_cache
 .ipynb_checkpoints
+*.tar
+*.pt
+*.dict

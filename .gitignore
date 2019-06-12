@@ -5,3 +5,6 @@ __pycache__
 *.tar
 *.pt
 *.dict
+*.txt
+*.fr
+*.en

@@ -1,4 +1,13 @@
-## 7/10
+## 6/12
+
+- Waiting for models to finish translating the datasets; moved to GPU now.
+- Looking into large length machine translation datasets for eventual use with the transformers for back translation:
+    - [Canadian Hansards](https://www.isi.edu/natural-language/download/hansard/)
+    - [EUROPARL](http://www.statmt.org/europarl/)
+    - [Global Voices](casmacat.eu/corpus/global-voices.html) is the most intriguing one since it's a parallel corpus of news articles. This may help to retain more nuanced information such at the lexical relationships between nouns within the same paragraph for instance.
+- _Note to self:_ Once the models are trained, you'll want to explore the OMT models in more detail since they only have the trained weights and the source code. 
+
+## 6/11
 
 - Downloaded 40K Guardian articles.
 - Started refactoring Back Translation code since it was built for an earlier version of PyTorch. Currently working on porting the OpenMNT parts of the code (for now, translation). 

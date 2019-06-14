@@ -1,3 +1,15 @@
+## 6/14
+
+- Retrained the models and the error remains. Since the majority of this codebase is taken from `OpenMNT-py` on GitHub I'm looking into porting the relevant code from there and using that instead.
+- However, some data from the original paper is missing (e.g. the valuation dataset for the neural classifier) so for now I'm spliting `classtrain.txt` since there is around 80K sequences. Currently using a 4:1 split. Currently writing writing split code.
+
+## 6/13
+
+- More refactoring in the models as `train_decoder.py` wasn't calculating softmax values in the right dimension (since the default values are deprecated from an earlier version of PyTorch.)
+- Had to recompute some of the model outputs since they were corrupted (computer randomly shut off).
+- Presently there's an issue with the encoder model reporting an accuracy of 0%, looking into some of the outputs it looks like it's reporting issues with predicting the right output which may correlate with the erroneous softmax outputs. We'll have to see if it changes after recomputing the model outputs.
+- Since the models output the responses to a plaintext file it shouldn't be difficult to port the models into the transformer.
+
 ## 6/12
 
 - Waiting for models to finish translating the datasets; moved to GPU now.

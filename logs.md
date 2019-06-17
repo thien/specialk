@@ -1,7 +1,30 @@
+## 6/17
+
+- Finished rerunning the models to verify source code integrity for the style transfer through back translation method. It does seem to work but as mentioned earlier, there isn't a copy of the original machine translation dataset they used. They only provided a pre-trained model. This might be because it took them forever to train.
+- We'll need to start with making our own machine-translation dataset. Since this alone is (although "solved") difficult we'll have to determine the most appropiate method of training the models.
+- We'll need to have models to look like the following:
+
+        seq2seq model
+        - sentence level
+        - paragraph level
+        transformer model
+        - sentence level
+        - paragraph level
+        - document level
+
+- Fortunately, we have access to some datasets that might be able to help us with sentence level. Paragraph level gets a bit trickier. 
+- Currently using:
+    - europarl
+    - [hansards](https://www.isi.edu/natural-language/download/hansard/)
+    - global voices (need to filter)
+
+
 ## 6/14
 
 - Retrained the models and the error remains. Since the majority of this codebase is taken from `OpenMNT-py` on GitHub I'm looking into porting the relevant code from there and using that instead.
 - However, some data from the original paper is missing (e.g. the valuation dataset for the neural classifier) so for now I'm spliting `classtrain.txt` since there is around 80K sequences. Currently using a 4:1 split. Currently writing writing split code.
+- Ported `style_transfer/classifier` and translated any deprecated code from PyTorch.
+- Trained the classifier.
 
 ## 6/13
 

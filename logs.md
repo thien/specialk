@@ -1,7 +1,8 @@
 ## 6/18
 
-- built data cleaning mechanism for global voices dataset. 
-- created bash script to download the global voices dataset, and deal with cleaning it.
+- built data cleaning mechanism for global voices, hansards, and europarl dataset. 
+- created bash script to download the global voices dataset, and deal with cleaning it. Also the case for hansards and europarl.
+- next steps would be to write some code to tokenise the datasets and create a feeder to a model.
 
 ## 6/17
 

@@ -33,8 +33,10 @@ for folder in paths:
         with open(fr_file, encoding=enc) as f, open(en_file, encoding=enc) as r:
             for f_txt, e_txt in zip(f,r):
                 f_txt, e_txt = f_txt.strip(), e_txt.strip()
-                """note: "Neither the sentence splitting nor the alignments are perfect. In particular, watch out for pairs that differ considerably in length. You may want to filter these out before you do any statistical training." -> https://www.isi.edu/natural-language/download/hansard/"""
                 if len(f_txt) < 1 or len(e_txt) < 1:
+                    continue
+                """note: "Neither the sentence splitting nor the alignments are perfect. In particular, watch out for pairs that differ considerably in length. You may want to filter these out before you do any statistical training." -> https://www.isi.edu/natural-language/download/hansard/"""
+                if len(f_txt)/len(e_txt) < 0.6 or len(e_txt)/len(f_txt) < 0.6:
                     continue
                 corpus[e_txt] = f_txt
 

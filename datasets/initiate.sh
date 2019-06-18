@@ -8,6 +8,7 @@ mkdir -p newspapers
 #
 
 # download global_voices dataset
+mkdir -p machine_translation/global_voices
 if [ -e machine_translation/global_voices/dataset.tgz ]
 then
     echo "already downloaded global voices corpus."
@@ -79,4 +80,25 @@ else
     python3 scrape.py
     echo " done."
     cd ../..
+fi
+
+
+#
+#   EUROPARL
+#
+
+# check if the corpus is downloaded
+mkdir -p machine_translation/europarl
+if [ -e machine_translation/europarl/fr-en.tgz ]
+then
+    echo "europarl corpus already downloaded."
+else
+    echo -n "downloading europarl... "
+    cd machine_translation/europarl
+    wget -q http://www.statmt.org/europarl/v7/fr-en.tgz
+    tar -xvf fr-en.tgz
+    mv europarl-v7.fr-en.en europarl.en
+    mv europarl-v7.fr-en.fr europarl.fr
+    cd ../..
+    echo "done."
 fi

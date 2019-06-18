@@ -102,3 +102,32 @@ else
     cd ../..
     echo "done."
 fi
+
+
+#
+# MERGING DATASETS
+#
+
+if [ -e machine_translation/corpus_enfr.en ]
+then
+    echo "corpus already merged."
+else
+    echo -n "merging datasets.."
+    cd machine_translation
+    cat europarl/europarl.en global_voices/globalvoices.en hansards/hansards.en > corpus_enfr.en
+    cat europarl/europarl.fr global_voices/globalvoices.fr hansards/hansards.fr > corpus_enfr.fr
+    echo " done."
+    echo -n "number of sequences: "
+    wc -l < corpus_enfr.en
+    cd ..
+fi 
+
+#
+# TOKENISING
+#
+# for l in en fr; do for f in machine_translation/*.$l; do if [[ "$f" != *"test"* ]]; then sed -i "$ d" $f; fi;  done; done
+for l in en fr
+    do for f in machine_translation/*.$l
+        do perl tokenizer.perl -a -no-escape -l $l -q  < $f > $f.atok
+    done
+done

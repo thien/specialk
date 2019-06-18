@@ -3,6 +3,9 @@
 - built data cleaning mechanism for global voices, hansards, and europarl dataset. 
 - created bash script to download the global voices dataset, and deal with cleaning it. Also the case for hansards and europarl.
 - next steps would be to write some code to tokenise the datasets and create a feeder to a model.
+- using moses tokeniser perl code to tokenise [french](https://github.com/moses-smt/mosesdecoder/blob/master/scripts/share/nonbreaking_prefixes/nonbreaking_prefix.fr) and [english](https://github.com/moses-smt/mosesdecoder/blob/master/scripts/share/nonbreaking_prefixes/nonbreaking_prefix.en).
+- added moses tokeniser source code.
+- TODO: need code to deal with splitting the dataset into train valid test.
 
 ## 6/17
 

@@ -12,3 +12,4 @@ datasets/machine_translation/global_voices/training/*
 *.tgz
 .fuse_*
 *.pyc
+*.atok

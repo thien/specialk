@@ -8,3 +8,7 @@ __pycache__
 *.txt
 *.fr
 *.en
+datasets/machine_translation/global_voices/training/*
+*.tgz
+.fuse_*
+*.pyc

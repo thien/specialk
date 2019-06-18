@@ -125,9 +125,18 @@ fi
 #
 # TOKENISING
 #
-# for l in en fr; do for f in machine_translation/*.$l; do if [[ "$f" != *"test"* ]]; then sed -i "$ d" $f; fi;  done; done
-for l in en fr
-    do for f in machine_translation/*.$l
-        do perl tokenizer.perl -a -no-escape -l $l -q  < $f > $f.atok
+if [ -e machine_translation/corpus_enfr.en.atok ]
+then 
+    echo "corpus already tokenised."
+else
+    echo -n "performing sed.. "
+    for l in en fr; do for f in machine_translation/*.$l; do if [[ "$f" != *"test"* ]]; then sed -i "$ d" $f; fi;  done; done
+    echo "done. "
+    echo -n "tokenising corpus.. "
+    for l in en fr
+        do for f in machine_translation/*.$l
+            do perl tokenizer.perl -a -no-escape -l $l -q  < $f > $f.atok
+        done
     done
-done
+    echo "done. "
+fi

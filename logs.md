@@ -1,3 +1,15 @@
+
+## 6/20
+
+- Added `preprocess.py` to deal with turning mose style data into something that can be interpreted 
+  by the models.
+- Added support for byte-pair encoding thanks to some open source code on GitHub (cites are there).
+
+## 6/19
+
+- Added `splitter.py` to deal with breaking datasets.
+- Added `splitter.py` command to run in `initiate.sh`.
+
 ## 6/18
 
 - built data cleaning mechanism for global voices, hansards, and europarl dataset. 

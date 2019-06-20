@@ -140,3 +140,12 @@ else
     done
     echo "done. "
 fi
+
+if [ -e machine_translation/corpus_enfr.train.en ]
+then
+    echo "dataset already created."
+else
+    echo "splitting dataset into training, validation and test data."
+    python3 splitter.py -source_a machine_translation/corpus_enfr.en.atok -source_b machine_translation/corpus_enfr.fr.atok -a_label en -b_label fr -verbose $true
+    echo "finished splitting dataset into training, validation, and test data."
+fi

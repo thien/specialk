@@ -11,12 +11,12 @@ parser = argparse.ArgumentParser(description='translate.py')
 
 ## When using english-french trained MT model, uncomment -model
 ## and comment -encoder_model and -decoder_model
-parser.add_argument('-model', required=True,
-                   help='Path to model .pt file')
-# parser.add_argument('-encoder_model', required=True,
-#                     help='Path to model .pt file')
-# parser.add_argument('-decoder_model', required=True,
-#                     help='Path to model .pt file')
+# parser.add_argument('-model', required=True,
+                #    help='Path to model .pt file')
+parser.add_argument('-encoder_model', required=True,
+                    help='Path to model .pt file')
+parser.add_argument('-decoder_model', required=True,
+                    help='Path to model .pt file')
 parser.add_argument('-src',   required=True,
                     help='Source sequence to decode (one line per sequence)')
 parser.add_argument('-tgt',
@@ -26,7 +26,7 @@ parser.add_argument('-output', default='pred_alt.txt',
                     be the decoded sequence""")
 parser.add_argument('-beam_size',  type=int, default=5,
                     help='Beam size')
-parser.add_argument('-batch_size', type=int, default=30,
+parser.add_argument('-batch_size', type=int, default=5,
                     help='Batch size')
 parser.add_argument('-max_sent_length', type=int, default=100,
                     help='Maximum sentence length.')
@@ -63,8 +63,8 @@ def main():
     if opt.cuda:
         torch.cuda.set_device(opt.gpu)
 
-    translator = onmt.Translator(opt)
-    # translator = onmt.Translator_style(opt)
+    # translator = onmt.Translator(opt)
+    translator = onmt.Translator_style(opt)
 
     outF = codecs.open(opt.output, 'w', 'utf-8')
 
@@ -95,7 +95,7 @@ def main():
         
         # translate sequence.
         predBatch, predScore, goldScore = translator.translate(srcBatch, tgtBatch)
-
+        # print("SCORES:", predBatch, predScore, goldScore)
         # calculate sequence translation prediction. 
         predScoreTotal += sum(score[0] for score in predScore)
         predWordsTotal += sum(len(x[0]) for x in predBatch)
@@ -133,6 +133,8 @@ def main():
                 print('')
 
         srcBatch, tgtBatch = [], []
+
+        # w
 
     reportScore('PRED', predScoreTotal, predWordsTotal)
     if tgtF:

@@ -5,9 +5,10 @@ import codecs
 
 parser = argparse.ArgumentParser(description='preprocess.py')
 
-##
-## **Preprocess Options**
-##
+"""
+`preprocess.py` deals with parsing the dataset such that we can feed them
+into our models.
+"""
 
 parser.add_argument('-config',    help="Read options from this file")
 
@@ -50,8 +51,9 @@ opt = parser.parse_args()
 torch.manual_seed(opt.seed)
 
 def makeVocabulary(filename, size):
-    vocab = onmt.Dict([onmt.Constants.PAD_WORD, onmt.Constants.UNK_WORD,
-                       onmt.Constants.BOS_WORD, onmt.Constants.EOS_WORD], lower=opt.lower)
+    vocab = onmt.Dict([onmt.Constants.PAD_WORD,                                         onmt.Constants.UNK_WORD,
+                       onmt.Constants.BOS_WORD, onmt.Constants.EOS_WORD],
+                       lower=opt.lower)
 
     with codecs.open(filename, "r", "utf-8") as f:
         for sent in f.readlines():
@@ -91,65 +93,57 @@ def saveVocabulary(name, vocab, file):
     print('Saving ' + name + ' vocabulary to \'' + file + '\'...')
     vocab.writeFile(file)
 
+
 def makeData(srcFile, tgtFile, srcDicts, tgtDicts):
-    src, tgt = [], []
-    sizes = []
+    src, tgt, sizes = [], [], []
     count, ignored = 0, 0
 
     print('Processing %s & %s ...' % (srcFile, tgtFile))
-    srcF = codecs.open(srcFile, "r", "utf-8")
-    tgtF = codecs.open(tgtFile, "r", "utf-8")
+    source_file = codecs.open(srcFile, "r", "utf-8")
+    target_file = codecs.open(tgtFile, "r", "utf-8")
 
     while True:
-        sline = srcF.readline()
-        tline = tgtF.readline()
-
-        # normal end of file
-        if sline == "" and tline == "":
+        # read lines.
+        source_line, target_line = source_file.readline(), target_file.readline()
+        # if there's nothing on the lines then we're reached the end of file.
+        if source_line == "" and target_line == "":
             break
-
         # source or target does not have same number of lines
-        if sline == "" or tline == "":
+        if source_line == "" or target_line == "":
             print('WARNING: source and target do not have the same number of sentences')
             break
-
-        sline = sline.strip()
-        tline = tline.strip()
-
+        # remove trailing spaces.
+        source_line, target_line = source_line.strip(),  target_line.strip()
         # source and/or target are empty
-        if sline == "" or tline == "":
+        if source_line == "" or target_line == "":
             print('WARNING: ignoring an empty line ('+str(count+1)+')')
             continue
-
-        srcWords = sline.split()
-        tgtWords = tline.split()
-
-        if len(srcWords) <= opt.seq_length and len(tgtWords) <= opt.seq_length:
-
-            src += [srcDicts.convertToIdx(srcWords,
-                                          onmt.Constants.UNK_WORD)]
-            tgt += [tgtDicts.convertToIdx(tgtWords,
+        # split tokens by spaces. 
+        source_tokens, target_tokens = source_line.split(), target_line.split()
+        # check if the sentence is within range.
+        if len(source_tokens) <= opt.seq_length and len(target_tokens) <= opt.seq_length:
+            # add token sequences to dictionary.
+            src += [srcDicts.convertToIdx(source_tokens,onmt.Constants.UNK_WORD)]
+            tgt += [tgtDicts.convertToIdx(target_tokens,
                                           onmt.Constants.UNK_WORD,
                                           onmt.Constants.BOS_WORD,
                                           onmt.Constants.EOS_WORD)]
-
-            sizes += [len(srcWords)]
+            sizes += [len(source_tokens)]
         else:
             ignored += 1
-
+        # increment and show status when needed.
         count += 1
-
         if count % opt.report_every == 0:
             print('... %d sentences prepared' % count)
 
-    srcF.close()
-    tgtF.close()
+    source_file.close()
+    target_file.close()
 
     if opt.shuffle == 1:
         print('... shuffling sentences')
         perm = torch.randperm(len(src))
-        src = [src[idx] for idx in perm]
-        tgt = [tgt[idx] for idx in perm]
+        src   = [src[idx]   for idx in perm]
+        tgt   = [tgt[idx]   for idx in perm]
         sizes = [sizes[idx] for idx in perm]
 
     print('... sorting sentences by size')
@@ -163,7 +157,6 @@ def makeData(srcFile, tgtFile, srcDicts, tgtDicts):
     return src, tgt
 
 def main():
-
     dicts = {}
     print('Preparing source vocab ....')
     dicts['src'] = initVocabulary('source', opt.train_src, opt.src_vocab,
@@ -171,7 +164,6 @@ def main():
     print('Preparing target vocab ....')
     dicts['tgt'] = initVocabulary('target', opt.train_tgt, opt.tgt_vocab,
                                   opt.tgt_vocab_size)
-
 
     print('Preparing training ...')
     train = {}
@@ -195,7 +187,6 @@ def main():
                  'valid': valid,
                 }
     torch.save(save_data, opt.save_data + '.train.pt')
-
 
 if __name__ == "__main__":
     main()

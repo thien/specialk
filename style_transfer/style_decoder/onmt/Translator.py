@@ -19,11 +19,11 @@ class Translator(object):
         decoder = onmt.Models.Decoder(model_opt, self.tgt_dict)
         model = onmt.Models.NMTModel(encoder, decoder)
 
+        # @ change here.
         generator = nn.Sequential(
             nn.Linear(model_opt.rnn_size, self.tgt_dict.size()),
             nn.LogSoftmax(dim=1))
 
-        # print(checkpoint.keys())
         if "model" in checkpoint.keys():
             model.load_state_dict(checkpoint['model'])
             
@@ -100,6 +100,7 @@ class Translator(object):
             decOut, decStates, attn = self.model.decoder(
                 tgtBatch[:-1], decStates, context, initOutput)
             for dec_t, tgt_t in zip(decOut, tgtBatch[1:].data):
+                # print("WOAH:", dec_t.shape)
                 gen_t = self.model.generator.forward(dec_t)
                 tgt_t = tgt_t.unsqueeze(1)
                 scores = gen_t.data.gather(1, tgt_t)
@@ -134,12 +135,17 @@ class Translator(object):
             decOut, decStates, attn = self.model.decoder(input, decStates, context, decOut)
             # decOut: 1 x (beam*batch) x numWords
             decOut = decOut.squeeze(0)
+            # print("DECOUT:", decOut.shape)
             out = self.model.generator.forward(decOut)
-
+            # print("0:",decOut.shape, out.shape)
             # batch x beam x numWords
             wordLk = out.view(beamSize, remainingSents, -1).transpose(0, 1).contiguous()
             attn = attn.view(beamSize, remainingSents, -1).transpose(0, 1).contiguous()
 
+            # print(wordLk.shape)
+            # print(wordLk)
+            # print("argmax:", torch.argmax(wordLk, dim=2))
+            # w
             active = []
             for b in range(batchSize):
                 if beam[b].done:
@@ -210,11 +216,13 @@ class Translator(object):
 
         #  (3) convert indexes to words
         predBatch = []
+        # print("SRC:", src[0])
+        # print("PRED:", pred)
         for b in range(src[0].size(1)):
-            # print(pred[b])
             predBatch.append(
                 [self.buildTargetTokens(pred[b][n], srcBatch[b], attn[b][n])
                         for n in range(self.opt.n_best)]
             )
+            
 
         return predBatch, predScore, goldScore

@@ -6,7 +6,9 @@ from torch.nn.utils.rnn import pad_packed_sequence as unpack
 from torch.nn.utils.rnn import pack_padded_sequence as pack
 
 class Encoder(nn.Module):
-
+    """
+    LSTM Encoder.
+    """
     def __init__(self, opt, dicts):
         self.layers = opt.layers
         self.num_directions = 2 if opt.brnn else 1
@@ -30,6 +32,7 @@ class Encoder(nn.Module):
 
     def forward(self, input, hidden=None):
         if isinstance(input, tuple):
+            # print(input)
             emb = pack(self.word_lut(input[0]), input[1])
         else:
             emb = self.word_lut(input)

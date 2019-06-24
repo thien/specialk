@@ -60,8 +60,7 @@ def load_file(filepath, max_sequence_limit, formatting, case_sensitive=True):
             else:
                 sequences.append(None)
             count += 1
-            # if count > breaker:
-            #     break
+
 
     print('[Info] Loaded {} sequences from {}'.format(len(sequences),filepath))
 
@@ -208,5 +207,5 @@ if __name__ == "__main__":
 
     # dump information.
     print('[Info] Dumping the processed data to pickle file', opt.save_data)
-    # torch.save(data, opt.save_data)
+    torch.save(data, opt.save_data + ".pt")
     print('[Info] Done.')

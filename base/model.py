@@ -6,22 +6,21 @@ init does have some logic in it.
 
 import torch
 import core.constants as constants
+from core.dataset import TranslationDataset, paired_collate_fn
 import os
+import torch.utils.data
+import datetime
 
 class Model:
-    def __init__(self, opt):
+    def __init__(self, opt, models_folder="models"):
         self.opt = opt
         self.device = torch.device('cuda' if opt.cuda else 'cpu')
         self.constants = constants
-        self.opt.dir = self.mkdir(opt.model)
+        self.opt.directory = self.make_dir(stores=models_folder)
         
-    @staticmethod
-    def make_dir(self, path):
-        """
-        makes a directory model data will be in.
-        """
-        directory_name = ""
-        os.mkdir(path)
+    # -------------------------
+    # OVERLOADED FUNCTIONS
+    # -------------------------
 
     def load(self):
         """
@@ -69,13 +68,64 @@ class Model:
         print("[Warning]: save() is not implemented.")
         return self
 
+    # ----------------------------
+    # BASE FUNCTIONS
+    # ----------------------------
+
+    def make_dir(self, stores):
+        """
+        makes a directory model data will be in.
+        """
+        # setup parent directory
+        basepath = os.path.abspath(os.getcwd())
+        basepath = os.path.join(basepath, stores)
+        # setup current model directory
+        directory_name = self.opt.model
+        directory_name += " " + datetime.datetime.now().strftime("%y-%m-%d-%H-%M")
+        directory = os.path.join(basepath, directory_name)
+        # create container for that folder.
+        os.mkdir(directory)
+        return directory
+
+    def init_logs(self):
+        """
+        If called, saves output logs to file.
+        """
+        self.log_train_file = self.opt.log + ".train.log"
+        self.log_valid_file = self.opt.log + ".valid.log"
+        print('[Info] Training performance will be written to file: {} and {}'.format(
+            self.log_train_file, self.log_valid_file))
+
+        with open(self.log_train_file, 'w') as log_tf, open(self.log_valid_file, 'w') as log_vf:
+            log_tf.write('epoch,loss,ppl,accuracy\n')
+            log_vf.write('epoch,loss,ppl,accuracy\n')
+
+    def update_logs(self, train_stats, valid_stats, epoch_i):
+        """
+        called within train(). Updates results into log files.
+        Assumes that 
+        """
+        train_loss, train_acc = train_stats
+        valid_loss, valid_acc = valid_stats
+        # deal with logs
+        if self.log_train_file and self.log_valid_file:
+            with open(log_train_file, 'a') as log_tf, open(log_valid_file, 'a') as log_vf:
+                log_tf.write('{epoch},{loss: 8.5f},{ppl: 8.5f},{accu:3.3f}\n'.format(
+                    epoch=epoch_i, loss=train_loss,
+                    ppl=math.exp(min(train_loss, 100)), accu=100*train_accu))
+                log_vf.write('{epoch},{loss: 8.5f},{ppl: 8.5f},{accu:3.3f}\n'.format(
+                    epoch=epoch_i, loss=valid_loss,
+                    ppl=math.exp(min(valid_loss, 100)), accu=100*valid_accu))
+        else:
+            print("[Warning] log files are not initiated. No updates are kept into storage.")
+
     def load_data(self):
         """
         Loads PyTorch pickled file, representing the dataset.
         """
         data = torch.load(self.opt.data)
         # the token sequence length is determined by `preprocess.py`
-        opt.max_token_seq_len = data['settings'].max_token_seq_len
+        self.opt.max_token_seq_len = data['settings'].max_token_seq_len
         datasets = self.init_dataloaders(data, self.opt)
         self.training_data, self.validation_data = datasets
         return self
@@ -83,5 +133,33 @@ class Model:
     @staticmethod
     def init_dataloaders(data, opt):
         """
-        Creates memory efficient dataloaders for feeding into the models.
+        Initiates memory efficient dataloaders for feeding 
+        into the models.
         """
+        train_loader = torch.utils.data.DataLoader(
+            TranslationDataset(
+                src_word2idx=data['dict']['src'],
+                tgt_word2idx=data['dict']['tgt'],
+                src_insts=data['train']['src'],
+                tgt_insts=data['train']['tgt']),
+            num_workers=2,
+            batch_size=opt.batch_size,
+            collate_fn=paired_collate_fn,
+            shuffle=True)
+
+        valid_loader = torch.utils.data.DataLoader(
+            TranslationDataset(
+                src_word2idx=data['dict']['src'],
+                tgt_word2idx=data['dict']['tgt'],
+                src_insts=data['valid']['src'],
+                tgt_insts=data['valid']['tgt']),
+            num_workers=2,
+            batch_size=opt.batch_size,
+            collate_fn=paired_collate_fn)
+        
+        # validate the tables if weight sharing flag is called.
+        if opt.embs_share_weight:
+            assert train_loader.dataset.src_word2idx == train_loader.dataset.tgt_word2idx, \
+                'The src/tgt word2idx table are different but you asked to share the word embeddings.'
+
+        return train_loader, valid_loader

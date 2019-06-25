@@ -13,7 +13,7 @@ from __future__ import division
 # Takes care of beams, back pointers, and scores.
 
 import torch
-import onmt
+import onmt.Constants as Constants
 
 
 class Beam(object):
@@ -31,8 +31,8 @@ class Beam(object):
         self.prevKs = []
 
         # The outputs at each time-step.
-        self.nextYs = [self.tt.LongTensor(size).fill_(onmt.Constants.PAD)]
-        self.nextYs[0][0] = onmt.Constants.BOS
+        self.nextYs = [self.tt.LongTensor(size).fill_(Constants.PAD)]
+        self.nextYs[0][0] = Constants.BOS
 
         # The attentions (matrix) for each time.
         self.attn = []
@@ -77,7 +77,7 @@ class Beam(object):
         self.attn.append(attnOut.index_select(0, prevK))
 
         # End condition is when top-of-beam is EOS.
-        if self.nextYs[-1][0] == onmt.Constants.EOS:
+        if self.nextYs[-1][0] == Constants.EOS:
             self.done = True
 
         return self.done

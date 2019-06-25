@@ -2,7 +2,6 @@
 Deals with training the models.
 
 train.py will load some datasets, and will produce some results and save the encoder and decoders seperately.
-``
 """
 
 import argparse
@@ -16,8 +15,8 @@ import torch.optim as optim
 import torch.utils.data
 import core.constants as Constants
 
-import lib.Recurrent as recurrent
-import lib.Transformer as transformer
+import lib.RecurrentModel as recurrent
+import lib.TransformerModel as transformer
 
 def load_args():
     parser = argparse.ArgumentParser(description="train.py")
@@ -43,6 +42,8 @@ def load_args():
                         help="""
                         Either a recurrent (seq2seq model) or a transformer.
                         """)
+    parser.add_argument('-cuda', default=True, type=bool, 
+                        help='determines whether to use CUDA or not.')
     # training options
     parser.add_argument('-epochs', type=int, required=True, help="""
                         Number of epochs for training. (Note that for transformers, the number of sequences become considerably longer.)
@@ -73,7 +74,7 @@ def init_model(opt):
 
 def train(dataset, model, args):
     for epoch in range(1, args.epochs +1):
-        model.train()
+        model.train(epoch)
 
 if __name__ == "__main__":
     args = load_args()

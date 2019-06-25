@@ -206,6 +206,7 @@ if __name__ == "__main__":
     }
 
     # dump information.
-    print('[Info] Dumping the processed data to pickle file', opt.save_data)
-    torch.save(data, opt.save_data + ".pt")
+    filename = opt.save_data + ".pt"
+    print('[Info] Dumping the processed data to pickle file', filename)
+    torch.save(data, filename)
     print('[Info] Done.')

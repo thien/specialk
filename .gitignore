@@ -6,6 +6,7 @@ __pycache__
 *.pt
 *.dict
 *.txt
+*.de
 *.fr
 *.en
 datasets/machine_translation/global_voices/training/*

@@ -7,7 +7,8 @@
 
 import torch
 import numpy as np
-import transformer.Constants as Constants
+# import transformer.Constants as Constants
+import core.constants as Constants
 
 class Beam():
     ''' Beam search '''

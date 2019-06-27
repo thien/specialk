@@ -1,5 +1,5 @@
 import numpy as np
-import onmt
+import core.constants as Constants
 import torch
 from torch.autograd import Variable
 from torch import optim

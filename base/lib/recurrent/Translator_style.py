@@ -1,4 +1,5 @@
-import onmt
+# import onmt
+from . import Models_decoder, Models, Constants, Dataset, modules, Beam
 import torch.nn as nn
 import torch
 from torch.autograd import Variable
@@ -16,11 +17,11 @@ class Translator(object):
         self.tgt_dict = checkpoint['dicts']['tgt']
         enc_opt = encoder_check['opt']
 
-        encoder = onmt.Models.Encoder(enc_opt, self.src_dict)
+        encoder = Models.Encoder(enc_opt, self.src_dict)
         encoder.load_state_dict(encoder_check['encoder'])
-        decoder = onmt.Models_decoder.Decoder(enc_opt, self.tgt_dict)
+        decoder = Models_decoder.Decoder(enc_opt, self.tgt_dict)
         decoder.load_state_dict(checkpoint['decoder'])
-        model = onmt.Models.NMTModel(encoder, decoder)
+        model = Models.NMTModel(encoder, decoder)
 
         generator = nn.Sequential(
             nn.Linear(enc_opt.rnn_size, self.tgt_dict.size()),
@@ -44,23 +45,23 @@ class Translator(object):
 
     def buildData(self, srcBatch, goldBatch):
         srcData = [self.src_dict.convertToIdx(b,
-                    onmt.Constants.UNK_WORD) for b in srcBatch]
+                    Constants.UNK_WORD) for b in srcBatch]
         tgtData = None
         if goldBatch:
             tgtData = [self.tgt_dict.convertToIdx(b,
-                       onmt.Constants.UNK_WORD,
-                       onmt.Constants.BOS_WORD,
-                       onmt.Constants.EOS_WORD) for b in goldBatch]
+                       Constants.UNK_WORD,
+                       Constants.BOS_WORD,
+                       Constants.EOS_WORD) for b in goldBatch]
 
-        return onmt.Dataset(srcData, tgtData,
+        return Dataset(srcData, tgtData,
             self.opt.batch_size, self.opt.cuda, volatile=True)
 
     def buildTargetTokens(self, pred, src, attn):
-        tokens = self.tgt_dict.convertToLabels(pred, onmt.Constants.EOS)
+        tokens = self.tgt_dict.convertToLabels(pred, Constants.EOS)
         tokens = tokens[:-1]  # EOS
         if self.opt.replace_unk:
             for i in range(len(tokens)):
-                if tokens[i] == onmt.Constants.UNK_WORD:
+                if tokens[i] == Constants.UNK_WORD:
                     _, maxIndex = attn[i].max(0)
                     tokens[i] = src[maxIndex.item()]
         return tokens
@@ -79,9 +80,9 @@ class Translator(object):
 
         #  This mask is applied to the attention model inside the decoder
         #  so that the attention ignores source padding
-        padMask = srcBatch.data.eq(onmt.Constants.PAD).t()
+        padMask = srcBatch.data.eq(Constants.PAD).t()
         def applyContextMask(m):
-            if isinstance(m, onmt.modules.GlobalAttention):
+            if isinstance(m, modules.GlobalAttention):
                 m.applyMask(padMask)
 
         #  (2) if a target is specified, compute the 'goldScore'
@@ -99,7 +100,7 @@ class Translator(object):
                 gen_t = self.model.generator.forward(dec_t)
                 tgt_t = tgt_t.unsqueeze(1)
                 scores = gen_t.data.gather(1, tgt_t)
-                scores.masked_fill_(tgt_t.eq(onmt.Constants.PAD), 0)
+                scores.masked_fill_(tgt_t.eq(Constants.PAD), 0)
                 goldScores += scores
 
         #  (3) run the decoder to generate sentences, using beam search
@@ -109,11 +110,11 @@ class Translator(object):
         decStates = (Variable(encStates[0].data.repeat(1, beamSize, 1)),
                      Variable(encStates[1].data.repeat(1, beamSize, 1)))
 
-        beam = [onmt.Beam(beamSize, self.opt.cuda) for k in range(batchSize)]
+        beam = [Beam(beamSize, self.opt.cuda) for k in range(batchSize)]
 
         decOut = self.model.make_init_decoder_output(context)
 
-        padMask = srcBatch.data.eq(onmt.Constants.PAD).t().unsqueeze(0).repeat(beamSize, 1, 1)
+        padMask = srcBatch.data.eq(Constants.PAD).t().unsqueeze(0).repeat(beamSize, 1, 1)
 
         batchIdx = list(range(batchSize))
         remainingSents = batchSize
@@ -183,7 +184,7 @@ class Translator(object):
             scores, ks = beam[b].sortBest()
 
             allScores += [scores[:n_best]]
-            valid_attn = srcBatch.data[:, b].ne(onmt.Constants.PAD).nonzero().squeeze(1)
+            valid_attn = srcBatch.data[:, b].ne(Constants.PAD).nonzero().squeeze(1)
             hyps, attn = zip(*[beam[b].getHyp(k) for k in ks[:n_best]])
             attn = [a.index_select(1, valid_attn) for a in attn]
             allHyp += [hyps]

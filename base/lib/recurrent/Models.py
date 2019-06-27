@@ -1,15 +1,16 @@
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-import onmt.modules
+from . import modules, Constants
 from torch.nn.utils.rnn import pad_packed_sequence as unpack
 from torch.nn.utils.rnn import pack_padded_sequence as pack
+
 
 class Encoder(nn.Module):
     """
     LSTM Encoder.
     """
-    def __init__(self, opt, dicts):
+    def __init__(self, opt, vocabulary_size):
         self.layers = opt.layers
         self.num_directions = 2 if opt.brnn else 1
         assert opt.rnn_size % self.num_directions == 0
@@ -17,9 +18,9 @@ class Encoder(nn.Module):
         input_size = opt.word_vec_size
 
         super(Encoder, self).__init__()
-        self.word_lut = nn.Embedding(dicts.size(),
+        self.word_lut = nn.Embedding(vocabulary_size,
                                   opt.word_vec_size,
-                                  padding_idx=onmt.Constants.PAD)
+                                  padding_idx=Constants.PAD)
         self.rnn = nn.LSTM(input_size, self.hidden_size,
                         num_layers=opt.layers,
                         dropout=opt.dropout,
@@ -31,6 +32,12 @@ class Encoder(nn.Module):
             self.word_lut.weight.data.copy_(pretrained)
 
     def forward(self, input, hidden=None):
+        """
+        if input is a tuple:
+            (list of sequences, list of sequence lengths)
+        otherwise:
+            list of sequences
+        """
         if isinstance(input, tuple):
             # print(input)
             emb = pack(self.word_lut(input[0]), input[1])
@@ -72,7 +79,7 @@ class StackedLSTM(nn.Module):
 
 class Decoder(nn.Module):
 
-    def __init__(self, opt, dicts):
+    def __init__(self, opt, vocabulary_size):
         self.layers = opt.layers
         self.input_feed = opt.input_feed
         input_size = opt.word_vec_size
@@ -80,11 +87,11 @@ class Decoder(nn.Module):
             input_size += opt.rnn_size
 
         super(Decoder, self).__init__()
-        self.word_lut = nn.Embedding(dicts.size(),
+        self.word_lut = nn.Embedding(vocabulary_size,
                                   opt.word_vec_size,
-                                  padding_idx=onmt.Constants.PAD)
+                                  padding_idx=Constants.PAD)
         self.rnn = StackedLSTM(opt.layers, input_size, opt.rnn_size, opt.dropout)
-        self.attn = onmt.modules.GlobalAttention(opt.rnn_size)
+        self.attn = modules.GlobalAttention(opt.rnn_size)
         self.dropout = nn.Dropout(opt.dropout)
 
         self.hidden_size = opt.rnn_size

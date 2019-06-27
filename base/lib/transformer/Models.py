@@ -2,8 +2,20 @@
 import torch
 import torch.nn as nn
 import numpy as np
-import transformer.Constants as Constants
-from transformer.Layers import EncoderLayer, DecoderLayer
+# import os
+# import sys 
+
+
+# import transformer.Constants as Constants
+import core.constants as Constants
+# if os.getcwd().split("/")[-1] == "transformer":
+#     import core.constants as Constants
+# else:
+#     import core.constants as Constants
+
+# print(sys.path)
+
+from .Layers import EncoderLayer, DecoderLayer
 
 __author__ = "Yu-Hsiang Huang"
 
@@ -184,8 +196,9 @@ class Transformer(nn.Module):
         nn.init.xavier_normal_(self.generator.weight)
 
         assert d_model == d_word_vec, \
-        'To facilitate the residual connections, \
-         the dimensions of all module outputs shall be the same.'
+        """
+        To facilitate the residual connections, the module outputs need to be the same; i.e. the dimension of the Transformer model needs to be the same as the dimension of the word/token vectors. Please set that again.
+        """
 
         if tgt_emb_prj_weight_sharing:
             # Share the weight matrix between target word embedding & the final logit dense layer

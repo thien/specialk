@@ -1,3 +1,8 @@
+# TODO
+
+- Check for any teacher forcing implemention differences between the models.
+- Save epoch in models (for checkpointing).
+- Note to self: Don't merge the optimisation methods. They're inherently different (see Attn is all you need paper.)
 
 ## 6/20
 

@@ -5,21 +5,34 @@ init does have some logic in it.
 """
 
 import torch
+import math
 import core.constants as constants
 from core.dataset import TranslationDataset, paired_collate_fn
 import os
 import torch.utils.data
 import datetime
+import atexit 
 
-class Model:
+from preprocess import load_file, seq2idx
+
+class NMTModel:
     def __init__(self, opt, models_folder="models"):
         self.opt = opt
         self.device = torch.device('cuda' if opt.cuda else 'cpu')
         self.constants = constants
         self.opt.directory = self.make_dir(stores=models_folder)
         
+        # update variables.
+        self.train_losses = []
+        self.valid_losses = []
+        self.train_accs = []
+        self.valid_accs = []
+
+        atexit.register(self.exit_handler)
     # -------------------------
     # OVERLOADED FUNCTIONS
+    # These functions are to be overwritten by whatever is declared
+    # in their child functions.
     # -------------------------
 
     def load(self):
@@ -81,18 +94,18 @@ class Model:
         basepath = os.path.join(basepath, stores)
         # setup current model directory
         directory_name = self.opt.model
-        directory_name += " " + datetime.datetime.now().strftime("%y-%m-%d-%H-%M")
+        directory_name += " " + datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S")
         directory = os.path.join(basepath, directory_name)
         # create container for that folder.
         os.mkdir(directory)
-        return directory
+        return directory 
 
     def init_logs(self):
         """
         If called, saves output logs to file.
         """
-        self.log_train_file = self.opt.log + ".train.log"
-        self.log_valid_file = self.opt.log + ".valid.log"
+        self.log_train_file = os.path.join(self.opt.directory,"train.log")
+        self.log_valid_file = os.path.join(self.opt.directory,"valid.log")
         print('[Info] Training performance will be written to file: {} and {}'.format(
             self.log_train_file, self.log_valid_file))
 
@@ -100,35 +113,72 @@ class Model:
             log_tf.write('epoch,loss,ppl,accuracy\n')
             log_vf.write('epoch,loss,ppl,accuracy\n')
 
-    def update_logs(self, train_stats, valid_stats, epoch_i):
+    def update_logs(self, epoch_i):
         """
         called within train(). Updates results into log files.
-        Assumes that 
+        Assumes logs are enabled.
         """
-        train_loss, train_acc = train_stats
-        valid_loss, valid_acc = valid_stats
+        train_loss, train_acc = self.train_losses[-1], self.train_accs[-1]
+        valid_loss, valid_acc = self.valid_losses[-1], self.valid_accs[-1]
+
         # deal with logs
         if self.log_train_file and self.log_valid_file:
-            with open(log_train_file, 'a') as log_tf, open(log_valid_file, 'a') as log_vf:
+            with open(self.log_train_file, 'a') as log_tf, open(self.log_valid_file, 'a') as log_vf:
                 log_tf.write('{epoch},{loss: 8.5f},{ppl: 8.5f},{accu:3.3f}\n'.format(
                     epoch=epoch_i, loss=train_loss,
-                    ppl=math.exp(min(train_loss, 100)), accu=100*train_accu))
+                    ppl=math.exp(min(train_loss, 100)), accu=100*train_acc))
                 log_vf.write('{epoch},{loss: 8.5f},{ppl: 8.5f},{accu:3.3f}\n'.format(
                     epoch=epoch_i, loss=valid_loss,
-                    ppl=math.exp(min(valid_loss, 100)), accu=100*valid_accu))
+                    ppl=math.exp(min(valid_loss, 100)), accu=100*valid_acc))
         else:
             print("[Warning] log files are not initiated. No updates are kept into storage.")
 
-    def load_data(self):
+    def load_dataset(self):
         """
-        Loads PyTorch pickled file, representing the dataset.
+        Loads PyTorch pickled training and validation dataset.
         """
         data = torch.load(self.opt.data)
         # the token sequence length is determined by `preprocess.py`
         self.opt.max_token_seq_len = data['settings'].max_token_seq_len
         datasets = self.init_dataloaders(data, self.opt)
         self.training_data, self.validation_data = datasets
+
+        # need to store vocabulary size for quick referencing
+        self.opt.src_vocab_size = self.training_data.dataset.src_vocab_size
+        self.opt.tgt_vocab_size = self.training_data.dataset.tgt_vocab_size
         return self
+
+    def load_testdata(self, test_datapath, test_vocab):
+        """
+        Loads a text file representing sequences.
+
+        params:
+        test_datapath: some text file.
+        test_vocab: it's the same PyTorch pickled training dataset.
+        """
+        
+        # load vocabulary
+        data = torch.load(test_vocab)
+        settings = data['settings']
+        # load test sequences
+        token_instances = load_file(test_datapath, 
+                                    settings.max_token_seq_len,
+                                    settings.keep_case)
+        # convert test sequences into IDx
+        test_src_insts = seq2idx(token_instances, data['dict']['src'])
+        # setup data loaders.
+        test_loader = torch.utils.data.DataLoader(
+            TranslationDataset(
+                src_word2idx=data['dict']['src'],
+                tgt_word2idx=data['dict']['tgt'],
+                src_insts=test_src_insts),
+            num_workers=2,
+            batch_size=opt.batch_size,
+            collate_fn=collate_fn)
+            
+        
+        return test_loader
+
 
     @staticmethod
     def init_dataloaders(data, opt):
@@ -163,3 +213,12 @@ class Model:
                 'The src/tgt word2idx table are different but you asked to share the word embeddings.'
 
         return train_loader, valid_loader
+
+    def exit_handler(self):
+        """
+        Handles anything when the code has finished running.
+        """
+        if len(os.listdir(self.opt.directory)) < 1:
+            # delete the folder since nothing interesting happened.
+            os.rmdir(self.opt.directory)
+        return None

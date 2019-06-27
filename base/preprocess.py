@@ -9,6 +9,7 @@ from functools import reduce
 """
 Preprocesses mose style code to pytorch ready files.
 """
+ 
 
 def get_num_seqs(filepath):
     """
@@ -31,7 +32,7 @@ def parse(text, formatting):
     if formatting == "character":
         return [i for i in text]
 
-def load_file(filepath, max_sequence_limit, formatting, case_sensitive=True):
+def load_file(filepath, max_sequence_limit, formatting, case_sensitive=True, max_train_seq=None):
     """
     loads text from file.
 
@@ -60,7 +61,8 @@ def load_file(filepath, max_sequence_limit, formatting, case_sensitive=True):
             else:
                 sequences.append(None)
             count += 1
-
+            if max_train_seq and count > max_train_seq:
+                break
 
     print('[Info] Loaded {} sequences from {}'.format(len(sequences),filepath))
 
@@ -129,8 +131,9 @@ def load_args():
     parser.add_argument('-train_tgt', required=True)
     parser.add_argument('-valid_src', required=True)
     parser.add_argument('-valid_tgt', required=True)
-    parser.add_argument('-save_data', required=True)
+    parser.add_argument('-save_name', required=True)
     parser.add_argument('-format', required=True, default='word', help="Determines whether to tokenise by word level, character level, or bytepair level.")
+    parser.add_argument('-max_train_seq', default=None, type=int, help="""Determines the maximum number of training sequences.""")
     parser.add_argument('-max_len', '--max_word_seq_len', type=int, default=50)
     parser.add_argument('-min_word_count', type=int, default=5, help="Minimum number of occurences before a word can be considered in the vocabulary.")
     parser.add_argument('-case_sensitive', action='store_true', default=True, help="Determines whether to keep it case sensitive or not.")
@@ -159,8 +162,8 @@ if __name__ == "__main__":
 
     # load training and validation data.
     for g in dataset:
-        src = load_file(dataset[g]['src'], opt.max_word_seq_len, opt.format, opt.case_sensitive)
-        tgt = load_file(dataset[g]['tgt'], opt.max_word_seq_len, opt.format, opt.case_sensitive)
+        src = load_file(dataset[g]['src'], opt.max_word_seq_len, opt.format, opt.case_sensitive, opt.max_train_seq)
+        tgt = load_file(dataset[g]['tgt'], opt.max_word_seq_len, opt.format, opt.case_sensitive, opt.max_train_seq)
         if len(src) != len(tgt):
             print('[Warning] The {} sequence counts are not equal.'.format(g))
         # remove empty instances
@@ -206,7 +209,7 @@ if __name__ == "__main__":
     }
 
     # dump information.
-    filename = opt.save_data + ".pt"
+    filename = opt.save_name + ".pt"
     print('[Info] Dumping the processed data to pickle file', filename)
     torch.save(data, filename)
     print('[Info] Done.')

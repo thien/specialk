@@ -4,3 +4,6 @@
 # # from RecurrentModel import RecurrentModel
 
 # __all__ = [transformer, recurrent, TransformerModel]
+
+from . import recurrent
+from . import transformer

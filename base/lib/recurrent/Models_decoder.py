@@ -1,12 +1,14 @@
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-import onmt.modules
+from . import modules
 from torch.nn.utils.rnn import pad_packed_sequence as unpack
 from torch.nn.utils.rnn import pack_padded_sequence as pack
 
 """
 I'm not sure where this is used.
+
+Potentially teacher forced outputs?
 """
 
 class StackedLSTM(nn.Module):
@@ -24,8 +26,6 @@ class StackedLSTM(nn.Module):
         h_0, c_0 = hidden
         h_1, c_1 = [], []
         for i, layer in enumerate(self.layers):
-            #print(h_0[i].size())
-            #print(c_0[i].size())
             h_1_i, c_1_i = layer(input, (h_0[i], c_0[i]))
             input = h_1_i
             if i + 1 != self.num_layers:
@@ -53,7 +53,7 @@ class Decoder(nn.Module):
                                   opt.word_vec_size,
                                   padding_idx=onmt.Constants.PAD)
         self.rnn = StackedLSTM(opt.layers, input_size, opt.rnn_size, opt.dropout)
-        self.attn = onmt.modules.GlobalAttention(opt.rnn_size)
+        self.attn = modules.GlobalAttention(opt.rnn_size)
         self.dropout = nn.Dropout(opt.dropout)
 
         self.num_directions = 2 if opt.brnn else 1

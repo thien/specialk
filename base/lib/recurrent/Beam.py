@@ -13,7 +13,7 @@ from __future__ import division
 # Takes care of beams, back pointers, and scores.
 
 import torch
-import onmt.Constants as Constants
+from . import Constants
 
 
 class Beam(object):

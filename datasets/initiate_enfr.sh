@@ -3,6 +3,11 @@ mkdir -p machine_translation
 mkdir -p newspapers
 
 
+# initiate.sh
+# deals with creating an english-french NMT corpus.
+# running this program will compute the whole thing for you.
+
+
 #
 #   GLOBAL VOICES DATASET
 #

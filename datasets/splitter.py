@@ -7,6 +7,8 @@ desc = """
 splitter.py
 
 deals with loading moses style aligned datasets into training data, validation data, and test data. 
+
+This is naturally not needed if the dataset is already appropiately split.
 """
 
 parser = argparse.ArgumentParser(description=desc)

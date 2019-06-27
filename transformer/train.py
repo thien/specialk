@@ -163,7 +163,7 @@ def train(model, training_data, validation_data, optimizer, device, opt):
                     elapse=(time.time()-start)/60))
 
         valid_accus += [valid_accu]
-
+        
         model_state_dict = model.state_dict()
         checkpoint = {
             'model': model_state_dict,

@@ -290,6 +290,7 @@ def main():
 
     print('Building model...')
 
+  
     encoder = onmt.Models.Encoder(opt, dicts['src'])
     decoder = onmt.Models.Decoder(opt, dicts['tgt'])
 

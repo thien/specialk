@@ -242,7 +242,7 @@ class TransformerModel(NMTModel):
 
     def compute_epoch(self, dataset, validation=False):
         """
-        Performs forward pass on some data.
+        Performs forward pass on batches of data.
         """
 
         if validation:
@@ -252,11 +252,11 @@ class TransformerModel(NMTModel):
 
         total_loss, n_word_total, n_word_correct = 0,0,0
 
-        for batch in tqdm(dataset, desc=' - Training', leave=False):
+        label = "Training" if not validation else "Validation"
+        for batch in tqdm(dataset, desc=' - '+label, leave=False):
             # prepare data
             src_seq, src_pos, tgt_seq, tgt_pos = map(lambda x: x.to(self.device), batch)
             gold = tgt_seq[:, 1:]
-            
             if not validation:
                 self.optimiser.zero_grad()
             # compute forward propagation
@@ -275,7 +275,7 @@ class TransformerModel(NMTModel):
             n_word_total += gold.ne(self.constants.PAD).sum().item()
             n_word_correct += n_correct
     
-
         loss_per_word = total_loss/n_word_total
         accuracy = n_word_correct/n_word_total
+
         return loss_per_word, accuracy

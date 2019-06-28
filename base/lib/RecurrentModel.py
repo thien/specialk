@@ -3,14 +3,17 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data
+from torch.autograd import Variable
 
 from tqdm import tqdm
 import time
 import math
 import os
 
+import core.constants as Constants
 from lib.nmtModel import NMTModel
 import lib.recurrent as recurrent
+
 
 class RecurrentModel(NMTModel):
     def __init__(self, opt):
@@ -33,10 +36,12 @@ class RecurrentModel(NMTModel):
         if encoder_path:
             enc = torch.load(encoder_path)
             self.model.encoder.load_state_dict(enc['model'])
+            # load optimiser
+            self.setup_optimiser(enc['optim'])
         if decoder_path:
             dec = torch.load(decoder_path)
-            # Note that the decoder file contains both the decoder and the 
-            # target_word_projection.
+            # Note that the decoder file contains both the decoder
+            # and the target_word_projection.
             self.model.decoder.load_state_dict(dec['model'])
             self.model.generator.load_state_dict(dec['generator'])
         self.model.to(self.device) 
@@ -52,55 +57,70 @@ class RecurrentModel(NMTModel):
         decoder = recurrent.Decoder(opt, self.opt.tgt_vocab_size)
 
         generator = nn.Sequential(
-            nn.Linear(opt.rnn_size, self.opt.tgt_vocab_size),
+            nn.Linear(self.opt.rnn_size, self.opt.tgt_vocab_size),
             nn.LogSoftmax()
             )
 
-        self.model = onmt.Models.NMTModel(encoder, decoder)
+        self.model = NMTModel(encoder, decoder)
         self.model.generator = generator
 
         return self
 
-    def setup_optimiser(self):
+    def setup_optimiser(self, opt=None):
+        if not opt:
+            opt = self.opt
         # based on the opt.
         self.optimiser = recurrent.Optim(
-            self.opt.optim,
-            self.opt.learning_rate,
-            self.opt.max_grad_norm,
-            lr_decay=self.opt.learning_rate_decay,
-            start_decay_at=self.opt.start_decay_at
+            opt.optim,
+            opt.learning_rate,
+            opt.max_grad_norm,
+            lr_decay=opt.learning_rate_decay,
+            start_decay_at=opt.start_decay_at
         )
         print("[Info] optimiser configured.")
 
-    def train(self):
+    def train(self, epoch, evaluate=True):
         """
-        Trains models.
+        Trains model against some data.
+        This represents one round of epoch training.
+
+        It's a wrapper function that calls self.compute_epoch();
+        this function comes with additional stat management.
+
+        params:
+        epoch: epoch round (int)
+        evaluate: boolean flag to determine whether to run model on
+                  validation data.
         """
-        print("[Warning]: train() is not implemented.")
+        
+        # training data
+        start = time.time()
+        train_stats = self.compute_epoch(self.training_data, False)
+        train_loss, train_acc = train_stats
+
+        self.train_losses.append(train_loss)
+        self.train_accs.append(train_acc)
+
+        print('  - (Training)   perplexity: {perplexity: 8.5f}, accuracy: {accu:3.3f} %, '\
+            'elapse: {elapse:3.3f} min'.format(
+                perplexity=math.exp(min(train_loss, 100)), accu=100*train_acc,
+                elapse=(time.time()-start)/60))
+
+        if evaluate:
+            # validation data
+            with torch.no_grad():
+                valid_stats = self.compute_epoch(self.validation_data, True)
+            valid_loss, valid_acc = valid_stats
+
+            self.valid_losses.append(valid_loss)
+            self.valid_accs.append(valid_acc)
+
+            print('  - (Validation) perplexity: {perplexity: 8.5f}, accuracy: {accu:3.3f} %, '\
+                'elapse: {elapse:3.3f} min'.format(
+                    perplexity=math.exp(min(valid_loss, 100)), accu=100*valid_acc,
+                    elapse=(time.time()-start)/60))
+
         return self
-
-    def validate(self, val_data):
-        """
-        Validates model performance against validation data.
-        """
-        print("[Warning:] validate() is not implemented.")
-
-        total_loss = 0
-        total_words = 0
-        total_num_correct = 0
-
-        self.model.eval()
-        for i in range(len(data)):
-            batch = data[i][:-1] # exclude original indices
-            outputs = self.model(batch)
-            targets = batch[1][1:]  # exclude <s> from targets
-            loss, _, num_correct = self.memoryEfficientLoss(
-                    outputs, targets, self.model.generator, criterion, eval=True)
-            total_loss += loss
-            total_num_correct += num_correct
-            total_words += targets.data.ne(onmt.Constants.PAD).sum()
-
-        return total_loss / total_words, total_num_correct / total_words
 
     def translate(self):
         """
@@ -118,15 +138,16 @@ class RecurrentModel(NMTModel):
         checkpoint_encoder = {
             'type': "recurrent",
             'model': self.model.encoder.state_dict(),
-            'epoch' : epoch,
+            'epoch': epoch,
+            'optim': self.optimiser,
             'settings': self.opt
         }
 
         checkpoint_decoder = {
             'type': "recurrent",
             'model': self.model.encoder.state_dict(),
-            'generator' : self.model.generator.state_dict(),
-            'epoch' : epoch,
+            'generator': self.model.generator.state_dict(),
+            'epoch': epoch,
             'settings': self.opt
         }
 
@@ -160,22 +181,21 @@ class RecurrentModel(NMTModel):
         # save the optimiser (hmm)
         return self
 
-    
     # ---------------------------
     # Below the line represents transformer specific code.
     # ---------------------------
 
-    @staticmethod
-    def NMTCriterion(vocabSize):
-        """
-        Deals with criterion for each GPU (which you'll need to sort out.)
-        """
-        weight = torch.ones(vocabSize)
-        weight[onmt.Constants.PAD] = 0
-        crit = nn.NLLLoss(weight, size_average=False)
-        if opt.gpus:
-            crit.cuda()
-        return crit
+
+    # def NMTCriterion(self,vocabSize):
+    #     """
+    #     Deals with criterion for each GPU (which you'll need to sort out.)
+    #     """
+    #     weight = torch.ones(vocabSize)
+    #     weight[onmt.Constants.PAD] = 0
+    #     crit = nn.NLLLoss(weight, size_average=False)
+    #     if self.opt.gpus:
+    #         crit.cuda()
+    #     return crit
 
     @staticmethod
     def memoryEfficientLoss(outputs, targets, generator, crit, eval=False):
@@ -191,7 +211,7 @@ class RecurrentModel(NMTModel):
             scores_t = generator(out_t)
             loss_t = crit(scores_t, targ_t.view(-1))
             pred_t = scores_t.max(1)[1]
-            num_correct_t = pred_t.data.eq(targ_t.data).masked_select(targ_t.ne(onmt.Constants.PAD).data).sum()
+            num_correct_t = pred_t.data.eq(targ_t.data).masked_select(targ_t.ne(Constants.PAD).data).sum()
             num_correct += num_correct_t
             loss += loss_t.data[0]
             if not eval:
@@ -199,3 +219,45 @@ class RecurrentModel(NMTModel):
 
         grad_output = None if outputs.grad is None else outputs.grad.data
         return loss, grad_output, num_correct
+
+    def compute_epoch(self, dataset, validation=False):
+        """
+        Performs forward pass on batches of data.
+        """
+
+        if validation:
+            self.model.eval()
+        else:
+            self.model.train()
+
+        total_loss, n_word_total, n_word_correct = 0, 0, 0
+
+        label = "Training" if not validation else "Validation"
+        for batch in tqdm(dataset, desc=' - '+label, leave=False):
+            # prepare data
+            src_seq, src_pos, tgt_seq, tgt_pos = map(lambda x: x.to(self.device), batch)
+
+            # need to exclude <s> from targets.
+            targets = tgt_seq[:, 1:]
+
+            if not validation:
+                self.optimiser.zero_grad()
+
+            outputs = model((src_seq, src_pos), (tgt_seq, tgt_pos))
+            # compute loss function
+            loss, grads, n_correct = self.memoryEfficientLoss(outputs, targets, self.model.generator, nn.NLLLoss())
+
+            if not validation:
+                # backprop
+                outputs.backward(grads)
+                # update parameters
+                self.optimiser.step()
+
+            total_loss += loss.item()
+            n_word_total += targets.ne(self.constants.PAD).sum().item()
+            n_word_correct += n_correct
+    
+        loss_per_word = total_loss/n_word_total
+        accuracy = n_word_correct/n_word_total
+
+        return loss_per_word, accuracy

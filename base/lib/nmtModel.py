@@ -11,9 +11,10 @@ from core.dataset import TranslationDataset, paired_collate_fn
 import os
 import torch.utils.data
 import datetime
-import atexit 
+import atexit
 
 from preprocess import load_file, seq2idx
+
 
 class NMTModel:
     def __init__(self, opt, models_folder="models"):

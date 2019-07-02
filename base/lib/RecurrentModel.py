@@ -12,8 +12,9 @@ import os
 
 import core.constants as Constants
 from lib.nmtModel import NMTModel
-import lib.recurrent as recurrent
-
+from lib.recurrent.Models import Encoder, Decoder
+from lib.recurrent.Models import NMTModel as Seq2Seq
+from lib.recurrent.Optim import Optim
 
 class RecurrentModel(NMTModel):
     def __init__(self, opt):
@@ -53,16 +54,11 @@ class RecurrentModel(NMTModel):
         Setups seq2seq model and stores it into memory.
         """
     
-        encoder = recurrent.Encoder(opt, self.opt.src_vocab_size)
-        decoder = recurrent.Decoder(opt, self.opt.tgt_vocab_size)
+        encoder = Encoder(self.opt, self.opt.src_vocab_size).to(self.device)
+        decoder = Decoder(self.opt, self.opt.tgt_vocab_size).to(self.device)
 
-        generator = nn.Sequential(
-            nn.Linear(self.opt.rnn_size, self.opt.tgt_vocab_size),
-            nn.LogSoftmax()
-            )
-
-        self.model = NMTModel(encoder, decoder)
-        self.model.generator = generator
+        self.model = Seq2Seq(encoder, decoder).to(self.device)
+        # self.model.decoder.generator = generator
 
         return self
 
@@ -70,13 +66,14 @@ class RecurrentModel(NMTModel):
         if not opt:
             opt = self.opt
         # based on the opt.
-        self.optimiser = recurrent.Optim(
+        self.optimiser = Optim(
             opt.optim,
             opt.learning_rate,
             opt.max_grad_norm,
             lr_decay=opt.learning_rate_decay,
             start_decay_at=opt.start_decay_at
         )
+        self.optimiser.set_parameters(self.model.parameters())
         print("[Info] optimiser configured.")
 
     def train(self, epoch, evaluate=True):
@@ -133,7 +130,6 @@ class RecurrentModel(NMTModel):
         """
         save model weights and parameters to file.
         """
-        print("[Warning]: save() is not implemented.")
 
         checkpoint_encoder = {
             'type': "recurrent",
@@ -145,8 +141,7 @@ class RecurrentModel(NMTModel):
 
         checkpoint_decoder = {
             'type': "recurrent",
-            'model': self.model.encoder.state_dict(),
-            'generator': self.model.generator.state_dict(),
+            'model': self.model.decoder.state_dict(),
             'epoch': epoch,
             'settings': self.opt
         }
@@ -185,40 +180,40 @@ class RecurrentModel(NMTModel):
     # Below the line represents transformer specific code.
     # ---------------------------
 
+    def performance(self, pred, gold, smoothing=False):
+        """
+        Calculates token level accuracy.
+        Smoothing can be applied if needed.
+        """
+        loss = self.calculate_loss(pred, gold, smoothing)
+        pred = pred.max(1)[1]
+        gold = gold.contiguous().view(-1)
+        non_pad_mask = gold.ne(self.constants.PAD)
+        n_correct = pred.eq(gold)
+        n_correct = n_correct.masked_select(non_pad_mask).sum().item()
+        return loss, n_correct
 
-    # def NMTCriterion(self,vocabSize):
-    #     """
-    #     Deals with criterion for each GPU (which you'll need to sort out.)
-    #     """
-    #     weight = torch.ones(vocabSize)
-    #     weight[onmt.Constants.PAD] = 0
-    #     crit = nn.NLLLoss(weight, size_average=False)
-    #     if self.opt.gpus:
-    #         crit.cuda()
-    #     return crit
+    def calculate_loss(self, pred, gold, smoothing=False):
+        """
+        Computes cross entropy loss,
+        apply label smoothing if needed.
+        """
+        gold = gold.contiguous().view(-1)
+        if smoothing:
+            epsilon = 0.1
+            n_class = pred.size(1)
+            one_hot = torch.zeros_like(pred).scatter(1, gold.view(-1, 1), 1)
+            one_hot = one_hot * (1 - epsilon) + (1 - one_hot) * epsilon / (n_class - 1)
 
-    @staticmethod
-    def memoryEfficientLoss(outputs, targets, generator, crit, eval=False):
-        # compute generations one piece at a time
-        num_correct, loss = 0, 0
-        outputs = Variable(outputs.data, requires_grad=(not eval), volatile=eval)
-
-        batch_size = outputs.size(1)
-        outputs_split = torch.split(outputs, opt.max_generator_batches)
-        targets_split = torch.split(targets, opt.max_generator_batches)
-        for i, (out_t, targ_t) in enumerate(zip(outputs_split, targets_split)):
-            out_t = out_t.view(-1, out_t.size(2))
-            scores_t = generator(out_t)
-            loss_t = crit(scores_t, targ_t.view(-1))
-            pred_t = scores_t.max(1)[1]
-            num_correct_t = pred_t.data.eq(targ_t.data).masked_select(targ_t.ne(Constants.PAD).data).sum()
-            num_correct += num_correct_t
-            loss += loss_t.data[0]
-            if not eval:
-                loss_t.div(batch_size).backward()
-
-        grad_output = None if outputs.grad is None else outputs.grad.data
-        return loss, grad_output, num_correct
+            log_prb = F.log_softmax(pred, dim=1)
+            # create non-padding mask with torch.ne()
+            non_pad_mask = gold.ne(self.constants.PAD)
+            loss = -(one_hot * log_prb).sum(dim=1)
+            # losses are averaged later
+            loss = loss.masked_select(non_pad_mask).sum()
+        else:
+            loss = F.cross_entropy(pred, gold, ignore_index=self.constants.PAD, reduction='sum')
+        return loss
 
     def compute_epoch(self, dataset, validation=False):
         """
@@ -236,25 +231,26 @@ class RecurrentModel(NMTModel):
         for batch in tqdm(dataset, desc=' - '+label, leave=False):
             # prepare data
             src_seq, src_pos, tgt_seq, tgt_pos = map(lambda x: x.to(self.device), batch)
-
-            # need to exclude <s> from targets.
-            targets = tgt_seq[:, 1:]
+            src_pos = torch.sum(src_pos > 0, dim=1)
+            tgt_pos = torch.sum(tgt_pos > 0, dim=1)
 
             if not validation:
-                self.optimiser.zero_grad()
+                self.model.zero_grad()
 
-            outputs = model((src_seq, src_pos), (tgt_seq, tgt_pos))
-            # compute loss function
-            loss, grads, n_correct = self.memoryEfficientLoss(outputs, targets, self.model.generator, nn.NLLLoss())
+            pred = self.model((src_seq, src_pos), (tgt_seq, tgt_pos))
+            pred = pred.view(-1, pred.size(2))
+   
+            loss, n_correct = self.performance(pred, tgt_seq, smoothing=self.opt.label_smoothing)
 
             if not validation:
                 # backprop
-                outputs.backward(grads)
+                loss.backward()
+                # outputs.backward(grads)
                 # update parameters
                 self.optimiser.step()
 
             total_loss += loss.item()
-            n_word_total += targets.ne(self.constants.PAD).sum().item()
+            n_word_total += tgt_seq.ne(self.constants.PAD).sum().item()
             n_word_correct += n_correct
     
         loss_per_word = total_loss/n_word_total

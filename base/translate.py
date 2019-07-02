@@ -1,22 +1,23 @@
 """
 Takes an NMT encoder and a style contingent decoder
-to perform style transfer.
-"""
-
-"""
-Deals with training the models.
-
-train.py will load some datasets, and will produce some results and save the encoder and decoders seperately.
+to perform style transfer. It can also be used for
+general machine translation. (i.e. it is contingent
+on the encoder and decoders used.)
 """
 
 import argparse
 from tqdm import tqdm
-# import lib.RecurrentModel as recurrent
 from lib.TransformerModel import TransformerModel as transformer
+from lib.RecurrentModel import RecurrentModel as recurrent
 
 def load_args():
     parser = argparse.ArgumentParser(description="train.py")
     # data options
+
+    parser.add_argument('-model', choices=['transformer', 'recurrent'], 
+                        required=True, help="""
+                        Either a recurrent (seq2seq model) or a transformer.
+                        """)
 
     parser.add_argument('-src', default="", required=True, type=str,
                         help="""
@@ -27,12 +28,12 @@ def load_args():
                         Vocabulary (refer to training data pickle.
                         """)
 
-    parser.add_argument('-checkpoint_encoder', default="", required=True, type=str,
+    parser.add_argument('-checkpoint_encoder', required=True, default=None, type=str,
                         help="""
                         If training from a checkpoint, then this is the path to the pretrained encoder.
                         """)
 
-    parser.add_argument('-checkpoint_decoder', default="", required=True, type=str,
+    parser.add_argument('-checkpoint_decoder', required=True, default=None, type=str,
                         help="""
                         If training from a checkpoint, then this is the path to the pretrained model.
                         """)
@@ -50,16 +51,15 @@ def load_args():
                         Determines whether to use CUDA or not. (You should.)
                         """)
 
-    parser.add_argument('-batch_size', type=int, default=128, help="""
-                        Determines batch size of input data, for feeding into the models.
-                        """)
-
     # debugging options
     parser.add_argument('-telegram_key', help="""
                         filepath to telegram API private key to send messages to.
                         """)
 
     # translate option
+    parser.add_argument('-batch_size', type=int, default=128, help="""
+                        Determines batch size of input data, for feeding into the models.
+                        """)
     parser.add_argument('-beam_size', type=int, default=5,
                         help='Beam size')
 
@@ -70,6 +70,8 @@ def load_args():
 
     opt = parser.parse_args()
 
+    opt.save_model = False
+
     # validation.
 
     return opt
@@ -77,26 +79,25 @@ def load_args():
 
 if __name__ == "__main__":
     opt = load_args()
-    # load model encoder and decoder
-    enc = torch.load(opt.checkpoint_encoder)
-    dec = torch.load(opt.checkpoint_decoder)
-    if enc['type'] != dec['type']:
-        throw Exception("The encoder and decoder model components don't belong to the same group.")
-    if enc['type'] == "transformer":
-        model = transformer(enc['settings'])
-        model.initiate()
-        
-        # overwrite model.opt properties with what is currently loaded
-    # initiate model
-    # load src
-    # load vocabulary
-    # translate
-    # save responses
-    model.load_dataset()
-    print("Loaded data.")
+    # load encoder and decoder
+
+    # then load them into the model.
+    model = transformer(opt) if opt.model == "transformer" else recurrent(opt)
+    print("Setup model wrapper.")
     model.initiate()
     print("Initiated model and weights.")
-    model.setup_optimiser()
-    print("Training model.")
-    train(model)
+    # load test data
+    test_loader = model.load_testdata(opt.src, opt.vocab)
+    idx2word = test_loader.dataset.tgt_idx2word
+    # load output file.
+    model.translate_batch(test_loader)
+    # with open(opt.output, 'w') as f:
+    #     # setup test loader.
+    #     for batch in tqdm(test_loader, mininterval=2, desc='  - (Test)', leave=False):
+    #         print(batch)
+    #         hypotheses, scores = model.translate_batch(*batch)
+    #         for sequences in hypotheses:
+    #             for sequence in sequences:
+    #                 line = " ".join([idx2word[t] for t in sequence])
+    #                 f.write(line + "\n")
     print("Done.")

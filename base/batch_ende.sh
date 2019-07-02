@@ -1,20 +1,38 @@
 if [ -e models/nmt_ende.pt ]
 then 
     clear
-    # train the model.
+
+    # TRAIN
     # DATA="models/nmt_ende.pt"
     # echo "ready"
-    # MODEL="transformer"
+    MODEL="transformer"
     # EP=15
     # MODELDIM=512
     # python3 train.py -data $DATA -log $true -save_model -model $MODEL -epoch $EP -d_word_vec $MODELDIM -d_model $MODELDIM -cuda
 
-    DATA="models/nmt_ende.pt"
-    echo "ready"
-    MODEL="recurrent"
-    EP=15
-    MODELDIM=512
-    python3 train.py -data $DATA -log $true -save_model -model $MODEL -epoch $EP -d_word_vec $MODELDIM -d_model $MODELDIM -cuda
+    # TRANSLATE
+    TESTDATA="../datasets/multi30k/test.en.atok"
+    VOCAB="models/nmt_ende.pt"
+    ENCODER='models/transformer-19-06-26-18-12-36/encoder_epoch_14_accu_51.533.chkpt'
+    DECODER='models/transformer-19-06-26-18-12-36/decoder_epoch_14_accu_51.533.chkpt'
+    OUTPUT="models/transformer-19-06-26-18-12-36/outputs.txt"
+    # python translate.py -model trained.chkpt -vocab data/multi30k.atok.low.pt -src data/multi30k/test.en.atok -no_cuda
+    python3 translate.py -model $MODEL -checkpoint_encoder $ENCODER -checkpoint_decoder $DECODER -vocab $VOCAB -src $TESTDATA -output $OUTPUT
+
+    # -----------------------
+    # RECURRENT
+    # -----------------------
+
+    # DATA="models/nmt_ende.pt"
+    # echo "ready"
+    # MODEL="recurrent"
+    # EP=5
+    # BATCHSIZE=64
+    # MODELDIM=512
+    # EMB=512
+    # python3 train.py -data $DATA -log $true -model $MODEL -epoch $EP -d_word_vec $EMB -d_model $MODELDIM -cuda -layers 2 -batch_size $BATCHSIZE -save_model
+
+
 
 else
     # make the corpus.

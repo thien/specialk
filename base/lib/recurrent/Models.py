@@ -15,13 +15,14 @@ class Encoder(nn.Module):
         self.num_directions = 2 if opt.brnn else 1
         assert opt.rnn_size % self.num_directions == 0
         self.hidden_size = opt.rnn_size // self.num_directions
-        input_size = opt.word_vec_size
+        input_size = opt.d_word_vec
 
         super(Encoder, self).__init__()
         self.word_lut = nn.Embedding(vocabulary_size,
-                                  opt.word_vec_size,
+                                  opt.d_word_vec,
                                   padding_idx=Constants.PAD)
-        self.rnn = nn.LSTM(input_size, self.hidden_size,
+        self.rnn = nn.LSTM(input_size,
+                        self.hidden_size,
                         num_layers=opt.layers,
                         dropout=opt.dropout,
                         bidirectional=opt.brnn)
@@ -39,15 +40,16 @@ class Encoder(nn.Module):
             list of sequences
         """
         if isinstance(input, tuple):
-            # print(input)
-            emb = pack(self.word_lut(input[0]), input[1])
+            x, x_lengths = input
+            emb = pack(self.word_lut(x), x_lengths)
         else:
             emb = self.word_lut(input)
         outputs, hidden_t = self.rnn(emb, hidden)
+
         if isinstance(input, tuple):
             outputs = unpack(outputs)[0]
+            
         return hidden_t, outputs
-
 
 class StackedLSTM(nn.Module):
     def __init__(self, num_layers, input_size, rnn_size, dropout):
@@ -76,31 +78,79 @@ class StackedLSTM(nn.Module):
 
         return input, (h_1, c_1)
 
-
 class Decoder(nn.Module):
 
     def __init__(self, opt, vocabulary_size):
         self.layers = opt.layers
         self.input_feed = opt.input_feed
-        input_size = opt.word_vec_size
+        input_size = opt.d_word_vec
         if self.input_feed:
             input_size += opt.rnn_size
 
         super(Decoder, self).__init__()
         self.word_lut = nn.Embedding(vocabulary_size,
-                                  opt.word_vec_size,
+                                  opt.d_word_vec,
                                   padding_idx=Constants.PAD)
-        self.rnn = StackedLSTM(opt.layers, input_size, opt.rnn_size, opt.dropout)
+        self.rnn = StackedLSTM(
+            opt.layers,
+            input_size,
+            opt.rnn_size,
+            opt.dropout)
+
+        self.num_directions = 2 if opt.brnn else 1
+        assert opt.rnn_size % self.num_directions == 0
+        self.hidden_size = opt.rnn_size // self.num_directions
+
+        # self.rnn = nn.LSTM(input_size,
+        #                 self.hidden_size,
+        #                 num_layers=opt.layers,
+        #                 dropout=opt.dropout,
+        #                 bidirectional=opt.brnn)
+
         self.attn = modules.GlobalAttention(opt.rnn_size)
         self.dropout = nn.Dropout(opt.dropout)
 
         self.hidden_size = opt.rnn_size
+
+        self.generator = nn.Sequential(
+            nn.Linear(opt.rnn_size, vocabulary_size),
+            nn.LogSoftmax(dim=1)
+            )
 
     def load_pretrained_vectors(self, opt):
         if opt.pre_word_vecs_dec is not None:
             pretrained = torch.load(opt.pre_word_vecs_dec)
             self.word_lut.weight.data.copy_(pretrained)
 
+    # def forward(self, input, hidden, context, init_output):
+    #     # print("INPUT FOR DECODER:", input.shape)
+    #     emb = self.word_lut(input)
+    #     #print(context.size())
+    #     # n.b. you can increase performance if you compute W_ih * x for all
+    #     # iterations in parallel, but that's only possible if
+    #     # self.input_feed=False
+    #     outputs = []
+    #     output = init_output
+    #     # print("DECODER EMB:", emb.shape)
+    #     for i in range(input.shape[1]):
+    #         # emb_t = emb[:,i,:]
+    #         # emb_t = emb_t.unsqueeze(1)
+    #         print("EMBT:", emb_t.shape)
+    #         # emb_t = emb_t.squeeze(0)
+    #         # if self.input_feed:
+    #         #     emb_t = torch.cat([emb_t, output], 1)
+    #         # print(hidden)
+    #         # print(emb_t.shape)
+    #         # print("HIDDEN:",hidden.shape)
+    #         output, hidden = self.rnn(emb_t, hidden)
+    #         print("OUT:",output.shape, context.shape)
+    #         output, attn = self.attn(output.transpose(0, 1), context.transpose(0, 1))
+    #         # output, attn = self.attn(output, context.transpose(0, 1))
+    #         output = self.dropout(output)
+    #         outputs += [output]
+
+    #     outputs = torch.stack(outputs)
+    #     return outputs, hidden, attn
     def forward(self, input, hidden, context, init_output):
         emb = self.word_lut(input)
         #print(context.size())
@@ -117,11 +167,11 @@ class Decoder(nn.Module):
             output, hidden = self.rnn(emb_t, hidden)
             output, attn = self.attn(output, context.transpose(0, 1))
             output = self.dropout(output)
+            output = self.generator(output)
             outputs += [output]
 
         outputs = torch.stack(outputs)
         return outputs, hidden, attn
-
 
 class NMTModel(nn.Module):
 
@@ -145,25 +195,29 @@ class NMTModel(nn.Module):
         else:
             return h
 
-        # def forward(self, input):
-        #     src = input[0]
-        #     tgt = input[1][:-1]  # exclude last target from inputs
-        #     enc_hidden, context = self.encoder(src)
-        #     init_output = self.make_init_decoder_output(context)
+    def forward(self, src, tgt):
+        x, x_length = src
+        y, y_length = tgt
+        # sort for pack_padded_sequences
+        sorted_lengths, sorted_idx = torch.sort(x_length, descending=True)
+        x = x[sorted_idx]
+        y = y[sorted_idx]
+        y_length = y_length[sorted_idx]
+        # swap batch relationship order.
+        x = x.transpose(0, 1)
+        y = y.transpose(0, 1)
+        
+        enc_hidden, context = self.encoder((x, sorted_lengths))
+        init_output = self.make_init_decoder_output(context)
 
-        #     enc_hidden = (self._fix_enc_hidden(enc_hidden[0]),
-        #                   self._fix_enc_hidden(enc_hidden[1]))
+        enc_hidden = (self._fix_enc_hidden(enc_hidden[0]),
+                      self._fix_enc_hidden(enc_hidden[1]))
 
-        #     out, dec_hidden, _attn = self.decoder(tgt, enc_hidden, context, init_output)
+        out, dec_hidden, _attn = self.decoder(y, enc_hidden, context, init_output)
+        # reverse tensor relationship order
+        out = out.transpose(0, 1)
+        # reverse order
+        _, reversed_idx = torch.sort(sorted_idx)
+        out = out[reversed_idx]
 
-        #     return out
-        def forward(self, src, tgt):
-            enc_hidden, context = self.encoder(src)
-            init_output = self.make_init_decoder_output(context)
-
-            enc_hidden = (self._fix_enc_hidden(enc_hidden[0]),
-                        self._fix_enc_hidden(enc_hidden[1]))
-
-            out, dec_hidden, _attn = self.decoder(tgt, enc_hidden, context, init_output)
-
-            return out
+        return out

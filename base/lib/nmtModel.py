@@ -7,7 +7,7 @@ init does have some logic in it.
 import torch
 import math
 import core.constants as constants
-from core.dataset import TranslationDataset, paired_collate_fn
+from core.dataset import TranslationDataset, collate_fn, paired_collate_fn
 import os
 import torch.utils.data
 import datetime
@@ -21,7 +21,7 @@ class NMTModel:
         self.opt = opt
         self.device = torch.device('cuda' if opt.cuda else 'cpu')
         self.constants = constants
-        self.opt.directory = self.make_dir(stores=models_folder)
+        self.opt.directory = self.init_dir(stores=models_folder)
         
         # update variables.
         self.train_losses = []
@@ -86,19 +86,25 @@ class NMTModel:
     # BASE FUNCTIONS
     # ----------------------------
 
-    def make_dir(self, stores):
+    def init_dir(self, stores):
         """
-        makes a directory model data will be in.
+        initiates a directory model data will be in.
+        If theres no preloaded encoder/decoder it'll 
+        create a new folder.
         """
+        if self.opt.checkpoint_encoder:
+            return os.path.split(self.opt.checkpoint_encoder)[0]
+    
         # setup parent directory
         basepath = os.path.abspath(os.getcwd())
         basepath = os.path.join(basepath, stores)
         # setup current model directory
         directory_name = self.opt.model
-        directory_name += " " + datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S")
+        directory_name += "-" + datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S")
         directory = os.path.join(basepath, directory_name)
         # create container for that folder.
-        os.mkdir(directory)
+        if self.opt.save_model:
+            os.mkdir(directory)
         return directory 
 
     def init_logs(self):
@@ -161,10 +167,12 @@ class NMTModel:
         # load vocabulary
         data = torch.load(test_vocab)
         settings = data['settings']
+        # print(settings)
         # load test sequences
         token_instances = load_file(test_datapath, 
                                     settings.max_token_seq_len,
-                                    settings.keep_case)
+                                    settings.format,
+                                    settings.case_sensitive)
         # convert test sequences into IDx
         test_src_insts = seq2idx(token_instances, data['dict']['src'])
         # setup data loaders.
@@ -174,7 +182,7 @@ class NMTModel:
                 tgt_word2idx=data['dict']['tgt'],
                 src_insts=test_src_insts),
             num_workers=2,
-            batch_size=opt.batch_size,
+            batch_size=self.opt.batch_size,
             collate_fn=collate_fn)
             
         
@@ -219,7 +227,8 @@ class NMTModel:
         """
         Handles anything when the code has finished running.
         """
-        if len(os.listdir(self.opt.directory)) < 1:
-            # delete the folder since nothing interesting happened.
-            os.rmdir(self.opt.directory)
+        if self.opt.save_model:
+            if len(os.listdir(self.opt.directory)) < 1:
+                # delete the folder since nothing interesting happened.
+                os.rmdir(self.opt.directory)
         return None

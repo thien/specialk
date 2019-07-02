@@ -10,7 +10,7 @@ import math
 import os
 
 from lib.nmtModel import NMTModel
-from lib.transformer.Models import Transformer
+from lib.transformer.Models import Transformer, Encoder, Decoder
 from lib.transformer.Optim import ScheduledOptim
 from lib.transformer.Translator import Translator
 """
@@ -42,7 +42,7 @@ class TransformerModel(NMTModel):
         Setups transformer model and stores it into memory.
         """
         if self.opt.checkpoint_encoder:
-            self.load(self.opt.checkpoint_encoder)
+            self.load(self.opt.checkpoint_encoder, self.opt.checkpoint_decoder)
         else:
             # start fresh.
             self.model = Transformer(
@@ -66,13 +66,62 @@ class TransformerModel(NMTModel):
         """
         if encoder_path:
             enc = torch.load(encoder_path)
+            # copy encoder weights
+            opts_e = enc['settings']
+            # replace parameters in opts.
+            # print(opts_e)
+            blacklist = {
+                "checkpoint_encoder",
+                "checkpoint_decoder",
+                "cuda",
+                "directory",
+                "data",
+                "log",
+                "model",
+                "save_mode",
+                "telegram_key",
+                "save_model",
+                "train_from_state_dict",
+                "batch_size"
+            }
+            for arg in dir(opts_e):
+                if arg[0] == "_":
+                    continue
+                if arg in blacklist:
+                    continue
+                # print(arg, getattr(opts_e,arg))
+                setattr(self.opt, arg, getattr(opts_e,arg))
+ 
+            self.model = Transformer(
+                self.opt.src_vocab_size,
+                self.opt.tgt_vocab_size,
+                self.opt.max_token_seq_len,
+                tgt_emb_prj_weight_sharing=self.opt.proj_share_weight,
+                emb_src_tgt_weight_sharing=self.opt.embs_share_weight,
+                d_k=self.opt.d_k,
+                d_v=self.opt.d_v,
+                d_model=self.opt.d_model,
+                d_word_vec=self.opt.d_word_vec,
+                d_inner=self.opt.d_inner_hid,
+                n_layers=self.opt.layers,
+                n_head=self.opt.n_head,
+                dropout=self.opt.dropout)
+            # replace encoder weights
             self.model.encoder.load_state_dict(enc['model'])
+            print("[Info] Loaded encoder model.")
         if decoder_path:
             dec = torch.load(decoder_path)
-            # Note that the decoder file contains both the decoder and the 
-            # target_word_projection.
-            self.model.decoder.load_state_dict(dec['model'])
-            self.model.generator.load_state_dict(dec['generator'])
+            # Note that the decoder file contains both 
+            # the decoder and the target_word_projection.
+            opts_d = enc['settings']
+
+            if encoder_path:
+                assert opts_e == opts_d
+                self.model.decoder.load_state_dict(dec['model'])
+                self.model.generator.load_state_dict(dec['generator'])
+                print("[Info] Loaded decoder model.")
+
+
         self.model.to(self.device) 
     
     def setup_optimiser(self):
@@ -129,7 +178,7 @@ class TransformerModel(NMTModel):
 
         return self
 
-    def translate(self, test_loader):
+    def translate_batch(self, test_loader):
         """
         Batch translates sequences.
 
@@ -137,7 +186,7 @@ class TransformerModel(NMTModel):
         """
         self.model.word_prob_prj = nn.LogSoftmax(dim=1)
         self.model.eval()
-        translator = Translator(opt, new=False)
+        translator = Translator(self.opt, new=False)
         translator.model = self.model
         idx2word = test_loader.dataset.tgt_idx2word
 
@@ -159,19 +208,23 @@ class TransformerModel(NMTModel):
         """
         
         checkpoint_encoder = {
-        'type': "transformer",
-        'model': self.model.encoder.state_dict(),
-        'epoch' : epoch,
-        'settings': self.opt
+            'type': "transformer",
+            'model': self.model.encoder.state_dict(),
+            'epoch': epoch,
+            'settings': self.opt
         }
 
+        del checkpoint_encoder['settings'].telegram_key
+
         checkpoint_decoder = {
-        'type': "transformer",
-        'model': self.model.decoder.state_dict(),
-        'generator' : self.model.generator.state_dict(),
-        'epoch' : epoch,
-        'settings': self.opt
+            'type': "transformer",
+            'model': self.model.decoder.state_dict(),
+            'generator': self.model.generator.state_dict(),
+            'epoch': epoch,
+            'settings': self.opt
         }
+
+        del checkpoint_decoder['settings'].telegram_key
 
         if not note:
             note = ""

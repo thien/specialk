@@ -96,6 +96,47 @@ def load_args():
     parser.add_argument('-embs_share_weight', action='store_true')
     parser.add_argument('-proj_share_weight', action='store_true')
     parser.add_argument('-label_smoothing', action='store_true')
+    
+    # RNN specific options
+    parser.add_argument('-max_generator_batches', type=int, default=32,
+                    help="""Maximum batches of words in a sequence to run
+                    the generator on in parallel. Higher is faster, but uses
+                    more memory.""")
+    parser.add_argument('-input_feed', type=int, default=0,
+                    help="""Feed the context vector at each time step as
+                    additional input (via concatenation with the word
+                    embeddings) to the decoder.""")
+    parser.add_argument('-max_grad_norm', type=float, default=5,
+                    help="""If the norm of the gradient vector exceeds this,
+                    renormalize it to have the norm equal to max_grad_norm""")
+    parser.add_argument('-curriculum', action="store_true",
+                    help="""For this many epochs, order the minibatches based
+                    on source sequence length. Sometimes setting this to 1 will
+                    increase convergence speed.""")
+    parser.add_argument('-brnn', action='store_true',
+                    help='Use a bidirectional encoder')
+    parser.add_argument('-brnn_merge', default='concat',
+                        help="""Merge action for the bidirectional hidden states:
+                        [concat|sum]""")
+    parser.add_argument('-rnn_size', type=int, default=500,
+                        help='Size of LSTM hidden states')
+    #learning rate
+    parser.add_argument('-learning_rate', type=float, default=1.0,
+                        help="""Starting learning rate. If adagrad/adadelta/adam is
+                        used, then this is the global learning rate. Recommended
+                        settings: sgd = 1, adagrad = 0.1, adadelta = 1, adam = 0.001""")
+    parser.add_argument('-learning_rate_decay', type=float, default=0.5,
+                        help="""If update_learning_rate, decay learning rate by
+                        this much if (i) perplexity does not decrease on the
+                        validation set or (ii) epoch has gone past
+                        start_decay_at""")
+    parser.add_argument('-start_decay_at', type=int, default=8,
+                        help="""Start decaying every epoch after and including this
+                        epoch""")
+    parser.add_argument('-optim', default='sgd',
+                    help="Optimization method. [sgd|adagrad|adadelta|adam]")
+    
+
 
     opt = parser.parse_args()
 
@@ -104,21 +145,10 @@ def load_args():
 
     return opt
 
-def setup_model(opt):
-    return transformer(opt) if opt.model == "transformer" else recurrent(opt)
-
-def train(model):
-    """
-    Deals with train and validation rounds.
-    """
-    model.init_logs()
-    for epoch in tqdm(range(1, model.opt.epochs+1), desc='Epochs'):
-        stats = model.train(epoch)
-        model.save(epoch=epoch, note="epoch_" + str(epoch))
-        model.update_logs(epoch)
 
 if __name__ == "__main__":
-    model = setup_model(load_args())
+    opt = load_args()
+    model = transformer(opt) if opt.model == "transformer" else recurrent(opt)
     print("Setup model wrapper.")
     model.load_dataset()
     print("Loaded data.")
@@ -126,5 +156,11 @@ if __name__ == "__main__":
     print("Initiated model and weights.")
     model.setup_optimiser()
     print("Training model.")
-    train(model)
+    if model.opt.save_model:
+        model.init_logs()
+    for epoch in tqdm(range(1, model.opt.epochs+1), desc='Epochs'):
+        stats = model.train(epoch)
+        if model.opt.save_model:
+            model.save(epoch=epoch, note="epoch_" + str(epoch))
+            model.update_logs(epoch)
     print("Done.")

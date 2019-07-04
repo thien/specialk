@@ -163,31 +163,49 @@ class RecurrentModel(NMTModel):
                 sorted_lengths, sorted_idx = torch.sort(src_pos, descending=True)
                 src_seq = src_seq[sorted_idx]
                 # swap batch relationship order.
-                src_seq = src_seq.transpose(0, 1)
+                # src_seq = src_seq.transpose(0, 1)
 
                 src = (src_seq, sorted_lengths)
 
                 pred, score, attn, _ = translator.translateBatch(src, None)
 
-                # reverse tensor relationship order
-                pred = pred.transpose(0, 1)
-                # reverse order
+                # pred = torch.tensor(pred)
+                # pred = torch.transpose(0,1)
+                # print(pred)
+                # print(pred)
+                # # pred, score, attn, _ = translator.translate_batch(src_seq, sorted_lengths)
+
+                # enc_hidden, context = self.model.encoder(src)
+                # init_output = self.make_init_decoder_output(context)
+
+                # enc_hidden = (self._fix_enc_hidden(enc_hidden[0]),
+                #             self._fix_enc_hidden(enc_hidden[1]))
+
+                # for t in range(range_limit):
+                        
+                #     out, dec_hidden, _attn = self.decoder(y, enc_hidden, context, init_output)
+
+                #     # reverse tensor relationship order
+                #     out = out.transpose(0, 1)
+
+                #     # greedy
+
+                
                 _, reversed_idx = torch.sort(sorted_idx)
-                pred  = pred[reversed_idx]
-                score = score[reversed_idx]
-                attn  = attn[reversed_idx]
+                pred  = [pred[i]  for i in reversed_idx]
+                score = [score[i] for i in reversed_idx]
+                attn  = [attn[i]  for i in reversed_idx]
+                # gold  = [gold[i]  for i in reversed_idx]
 
-                pred, predScore, attn, goldScore = list(zip(*sorted(zip(pred, predScore, attn, goldScore, indices), key=lambda x: x[-1])))[:-1]
 
-                #  (3) convert indexes to words
-                predBatch = []
-                for b in range(src[0].size(1)):
-                    predBatch.append(
-                        [self.buildTargetTokens(pred[b][n], srcBatch[b], attn[b][n])
-                                for n in range(self.opt.n_best)]
-                    )
+                for idx_seqs in pred:
+                    for idx_seq in idx_seqs:
+                        tokens = [idx2word[idx.item()] for idx in idx_seq if idx != self.constants.EOS]
+                        pred_line = ' '.join(tokens)
+                        print(pred_line)
+                #         f.write(pred_line + '\n')
 
-                print("COOL")
+                # print("COOL")
                 break
         return self
     

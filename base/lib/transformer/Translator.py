@@ -17,11 +17,11 @@ class Translator(object):
         self.opt = opt
         self.device = torch.device('cuda' if opt.cuda else 'cpu')
 
-        checkpoint = torch.load(opt.model)
-        model_opt = checkpoint['settings']
-        self.model_opt = model_opt
-
         if new:
+            checkpoint = torch.load(opt.model)
+            model_opt = checkpoint['settings']
+            self.model_opt = model_opt
+            self.max_token_seq_len = model_opt.max_token_seq_len
             model = Transformer(
                 model_opt.src_vocab_size,
                 model_opt.tgt_vocab_size,
@@ -154,7 +154,7 @@ class Translator(object):
             inst_idx_to_position_map = get_inst_idx_to_tensor_position_map(active_inst_idx_list)
 
             #-- Decode
-            for len_dec_seq in range(1, self.model_opt.max_token_seq_len + 1):
+            for len_dec_seq in range(1, self.max_token_seq_len + 1):
 
                 active_inst_idx_list = beam_decode_step(
                     inst_dec_beams, len_dec_seq, src_seq, src_enc, inst_idx_to_position_map, n_bm)

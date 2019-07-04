@@ -1,44 +1,47 @@
-from . import Models, Constants, Dataset, Beam, modules
+from . import Models, Constants, Dataset, modules
+from .Beam import Beam
 import torch.nn as nn
 import torch
 from torch.autograd import Variable
 
 class Translator(object):
-    def __init__(self, opt):
+    def __init__(self, opt, new=True):
         self.opt = opt
-        self.tt = torch.cuda if opt.cuda else torch
+        self.device = torch.device('cuda' if opt.cuda else 'cpu')
+        if new:
+            # self.tt = torch.cuda if opt.cuda else torch
 
-        checkpoint = torch.load(opt.model)
+            checkpoint = torch.load(opt.model)
 
-        model_opt = checkpoint['opt']
-        self.src_dict = checkpoint['dicts']['src']
-        self.tgt_dict = checkpoint['dicts']['tgt']
+            model_opt = checkpoint['opt']
+            self.src_dict = checkpoint['dicts']['src']
+            self.tgt_dict = checkpoint['dicts']['tgt']
 
-        encoder = Models.Encoder(model_opt, self.src_dict)
-        decoder = Models.Decoder(model_opt, self.tgt_dict)
-        model = Models.NMTModel(encoder, decoder)
+            encoder = Models.Encoder(model_opt, self.src_dict)
+            decoder = Models.Decoder(model_opt, self.tgt_dict)
+            model = Models.NMTModel(encoder, decoder)
 
-        # @ change here.
-        generator = nn.Sequential(
-            nn.Linear(model_opt.rnn_size, self.tgt_dict.size()),
-            nn.LogSoftmax(dim=1))
+            # @ change here.
+            generator = nn.Sequential(
+                nn.Linear(model_opt.rnn_size, self.tgt_dict.size()),
+                nn.LogSoftmax(dim=1))
 
-        if "model" in checkpoint.keys():
-            model.load_state_dict(checkpoint['model'])
-            
-        generator.load_state_dict(checkpoint['generator'])
+            if "model" in checkpoint.keys():
+                model.load_state_dict(checkpoint['model'])
+                
+            generator.load_state_dict(checkpoint['generator'])
 
-        if opt.cuda:
-            model.cuda()
-            generator.cuda()
-        else:
-            model.cpu()
-            generator.cpu()
+            if opt.cuda:
+                model.cuda()
+                generator.cuda()
+            else:
+                model.cpu()
+                generator.cpu()
 
-        model.generator = generator
+            model.generator = generator
 
-        self.model = model
-        self.model.eval()
+            self.model = model
+            self.model.eval()
 
 
     def buildData(self, srcBatch, goldBatch):
@@ -48,7 +51,7 @@ class Translator(object):
         if goldBatch:
             tgtData = [self.tgt_dict.convertToIdx(b,
                        Constants.UNK_WORD,
-                       Constants.BOS_WORD,
+                       Constants.SOS_WORD,
                        Constants.EOS_WORD) for b in goldBatch]
         with torch.no_grad():
             return Dataset(srcData, tgtData,
@@ -68,7 +71,7 @@ class Translator(object):
                     
         return tokens
 
-    def translateBatch(self, srcBatch, tgtBatch):
+    def translateBatch(self, srcBatch, tgtBatch=None):
         batchSize = srcBatch[0].size(1)
         beamSize = self.opt.beam_size
 
@@ -90,6 +93,8 @@ class Translator(object):
         #  (2) if a target is specified, compute the 'goldScore'
         #  (i.e. log likelihood) of the target under the model
         goldScores = context.data.new(batchSize).zero_()
+
+        # This section is most likely not to be called.
         if tgtBatch is not None:
             decStates = encStates
             decOut = self.model.make_init_decoder_output(context)
@@ -120,7 +125,7 @@ class Translator(object):
 
         batchIdx = list(range(batchSize))
         remainingSents = batchSize
-        for i in range(self.opt.max_sent_length):
+        for i in range(self.max_token_seq_len):
 
             self.model.decoder.apply(applyContextMask)
 
@@ -130,10 +135,12 @@ class Translator(object):
 
             with torch.no_grad():
                 input = Variable(input)
-            decOut, decStates, attn = self.model.decoder(input, decStates, context, decOut)
+            decOut, decStates, attn = self.model.decoder(input, decStates, context, decOut, False)
             # decOut: 1 x (beam*batch) x numWords
-            decOut = decOut.squeeze(0)
-            out = self.model.generator.forward(decOut)
+            out = self.model.decoder.generator(decOut)
+
+
+
             # batch x beam x numWords
             wordLk = out.view(beamSize, remainingSents, -1).transpose(0, 1).contiguous()
             attn = attn.view(beamSize, remainingSents, -1).transpose(0, 1).contiguous()
@@ -159,7 +166,7 @@ class Translator(object):
 
             # in this section, the sentences that are still active are
             # compacted so that the decoder is not run on completed sentences
-            activeIdx = self.tt.LongTensor([batchIdx[k] for k in active])
+            activeIdx = torch.LongTensor([batchIdx[k] for k in active]).to(self.device)
             batchIdx = {beam: idx for idx, beam in enumerate(active)}
 
             def updateActive(t):

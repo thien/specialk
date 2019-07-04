@@ -15,6 +15,7 @@ from lib.nmtModel import NMTModel
 from lib.recurrent.Models import Encoder, Decoder
 from lib.recurrent.Models import NMTModel as Seq2Seq
 from lib.recurrent.Optim import Optim
+from lib.recurrent.Translator import Translator
 
 class RecurrentModel(NMTModel):
     def __init__(self, opt):
@@ -33,18 +34,42 @@ class RecurrentModel(NMTModel):
         """
         Loads models from file.
         """
-
         if encoder_path:
             enc = torch.load(encoder_path)
+            # copy encoder weights
+            opts_e = enc['settings']
+            # replace parameters in opts.
+            blacklist = {
+                "checkpoint_encoder",
+                "checkpoint_decoder",
+                "cuda",
+                "directory",
+                "data",
+                "log",
+                "model",
+                "save_mode",
+                "telegram_key",
+                "save_model",
+                "train_from_state_dict",
+                "batch_size"
+            }
+            for arg in dir(opts_e):
+                if arg[0] == "_":
+                    continue
+                if arg in blacklist:
+                    continue
+                setattr(self.opt, arg, getattr(opts_e, arg))
+            # initiate a new model
+            self.initiate()
             self.model.encoder.load_state_dict(enc['model'])
-            # load optimiser
-            self.setup_optimiser(enc['optim'])
+
         if decoder_path:
             dec = torch.load(decoder_path)
+            opts_d = enc['settings']
             # Note that the decoder file contains both the decoder
             # and the target_word_projection.
             self.model.decoder.load_state_dict(dec['model'])
-            self.model.generator.load_state_dict(dec['generator'])
+            # self.model.generator.load_state_dict(dec['generator'])
         self.model.to(self.device) 
 
         return self
@@ -119,11 +144,51 @@ class RecurrentModel(NMTModel):
 
         return self
 
-    def translate(self):
+    def translate(self, test_loader, max_token_seq_len):
         """
         Uses the models to perform inference/translation.
         """
-        print("[Warning]: translate() is not implemented.")
+        translator = Translator(self.opt, False)
+        translator.model = self.model
+        # max_token_seq_len depends on the vocabulary_loader.
+        translator.max_token_seq_len = max_token_seq_len
+        idx2word = test_loader.dataset.tgt_idx2word
+        # setup run
+        with open(self.opt.output, 'w') as f:
+            for batch in tqdm(test_loader, desc='  - (Test)', leave=False):
+                src_seq, src_pos, = map(lambda x: x.to(self.device), batch)
+                src_pos = torch.sum(src_pos > 0, dim=1)
+                
+                # sort for pack_padded_sequences
+                sorted_lengths, sorted_idx = torch.sort(src_pos, descending=True)
+                src_seq = src_seq[sorted_idx]
+                # swap batch relationship order.
+                src_seq = src_seq.transpose(0, 1)
+
+                src = (src_seq, sorted_lengths)
+
+                pred, score, attn, _ = translator.translateBatch(src, None)
+
+                # reverse tensor relationship order
+                pred = pred.transpose(0, 1)
+                # reverse order
+                _, reversed_idx = torch.sort(sorted_idx)
+                pred  = pred[reversed_idx]
+                score = score[reversed_idx]
+                attn  = attn[reversed_idx]
+
+                pred, predScore, attn, goldScore = list(zip(*sorted(zip(pred, predScore, attn, goldScore, indices), key=lambda x: x[-1])))[:-1]
+
+                #  (3) convert indexes to words
+                predBatch = []
+                for b in range(src[0].size(1)):
+                    predBatch.append(
+                        [self.buildTargetTokens(pred[b][n], srcBatch[b], attn[b][n])
+                                for n in range(self.opt.n_best)]
+                    )
+
+                print("COOL")
+                break
         return self
     
     def save(self, epoch=None, note=None):

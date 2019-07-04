@@ -13,6 +13,7 @@ from lib.nmtModel import NMTModel
 from lib.transformer.Models import Transformer, Encoder, Decoder
 from lib.transformer.Optim import ScheduledOptim
 from lib.transformer.Translator import Translator
+
 """
 Wrapper class for Transformer.
 
@@ -41,24 +42,24 @@ class TransformerModel(NMTModel):
         """
         Setups transformer model and stores it into memory.
         """
-        if self.opt.checkpoint_encoder:
-            self.load(self.opt.checkpoint_encoder, self.opt.checkpoint_decoder)
-        else:
-            # start fresh.
-            self.model = Transformer(
-                self.opt.src_vocab_size,
-                self.opt.tgt_vocab_size,
-                self.opt.max_token_seq_len,
-                tgt_emb_prj_weight_sharing=self.opt.proj_share_weight,
-                emb_src_tgt_weight_sharing=self.opt.embs_share_weight,
-                d_k=self.opt.d_k,
-                d_v=self.opt.d_v,
-                d_model=self.opt.d_model,
-                d_word_vec=self.opt.d_word_vec,
-                d_inner=self.opt.d_inner_hid,
-                n_layers=self.opt.layers,
-                n_head=self.opt.n_head,
-                dropout=self.opt.dropout).to(self.device)
+        # if self.opt.checkpoint_encoder:
+        #     self.load(self.opt.checkpoint_encoder, self.opt.checkpoint_decoder)
+        # else:
+        # start fresh.
+        self.model = Transformer(
+            self.opt.src_vocab_size,
+            self.opt.tgt_vocab_size,
+            self.opt.max_token_seq_len,
+            tgt_emb_prj_weight_sharing=self.opt.proj_share_weight,
+            emb_src_tgt_weight_sharing=self.opt.embs_share_weight,
+            d_k=self.opt.d_k,
+            d_v=self.opt.d_v,
+            d_model=self.opt.d_model,
+            d_word_vec=self.opt.d_word_vec,
+            d_inner=self.opt.d_inner_hid,
+            n_layers=self.opt.layers,
+            n_head=self.opt.n_head,
+            dropout=self.opt.dropout).to(self.device)
     
     def load(self, encoder_path, decoder_path=None):
         """
@@ -69,7 +70,6 @@ class TransformerModel(NMTModel):
             # copy encoder weights
             opts_e = enc['settings']
             # replace parameters in opts.
-            # print(opts_e)
             blacklist = {
                 "checkpoint_encoder",
                 "checkpoint_decoder",
@@ -89,23 +89,9 @@ class TransformerModel(NMTModel):
                     continue
                 if arg in blacklist:
                     continue
-                # print(arg, getattr(opts_e,arg))
-                setattr(self.opt, arg, getattr(opts_e,arg))
- 
-            self.model = Transformer(
-                self.opt.src_vocab_size,
-                self.opt.tgt_vocab_size,
-                self.opt.max_token_seq_len,
-                tgt_emb_prj_weight_sharing=self.opt.proj_share_weight,
-                emb_src_tgt_weight_sharing=self.opt.embs_share_weight,
-                d_k=self.opt.d_k,
-                d_v=self.opt.d_v,
-                d_model=self.opt.d_model,
-                d_word_vec=self.opt.d_word_vec,
-                d_inner=self.opt.d_inner_hid,
-                n_layers=self.opt.layers,
-                n_head=self.opt.n_head,
-                dropout=self.opt.dropout)
+                setattr(self.opt, arg, getattr(opts_e, arg))
+            # initiate a new model
+            self.initiate()
             # replace encoder weights
             self.model.encoder.load_state_dict(enc['model'])
             print("[Info] Loaded encoder model.")
@@ -114,13 +100,9 @@ class TransformerModel(NMTModel):
             # Note that the decoder file contains both 
             # the decoder and the target_word_projection.
             opts_d = enc['settings']
-
-            if encoder_path:
-                assert opts_e == opts_d
-                self.model.decoder.load_state_dict(dec['model'])
-                self.model.generator.load_state_dict(dec['generator'])
-                print("[Info] Loaded decoder model.")
-
+            self.model.decoder.load_state_dict(dec['model'])
+            self.model.generator.load_state_dict(dec['generator'])
+            print("[Info] Loaded decoder model.")
 
         self.model.to(self.device) 
     
@@ -178,7 +160,7 @@ class TransformerModel(NMTModel):
 
         return self
 
-    def translate_batch(self, test_loader):
+    def translate(self, test_loader, max_token_seq_len):
         """
         Batch translates sequences.
 
@@ -188,19 +170,22 @@ class TransformerModel(NMTModel):
         self.model.eval()
         translator = Translator(self.opt, new=False)
         translator.model = self.model
+        translator.max_token_seq_len = max_token_seq_len
+        # translator.model_opt = self.opt
         idx2word = test_loader.dataset.tgt_idx2word
 
-        with open(opt.output, 'w') as f:
-            for batch in tqdm(test_loader, mininterval=2, desc='  - (Test)', leave=False):
+        with open(self.opt.output, 'w') as f:
+            for batch in tqdm(test_loader, desc='  - (Test)', leave=False):
                 # get sequences through beam search.
                 all_hyp, _ = translator.translate_batch(*batch)
                 # save outputs
                 for idx_seqs in all_hyp:
                     for idx_seq in idx_seqs:
-                        pred_line = ' '.join([idx2word[idx] for idx in idx_seq])
+                        tokens = [idx2word[idx] for idx in idx_seq if idx != self.constants.EOS]
+                        pred_line = ' '.join(tokens)
                         f.write(pred_line + '\n')
         print('[Info] Finished.')
-        return sequences
+      
 
     def save(self, epoch=None, note=None):
         """
@@ -303,7 +288,7 @@ class TransformerModel(NMTModel):
         else:
             self.model.train()
 
-        total_loss, n_word_total, n_word_correct = 0,0,0
+        total_loss, n_word_total, n_word_correct = 0, 0, 0
 
         label = "Training" if not validation else "Validation"
         for batch in tqdm(dataset, desc=' - '+label, leave=False):

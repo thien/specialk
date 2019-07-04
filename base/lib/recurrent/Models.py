@@ -151,7 +151,7 @@ class Decoder(nn.Module):
 
     #     outputs = torch.stack(outputs)
     #     return outputs, hidden, attn
-    def forward(self, input, hidden, context, init_output):
+    def forward(self, input, hidden, context, init_output, useGen=True):
         emb = self.word_lut(input)
         #print(context.size())
         # n.b. you can increase performance if you compute W_ih * x for all
@@ -167,7 +167,8 @@ class Decoder(nn.Module):
             output, hidden = self.rnn(emb_t, hidden)
             output, attn = self.attn(output, context.transpose(0, 1))
             output = self.dropout(output)
-            output = self.generator(output)
+            if useGen:
+                output = self.generator(output)
             outputs += [output]
 
         outputs = torch.stack(outputs)

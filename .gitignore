@@ -14,4 +14,5 @@ datasets/machine_translation/global_voices/training/*
 .fuse_*
 *.pyc
 *.atok
+base/models
 hansard.36

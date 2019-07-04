@@ -27,7 +27,7 @@ class Beam():
 
         # The outputs at each time-step.
         self.next_ys = [torch.full((size,), Constants.PAD, dtype=torch.long, device=device)]
-        self.next_ys[0][0] = Constants.BOS
+        self.next_ys[0][0] = Constants.SOS
 
     def get_current_state(self):
         "Get the outputs for the current timestep."
@@ -89,7 +89,7 @@ class Beam():
         else:
             _, keys = self.sort_scores()
             hyps = [self.get_hypothesis(k) for k in keys]
-            hyps = [[Constants.BOS] + h for h in hyps]
+            hyps = [[Constants.SOS] + h for h in hyps]
             dec_seq = torch.LongTensor(hyps)
 
         return dec_seq

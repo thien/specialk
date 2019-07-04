@@ -68,7 +68,7 @@ class NMTModel:
         print("[Warning:] validate() is not implemented.")
         return self
 
-    def translate(self):
+    def translate(self, dataset):
         """
         Uses the models to perform inference/translation.
         """
@@ -186,7 +186,7 @@ class NMTModel:
             collate_fn=collate_fn)
             
         
-        return test_loader
+        return test_loader, settings.max_token_seq_len
 
 
     @staticmethod

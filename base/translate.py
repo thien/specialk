@@ -84,13 +84,13 @@ if __name__ == "__main__":
     # then load them into the model.
     model = transformer(opt) if opt.model == "transformer" else recurrent(opt)
     print("Setup model wrapper.")
-    model.initiate()
+    model.load(opt.checkpoint_encoder, opt.checkpoint_decoder)
     print("Initiated model and weights.")
     # load test data
-    test_loader = model.load_testdata(opt.src, opt.vocab)
-    idx2word = test_loader.dataset.tgt_idx2word
+    test_loader, max_token_seq_len = model.load_testdata(opt.src, opt.vocab)
+    # idx2word = test_loader.dataset.tgt_idx2word
     # load output file.
-    model.translate_batch(test_loader)
+    model.translate(test_loader, max_token_seq_len)
     # with open(opt.output, 'w') as f:
     #     # setup test loader.
     #     for batch in tqdm(test_loader, mininterval=2, desc='  - (Test)', leave=False):

@@ -152,8 +152,17 @@ if __name__ == "__main__":
     print("Setup model wrapper.")
     model.load_dataset()
     print("Loaded data.")
-    model.initiate()
-    print("Initiated model and weights.")
+
+    if opt.encoder_path:
+        model.load(opt.checkpoint_encoder, opt.checkpoint_decoder)
+        if opt.checkpoint_decoder:
+            print("Loaded model encoder and decoder.")
+        else:
+            print("Loaded model encoder.")
+    else:
+        model.initiate()
+        print("Initiated model and weights.")
+
     model.setup_optimiser()
     print("Training model.")
     if model.opt.save_model:

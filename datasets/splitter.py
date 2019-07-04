@@ -25,7 +25,7 @@ parser.add_argument('-seed', default=0,
 parser.add_argument('-ratio', default="80:15:5",
                     help="Ratio to determine the dataset split. Input should be in the form of train:val:test. See default example as a guide.")
 parser.add_argument('-save_location', help="Location to save the output files. defaults to the same location of the source file.")
-parser.add_argument('-verbose', default=False, help="Determines whether to print outputs.")
+parser.add_argument('-verbose', action='store_true', default=False, help="Determines whether to print outputs.")
 
 opt = parser.parse_args()
 

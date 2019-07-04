@@ -4,6 +4,23 @@
 - Save epoch in models (for checkpointing).
 - Note to self: Don't merge the optimisation methods. They're inherently different (see Attn is all you need paper.)
 
+## 7/04
+
+- Recurrent trainer needs major refactoring
+- TODO: Reverse engineer the beam mechanism for the seq2seq translator.
+- TODO: Telegram support
+- TODO: Bayesian Hyperoptimisation
+
+## 7/02
+
+- Implemented Transformer Trainer
+- Implemented Seq2Seq Trainer
+- Built batch functions for relevant dataset parsers
+- Built dataset downloaders.
+- Finished integrating the trainer classes into respective functions.
+- Built model trainer functions.
+- Initial tests on training data on en-de 30k shows that the seq2seq model greatly surpasses the transformer model. We'll have to build translator components to verify that this is the case. (Quite strange!)
+
 ## 6/20
 
 - Added `preprocess.py` to deal with turning mose style data into something that can be interpreted 

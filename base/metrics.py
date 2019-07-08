@@ -18,7 +18,9 @@ from gensim.corpora.dictionary import Dictionary
 # TODO: need to move spacy to outside s.t. it can be used for multiprocessing.
 # TODO: need to move glove to outside for similar reasons to as spacy.
 # TODO: same for syllables dict.
-# TODO: same for rouge.
+
+import warnings
+warnings.filterwarnings("ignore")
 
 # load rouge
 rouge_comp = Rouge()
@@ -509,17 +511,20 @@ if __name__ == "__main__":
 
         for key in avgs:
             avgs[key] = sum(avgs[key]) / len(avgs[key])
-        return avgs
+
+        new_avg = {}
+        for key in avgs:
+            new_avg[str(key)] = avgs[key]
+        
+        return new_avg
 
     mean = means(results)
-    for metric in mean:
-        print(metric, mean[metric])
-
+    
     store = {
         'mean': mean,
         'base': results
     }
 
     # output results to json.
-    with open(args.output, "w") as f:
-        json.dumps(store, f)
+    with open(args.output, 'w') as outfile:
+        json.dump(store, outfile)

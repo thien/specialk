@@ -1,4 +1,4 @@
-# import spacy
+import spacy
 import torch
 import os
 import json
@@ -6,48 +6,52 @@ from tqdm import tqdm
 import argparse
 import multiprocessing
 import subprocess
+from core.utils import get_len, batch_compute
+from rouge import Rouge
+import nltk
+# import pandas as pd
+# for emd
+from pyemd import emd
+from gensim.corpora.dictionary import Dictionary
+
 
 class Metrics:
     """
-    Handles performance measurements of either one document
-    or comparisons between two documents.
+    Handles performance measurements of either one tokenised
+    document or comparisons between two tokenised documents.
+
+    MAKE SURE THE DOCUMENTS ARE TOKENISED. (e.g. .atok files
+    or model outputs.)
     """
 
     def __init__(self):
         self.running = True
 
-    def load(self):
-        self.load_config()
-        self.load_glove()
+    def load(self, args):
+        self.load_glove(args.glove_path)
         self.load_spacy()
         self.load_syllables_dict()
+        self.rouge = Rouge()
         return self
 
-    def load_config(self):
-        """
-        Loads config file.
-        """
-        with open("../config.json", "r") as file:
-            self.config = json.load(file)
-        return self
-
-    def load_glove(self):
+    def load_glove(self, glove_path):
         """
         Loads glove dataset.
         """
         # done some performance studies and found that this pandas method is faster than msgpack, json, and pickling.
         # also does not require creating a new file.
-        df = pd.read_csv(config['glove_path'], sep=" ", quoting=3, header=None, index_col=0)
+        df = pd.read_csv(glove_path, sep=" ", quoting=3, header=None, index_col=0)
         self.glove = {key: val.values for key, val in df.T.items()}
         return self
 
     def load_spacy(self):
         # load spacy model if it isn't in memory yet.
-        if not self.spacy:
+        if spacy not in dir(self):
             self.spacy = spacy.load('en_core_web_sm')
             self.sentencizer = self.spacy.create_pipe("sentencizer")
             self.spacy.add_pipe(self.sentencizer)
             self.tokenizer = self.spacy.create_pipe("tokenizer")
+            self.stopwords = spacy.lang.en.stop_words.STOP_WORDS
         return self
 
     def load_syllables_dict(self):
@@ -55,24 +59,23 @@ class Metrics:
         self.cmudict = cmudict.dict()
         return self
 
-    # measurements below
+    # NMT style measurements
 
-    def word_movers_distance(self, document1, document2):
+    def wmd(self, ref_tokens, hyp_tokens):
         """
         Calculates word mover distances between two strings.
+
+        Uses spacy tokenisers input.
         """
         # based on https://github.com/RaRe-Technologies/gensim/blob/18bcd113fd5ed31294a24c7274fcb95df001f88a/gensim/models/keyedvectors.py
         # If pyemd C extension is available, import it.
         # If pyemd is attempted to be used, but isn't installed, ImportError will be raised in wmdistance
-        from pyemd import emd
-        from gensim.corpora.dictionary import Dictionary
 
-        
-        documents = [document1, document2]
+        documents = [ref_tokens, hyp_tokens]
         for i, document in enumerate(documents):
-            document = self.tokenizer(document)
+            # document = self.tokenizer(document)
             # remove stopwords.
-            document = [i.text.lower() for i in document if not i.is_stop]
+            document = [i.lower() for i in document if not i in self.stopwords]
             # remove out-of-vocabulary words.
             document = [token for token in document if token in self.glove]
             documents[i] = document
@@ -123,6 +126,40 @@ class Metrics:
         # Compute WMD.
         return emd(d1, d2, distance_matrix)
 
+    def bleu(self, ref_tokens, hyp_tokens):
+        """
+        chicken
+        """
+        # could try NLTK
+
+        hypothesis = ['It', 'is', 'a', 'cat', 'at', 'room']
+        reference = ['It', 'is', 'a', 'cat', 'inside', 'the', 'room']
+        # there may be several references
+        return nltk.translate.bleu_score.sentence_bleu([reference], hypothesis)
+
+    def rouge(self, ref_tokens, hyp_tokens):
+        """
+        Calculates ROUGE scores (uses an independent library.)
+        """
+        hypothesis = " ".join(hyp_tokens)
+        reference = " ".join(ref_tokens)
+        return rouge.get_scores(hypothesis, reference)
+
+    def meteor(self, ref_tokens, hyp_tokens):
+        
+        # could try NLTK
+        return None
+
+    def perplexity(self, tokens):
+        # not sure how to calculate this
+        return None
+
+    # style transfer intensity
+    # content preservation
+    # naturalness
+
+    # lexical measurements
+
     def lex_match_1(self, tokens):
         """
         finds ``it v-link ADJ finite/non-finite clause''
@@ -155,7 +192,7 @@ class Metrics:
             
         return matches if matches else None
 
-    def lex_match_2(self,tokens):
+    def lex_match_2(self, tokens):
         """
         finds ``v-link ADJ prep''
         
@@ -196,7 +233,9 @@ class Metrics:
             
         return matches if matches else None
 
-    def syllables(self,word):
+    # readability measurements
+
+    def syllables(self, word):
         """
         counts syllables in a word.
 
@@ -265,54 +304,34 @@ class Metrics:
             "ari" : ari
         }
 
-    def bleu(self, left, right):
-        """
-        chicken
-        """
-        # could try NLTK
-
-    hypothesis = ['It', 'is', 'a', 'cat', 'at', 'room']
-    reference = ['It', 'is', 'a', 'cat', 'inside', 'the', 'room']
-    #there may be several references
-    BLEUscore = nltk.translate.bleu_score.sentence_bleu([reference], hypothesis)
-    print BLEUscore
-        return None
-    
-    def rouge(self, left, right):
-        """
-        help
-        """
-        # could try NLTK
-        return None
-
-    def meteor(self, left, right):
-        """
-        wat
-        """
-        # could try NLTK
-        return None
-    
-    def perplexity(self, tokens):
-        # not sure how to calculate this
-        return None
-
-    # style transfer intensity
-    # content preservation
-    # naturalness
-
 
 def load_args():
     parser = argparse.ArgumentParser(description="metrics.py")
     # load documents
-    parser.add_argument("-doc_a", required=True, type=str, 
+    parser.add_argument("-reference", required=True, type=str, 
                         help="""
-                        filepath to text file containing MOSES
-                        style sequences.
+                        filepath to reference text file containing
+                        MOSES style sequences.
                         """)
-    parser.add_argument("-doc_b", default=None, type=str, help="""
-                        filepath to text file containing MOSES
-                        style sequences.
+    parser.add_argument("-ref_lang", required=True, type=str,
+                        help="""
+                        Reference document language.
                         """)
+    parser.add_argument("-hypothesis", default=None, type=str, help="""
+                        filepath to text file containing hypothesis
+                        MOSES style sequences.
+                        """)
+    parser.add_argument("-hyp_lang", required=True, type=str,
+                        help="""
+                        Hypothesis document language.
+                        """)
+
+    # additional stuff
+
+    parser.add_argument("-glove_path", type=str, help="""
+                        Filepath to glove embedding weights.
+                        """)
+
 
     # load measurement flags
     # these are automatically called from 
@@ -333,15 +352,7 @@ def load_args():
     return opt
 
 
-def get_len(filepath):
-    # read number of lines in the mose corpus without using python
-    # to deal with it. This is some order of magnitude faster!
-    command = "wc -l " + filepath
-    process = subprocess.run(command.split(" "), stdout=subprocess.PIPE)
-    return int(process.stdout.decode("utf-8").split(" ")[0])
-
-
-def load_dataset(doc_a, doc_b=None):
+def load_dataset(reference_doc, hypothesis_doc=None):
     """
     Since it is often the case that processing of the
     sequences is more expensive than loading the dataset,
@@ -351,19 +362,19 @@ def load_dataset(doc_a, doc_b=None):
     ignored = []
     count = 0
 
-    len_a = get_len(doc_a)
-    load_a = open(doc_a, "r")
-    if doc_b:
-        len_b = get_len(doc_b)
+    len_a = get_len(reference_doc)
+    load_a = open(reference_doc, "r")
+    if hypothesis_doc:
+        len_b = get_len(hypothesis_doc)
         if len_a != len_b:
             print("[Warning] The datasets are not equal in length.")
 
-        load_b = open(doc_b, "r")
+        load_b = open(hypothesis_doc, "r")
         with load_a as a, load_b as b:
             for line in tqdm(zip(a, b), total=len_a):
                 count += 1
-                # remove trailing \n
-                line = [s[:-2] for s in line]
+                # remove trailing spaces
+                line = [s.strip() for s in line]
                 if len(line[0]) < 1 and len(line[1]) < 1:
                     ignored.append(count)
                     continue
@@ -372,24 +383,47 @@ def load_dataset(doc_a, doc_b=None):
         with load_a as a:
             for line in tqdm(a, total=len_a):
                 count += 1
-                # remove trailing \n
-                line = line[:-2]
+                # remove trailing spaces
+                line = line.strip()
                 if len(line) < 1:
                     ignored.append(count)
                     continue
                 sequences.append(line)
 
-
     if len(ignored) > 0:
         print("[Warning] There were",len(ignored),"ignored sequences.")
     return sequences
 
-def batch_tokenise(entry):
+
+def batch_tokenise(sequence_pair):
+    """
+    Multithreaded tokenisation of sequences.
+    """
+    left, right = sequence_pair
+
+    pass
 
 
 if __name__ == "__main__":
     print("You shouldn't be running this directly.")
     args = load_args()
-    dataset = load_dataset(args.doc_a, args.doc_b)
+    dataset = load_dataset(args.reference, args.hypothesis)
     # load the metrics model
     metrics = Metrics()
+    metrics.load_spacy()
+
+    for seq_pair in dataset:
+        if args.hypothesis_doc:
+            reference, hypothesis = seq_pair
+            reference = reference.split(" ")
+            hypothesis = hypothesis.split(" ")
+            if args.wmd:
+                wmd = metrics.wmd(reference, hypothesis)
+            if args.bleu:
+                bleu = metrics.bleu(reference, hypothesis)
+                print(bleu)
+        break
+
+    # output results to json.
+    # calculate average.
+    # metrics.load(args)

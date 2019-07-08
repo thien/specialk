@@ -37,8 +37,7 @@ class Metrics:
     or model outputs.)
     """
 
-    def __init__(self):
-        self.running = True
+    def __init__(self, args):
         self.stopwords = spacy.lang.en.stop_words.STOP_WORDS
 
     def load(self, args):
@@ -359,12 +358,17 @@ def load_args():
                         Hypothesis document language.
                         """)
 
+    parser.add_argument("-output", required=True, type=str, help="""
+                        Location of output json filepath.
+                        """)
     # additional stuff
 
     parser.add_argument("-glove_path", type=str, help="""
                         Filepath to glove embedding weights.
                         """)
-
+    parser.add_argument("-lowercase", action="store_true", help="""
+                        If enabled, performs lowercase operation.
+                        """)
 
     # load measurement flags
     # these are automatically called from 
@@ -385,7 +389,7 @@ def load_args():
     return opt
 
 
-def load_dataset(reference_doc, hypothesis_doc=None):
+def load_dataset(reference_doc, hypothesis_doc=None, lowercase=False):
     """
     Since it is often the case that processing of the
     sequences is more expensive than loading the dataset,
@@ -409,6 +413,8 @@ def load_dataset(reference_doc, hypothesis_doc=None):
                 count += 1
                 # remove trailing spaces
                 line = [s.strip() for s in line]
+                if lowercase:
+                    line = [s.lower() for s in line]
                 if len(line[0]) < 1 and len(line[1]) < 1:
                     ignored.append(count)
                     continue
@@ -419,6 +425,8 @@ def load_dataset(reference_doc, hypothesis_doc=None):
                 count += 1
                 # remove trailing spaces
                 line = line.strip()
+                if lowercase:
+                    line = line.lower()
                 if len(line) < 1:
                     ignored.append(count)
                     continue
@@ -429,13 +437,13 @@ def load_dataset(reference_doc, hypothesis_doc=None):
     return sequences
 
 
-
 if __name__ == "__main__":
     args = load_args()
-    dataset = load_dataset(args.reference, args.hypothesis)
+    dataset = load_dataset(args.reference, args.hypothesis, args.lowercase)
+    # setup ordering (for multiprocessing purposes)
     dataset = [(i, dataset[i]) for i in range(len(dataset))]
     # load the metrics model
-    metrics = Metrics()
+    metrics = Metrics(args)
 
     def operate(sequence, args=args):
         """
@@ -456,10 +464,9 @@ if __name__ == "__main__":
         return (i, operate(cont))
 
     results = batch_compute(op_wrapper, dataset)
+    # sort by order and remove ordering tag
     results = sorted(results, key=lambda x: x[0])
     results = [x[1] for x in results]
-
-    ent_size = len(results)
 
     # need to compute means
 
@@ -488,6 +495,7 @@ if __name__ == "__main__":
         # get the keys
         eg = results[0]
         keys = sniff_keys(eg)
+        keys = sorted(keys)
         avgs = {key: [] for key in keys}
   
         for key in keys:
@@ -503,10 +511,15 @@ if __name__ == "__main__":
             avgs[key] = sum(avgs[key]) / len(avgs[key])
         return avgs
 
-    avgs = means(results)
-    for avg in avgs:
-        print(avg, avgs[avg])
-#  
+    mean = means(results)
+    for metric in mean:
+        print(metric, mean[metric])
+
+    store = {
+        'mean': mean,
+        'base': results
+    }
+
     # output results to json.
-    # calculate average.
-    # metrics.load(args)
+    with open(args.output, "w") as f:
+        json.dumps(store, f)

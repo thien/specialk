@@ -9,11 +9,24 @@ import subprocess
 from core.utils import get_len, batch_compute
 from rouge import Rouge
 import nltk
+from nltk.translate.bleu_score import sentence_bleu
 # import pandas as pd
 # for emd
 from pyemd import emd
 from gensim.corpora.dictionary import Dictionary
 
+# TODO: need to move spacy to outside s.t. it can be used for multiprocessing.
+# TODO: need to move glove to outside for similar reasons to as spacy.
+# TODO: same for syllables dict.
+# TODO: same for rouge.
+
+# load rouge
+rouge_comp = Rouge()
+# load spacy
+nlp = spacy.load('en_core_web_sm')
+sentencizer = nlp.create_pipe("sentencizer")
+nlp.add_pipe(sentencizer)
+tokenizer = nlp.create_pipe("tokenizer")
 
 class Metrics:
     """
@@ -26,12 +39,11 @@ class Metrics:
 
     def __init__(self):
         self.running = True
+        self.stopwords = spacy.lang.en.stop_words.STOP_WORDS
 
     def load(self, args):
         self.load_glove(args.glove_path)
-        self.load_spacy()
         self.load_syllables_dict()
-        self.rouge = Rouge()
         return self
 
     def load_glove(self, glove_path):
@@ -44,24 +56,33 @@ class Metrics:
         self.glove = {key: val.values for key, val in df.T.items()}
         return self
 
-    def load_spacy(self):
-        # load spacy model if it isn't in memory yet.
-        if spacy not in dir(self):
-            self.spacy = spacy.load('en_core_web_sm')
-            self.sentencizer = self.spacy.create_pipe("sentencizer")
-            self.spacy.add_pipe(self.sentencizer)
-            self.tokenizer = self.spacy.create_pipe("tokenizer")
-            self.stopwords = spacy.lang.en.stop_words.STOP_WORDS
-        return self
-
     def load_syllables_dict(self):
         from nltk.corpus import cmudict
         self.cmudict = cmudict.dict()
         return self
 
+    # preprocess
+
+    def prep(self, sents, tokenise=True):
+        """
+        Preprocess sequence s.t. the same variable
+        can be passed through all the metrics.
+        """
+        if type(sents) != str:
+            # pair of sequences
+            if tokenise:
+                seqs = [x.split(" ") for x in sents]
+                return seqs[0], seqs[1]
+            return sents
+        else:
+            # single sequence
+            if tokenise:
+                seq = sents.split(" ")
+                return seq
+
     # NMT style measurements
 
-    def wmd(self, ref_tokens, hyp_tokens):
+    def wmd(self, sequences):
         """
         Calculates word mover distances between two strings.
 
@@ -70,6 +91,8 @@ class Metrics:
         # based on https://github.com/RaRe-Technologies/gensim/blob/18bcd113fd5ed31294a24c7274fcb95df001f88a/gensim/models/keyedvectors.py
         # If pyemd C extension is available, import it.
         # If pyemd is attempted to be used, but isn't installed, ImportError will be raised in wmdistance
+
+        ref_tokens, hyp_tokens = self.prep(sequences, tokenise=True)
 
         documents = [ref_tokens, hyp_tokens]
         for i, document in enumerate(documents):
@@ -126,27 +149,33 @@ class Metrics:
         # Compute WMD.
         return emd(d1, d2, distance_matrix)
 
-    def bleu(self, ref_tokens, hyp_tokens):
+    def bleu(self, sequences):
         """
-        chicken
+        calculates BLEU score.
         """
-        # could try NLTK
+        reference, hypothesis = self.prep(sequences, tokenise=True)
+        # print(reference, hypothesis)
+        bleu1 = sentence_bleu([reference], hypothesis, weights=(1, 0, 0, 0))
+        bleu2 = sentence_bleu([reference], hypothesis, weights=(0, 1, 0, 0))
+        bleu3 = sentence_bleu([reference], hypothesis, weights=(0, 0, 1, 0))
+        bleu4 = sentence_bleu([reference], hypothesis, weights=(0, 0, 0, 1))
 
-        hypothesis = ['It', 'is', 'a', 'cat', 'at', 'room']
-        reference = ['It', 'is', 'a', 'cat', 'inside', 'the', 'room']
-        # there may be several references
-        return nltk.translate.bleu_score.sentence_bleu([reference], hypothesis)
+        return {
+            'bleu_1': bleu1,
+            'bleu_2': bleu2,
+            'bleu_3': bleu3,
+            'bleu_4': bleu4
+        }
 
-    def rouge(self, ref_tokens, hyp_tokens):
+    def rouge(self, sequences):
         """
         Calculates ROUGE scores (uses an independent library.)
         """
-        hypothesis = " ".join(hyp_tokens)
-        reference = " ".join(ref_tokens)
-        return rouge.get_scores(hypothesis, reference)
+        reference, hypothesis = self.prep(sequences, tokenise=False)
+        return rouge_comp.get_scores(hypothesis, reference)[-1]
 
-    def meteor(self, ref_tokens, hyp_tokens):
-        
+    def meteor(self, sequences):
+        reference, hypothesis = self.prep(sequences, tokenise=False)
         # could try NLTK
         return None
 
@@ -160,7 +189,7 @@ class Metrics:
 
     # lexical measurements
 
-    def lex_match_1(self, tokens):
+    def lex_match_1(self, sequence):
         """
         finds ``it v-link ADJ finite/non-finite clause''
         
@@ -173,9 +202,11 @@ class Metrics:
             matches: None if nothing is found,
                     [(match pairs)] otherwise.
         """
+        tokens = self.prep(sequence, tokenise=False)
 
         if type(tokens) != spacy.tokens.doc.Doc:
-            print("Warning: this is not a spacy processed input sequence. Manually processing..")
+            print("Warning: this is not a spacy processed input sequence.\
+                   Manually processing..")
             tokens = self.spacy(tokens)
 
         matches = []
@@ -192,7 +223,7 @@ class Metrics:
             
         return matches if matches else None
 
-    def lex_match_2(self, tokens):
+    def lex_match_2(self, sequence):
         """
         finds ``v-link ADJ prep''
         
@@ -205,6 +236,8 @@ class Metrics:
             matches: None if nothing is found,
                     [(match pairs)] otherwise.
         """
+        tokens = self.prep(sequence, tokenise=False)
+
         if type(tokens) != spacy.tokens.doc.Doc:
             print("Warning: this is not a spacy processed input sequence. Manually processing..")
             tokens = self.spacy(tokens)
@@ -321,7 +354,7 @@ def load_args():
                         filepath to text file containing hypothesis
                         MOSES style sequences.
                         """)
-    parser.add_argument("-hyp_lang", required=True, type=str,
+    parser.add_argument("-hyp_lang", default=None, type=str,
                         help="""
                         Hypothesis document language.
                         """)
@@ -364,6 +397,7 @@ def load_dataset(reference_doc, hypothesis_doc=None):
 
     len_a = get_len(reference_doc)
     load_a = open(reference_doc, "r")
+
     if hypothesis_doc:
         len_b = get_len(hypothesis_doc)
         if len_a != len_b:
@@ -395,35 +429,84 @@ def load_dataset(reference_doc, hypothesis_doc=None):
     return sequences
 
 
-def batch_tokenise(sequence_pair):
-    """
-    Multithreaded tokenisation of sequences.
-    """
-    left, right = sequence_pair
-
-    pass
-
 
 if __name__ == "__main__":
-    print("You shouldn't be running this directly.")
     args = load_args()
     dataset = load_dataset(args.reference, args.hypothesis)
+    dataset = [(i, dataset[i]) for i in range(len(dataset))]
     # load the metrics model
     metrics = Metrics()
-    metrics.load_spacy()
 
-    for seq_pair in dataset:
-        if args.hypothesis_doc:
-            reference, hypothesis = seq_pair
-            reference = reference.split(" ")
-            hypothesis = hypothesis.split(" ")
-            if args.wmd:
-                wmd = metrics.wmd(reference, hypothesis)
-            if args.bleu:
-                bleu = metrics.bleu(reference, hypothesis)
-                print(bleu)
-        break
+    def operate(sequence, args=args):
+        """
+        computes metric operations against the sequences.
+        """
+        result = {}
+        for key in dir(args):
+            if key[0] == "_":
+                continue
+            if key in dir(Metrics) and getattr(args, key):
+                result[key] = getattr(metrics, key)(sequence)
+        return result
 
+    def op_wrapper(seq):
+        # maintain the order of the sequences since we're
+        # doing batch operations.
+        i, cont = seq
+        return (i, operate(cont))
+
+    results = batch_compute(op_wrapper, dataset)
+    results = sorted(results, key=lambda x: x[0])
+    results = [x[1] for x in results]
+
+    ent_size = len(results)
+
+    # need to compute means
+
+    def sniff_keys(ent):
+        """
+        recursively finds keys of some dictionary.
+        returns tuple of keys.
+        """
+        keys = ent.keys()
+        stores = []
+        for key in keys:
+            if type(ent[key]) != dict:
+                entry = key
+                stores.append(entry)
+            else:
+                subset = sniff_keys(ent[key])
+                for subkey in subset:
+                    if type(subkey) == tuple:
+                        stores.append(tuple([key] + list(subkey)))
+                    else:
+                        stores.append(tuple([key, subkey]))
+        stores = list(set(stores))
+        return stores
+
+    def means(results):
+        # get the keys
+        eg = results[0]
+        keys = sniff_keys(eg)
+        avgs = {key: [] for key in keys}
+  
+        for key in keys:
+            if type(key) != tuple:
+                value = eg[key]
+            else:
+                value = eg
+                for level in key:
+                    value = value[level]
+            avgs[key].append(value)
+
+        for key in avgs:
+            avgs[key] = sum(avgs[key]) / len(avgs[key])
+        return avgs
+
+    avgs = means(results)
+    for avg in avgs:
+        print(avg, avgs[avg])
+#  
     # output results to json.
     # calculate average.
     # metrics.load(args)

@@ -3,6 +3,7 @@
 - Check for any teacher forcing implemention differences between the models.
 - Save epoch in models (for checkpointing).
 - Note to self: Don't merge the optimisation methods. They're inherently different (see Attn is all you need paper.)
+- Need to consider how to process newspaper articles in metrics.py. Possibly replacing \n tags with a custom token representing a new paragraph.
 
 ## 7/04
 

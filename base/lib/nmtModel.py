@@ -12,9 +12,10 @@ import os
 import torch.utils.data
 import datetime
 import atexit
+import telebot
+import json
 
 from preprocess import load_file, seq2idx
-
 
 class NMTModel:
     def __init__(self, opt, models_folder="models"):
@@ -28,6 +29,9 @@ class NMTModel:
         self.valid_losses = []
         self.train_accs = []
         self.valid_accs = []
+
+        if self.bot:
+            self.init_telegram(self.opt.telegram)
 
         atexit.register(self.exit_handler)
     # -------------------------
@@ -232,3 +236,21 @@ class NMTModel:
                 # delete the folder since nothing interesting happened.
                 os.rmdir(self.opt.directory)
         return None
+
+    def init_telegram(self, api_json_path):
+        """
+        Initiates telegram API bot.
+        (Quite useful if you want to get notified of any
+        status changes in the event that you're afk with model
+        training.)
+        """
+        api_q = json.load(api_json_path)
+        self.bot = telebot.TeleBot(api_q['api_private_key'])
+        self.bot_chatid = api_q['chat_id']
+
+    def t_msg(self, msg):
+        """
+        Sends messages to telegram chat ID.
+        """
+        if self.bot:
+            self.bot.send_message(self.bot_chatid, msg)

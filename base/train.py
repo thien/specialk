@@ -70,15 +70,20 @@ def load_args():
 
     # training options
     parser.add_argument('-epochs', type=int, required=True, default=10, help="""
-                        Number of epochs for training. (Note that for transformers, the number of sequences become considerably longer.)
+                        Number of epochs for training. (Note
+                        that for transformers, the number of
+                        sequences become considerably longer.)
                         """)
+
     parser.add_argument('-dropout', type=float, default=0.1, help="""
-                        Dropout probability' applied between self-attention layers/RNN Stacks.
+                        Dropout probability' applied between
+                        self-attention layers/RNN Stacks.
                         """)
 
     # debugging options
-    parser.add_argument('-telegram_key', help="""
-                        filepath to telegram API private key to send messages to.
+    parser.add_argument('-telegram', type=str, help="""
+                        filepath to telegram API private key
+                        and chatID to send messages to.
                         """)
 
     # transformer specific options
@@ -88,33 +93,49 @@ def load_args():
     parser.add_argument('-d_inner_hid', type=int, default=2048, help="""
                         Dimension size of the hidden layers of the transformer.
                         """)
-    parser.add_argument('-d_k', type=int, default=64, help="Key vector dimension size. ")
-    parser.add_argument('-d_v', type=int, default=64, help="Value vector dimension size.")
-
-    parser.add_argument('-n_head', type=int, default=8, help="Number of attention heads.")
-    parser.add_argument('-n_warmup_steps', type=int, default=4000)
-    parser.add_argument('-embs_share_weight', action='store_true')
-    parser.add_argument('-proj_share_weight', action='store_true')
-    parser.add_argument('-label_smoothing', action='store_true')
+    parser.add_argument('-d_k', type=int, default=64, help="""
+                        Key vector dimension size.
+                        """)
+    parser.add_argument('-d_v', type=int, default=64, help="""
+                        Value vector dimension size.
+                        """)
+    parser.add_argument('-n_head', type=int, default=8, help="""
+                        Number of attention heads.
+                        """)
+    parser.add_argument('-n_warmup_steps', type=int, default=4000, help="""
+                        Number of warmup steps.
+                        """)
+    parser.add_argument('-embs_share_weight', action='store_true', help="""
+                        If enabled, allows the embeddings of the encoder
+                        and the decoder to share weights.
+                        """)
+    parser.add_argument('-proj_share_weight', action='store_true', help="""
+                        If enabled, allows the projection/generator 
+                        to share weights.
+                        """)
+    parser.add_argument('-label_smoothing', action='store_true', help="""
+                        Enables label smoothing.
+                        """)
     
     # RNN specific options
-    parser.add_argument('-max_generator_batches', type=int, default=32,
-                    help="""Maximum batches of words in a sequence to run
-                    the generator on in parallel. Higher is faster, but uses
-                    more memory.""")
-    parser.add_argument('-input_feed', type=int, default=0,
-                    help="""Feed the context vector at each time step as
-                    additional input (via concatenation with the word
-                    embeddings) to the decoder.""")
-    parser.add_argument('-max_grad_norm', type=float, default=5,
-                    help="""If the norm of the gradient vector exceeds this,
-                    renormalize it to have the norm equal to max_grad_norm""")
+    parser.add_argument('-max_generator_batches', type=int, default=32, help="""
+                        Maximum batches of words in a sequence to run
+                        the generator on in parallel. Higher is faster, but uses
+                        more memory.""")
+    parser.add_argument('-input_feed', type=int, default=0, help="""
+                        Feed the context vector at each time step as
+                        additional input (via concatenation with the word
+                        embeddings) to the decoder.""")
+    parser.add_argument('-max_grad_norm', type=float, default=5, help="""
+                        If the norm of the gradient vector exceeds this,
+                        renormalize it to have the norm equal to max_grad_norm.
+                        """)
     parser.add_argument('-curriculum', action="store_true",
-                    help="""For this many epochs, order the minibatches based
-                    on source sequence length. Sometimes setting this to 1 will
-                    increase convergence speed.""")
+                        help="""For this many epochs, order the minibatches based
+                        on source sequence length. Sometimes setting this to 1 will
+                        increase convergence speed.""")
     parser.add_argument('-brnn', action='store_true',
-                    help='Use a bidirectional encoder')
+                        help='Use a bidirectional encoder')
     parser.add_argument('-brnn_merge', default='concat',
                         help="""Merge action for the bidirectional hidden states:
                         [concat|sum]""")
@@ -133,10 +154,10 @@ def load_args():
     parser.add_argument('-start_decay_at', type=int, default=8,
                         help="""Start decaying every epoch after and including this
                         epoch""")
-    parser.add_argument('-optim', default='sgd',
-                    help="Optimization method. [sgd|adagrad|adadelta|adam]")
+    parser.add_argument('-optim', default='sgd', 
+                        choices=['sgd', 'adagrad', 'adadelta', 'adam'], 
+                        help="Gradient optimisation method.")
     
-
 
     opt = parser.parse_args()
 
@@ -144,7 +165,6 @@ def load_args():
     assert opt.epochs > 0
 
     return opt
-
 
 if __name__ == "__main__":
     opt = load_args()

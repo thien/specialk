@@ -1,9 +1,18 @@
-import spacy
+# import spacy
 import torch
 import os
 import json
+from tqdm import tqdm
+import argparse
+import multiprocessing
+import subprocess
 
 class Metrics:
+    """
+    Handles performance measurements of either one document
+    or comparisons between two documents.
+    """
+
     def __init__(self):
         self.running = True
 
@@ -45,6 +54,8 @@ class Metrics:
         from nltk.corpus import cmudict
         self.cmudict = cmudict.dict()
         return self
+
+    # measurements below
 
     def word_movers_distance(self, document1, document2):
         """
@@ -112,7 +123,7 @@ class Metrics:
         # Compute WMD.
         return emd(d1, d2, distance_matrix)
 
-    def lex_match_1(tokens):
+    def lex_match_1(self, tokens):
         """
         finds ``it v-link ADJ finite/non-finite clause''
         
@@ -144,7 +155,7 @@ class Metrics:
             
         return matches if matches else None
 
-    def lex_match_2(tokens):
+    def lex_match_2(self,tokens):
         """
         finds ``v-link ADJ prep''
         
@@ -254,21 +265,131 @@ class Metrics:
             "ari" : ari
         }
 
-    def bleu(self):
+    def bleu(self, left, right):
+        """
+        chicken
+        """
+        # could try NLTK
+
+    hypothesis = ['It', 'is', 'a', 'cat', 'at', 'room']
+    reference = ['It', 'is', 'a', 'cat', 'inside', 'the', 'room']
+    #there may be several references
+    BLEUscore = nltk.translate.bleu_score.sentence_bleu([reference], hypothesis)
+    print BLEUscore
         return None
     
-    def rouge(self):
+    def rouge(self, left, right):
+        """
+        help
+        """
+        # could try NLTK
         return None
 
-    def meteor(self):
+    def meteor(self, left, right):
+        """
+        wat
+        """
+        # could try NLTK
         return None
-
+    
+    def perplexity(self, tokens):
+        # not sure how to calculate this
+        return None
 
     # style transfer intensity
     # content preservation
     # naturalness
 
 
+def load_args():
+    parser = argparse.ArgumentParser(description="metrics.py")
+    # load documents
+    parser.add_argument("-doc_a", required=True, type=str, 
+                        help="""
+                        filepath to text file containing MOSES
+                        style sequences.
+                        """)
+    parser.add_argument("-doc_b", default=None, type=str, help="""
+                        filepath to text file containing MOSES
+                        style sequences.
+                        """)
+
+    # load measurement flags
+    # these are automatically called from 
+    # the metrics function.
+    mets = []
+    for funct in dir(Metrics):
+        if funct[0:4] == "load":
+            continue
+        if funct[0] == "_":
+            continue
+        funct_name = "-" + funct
+        mets.append(funct_name)
+    sorted(mets)
+    for funct_name in mets:
+        parser.add_argument(funct_name, action="store_true")
+
+    opt = parser.parse_args()
+    return opt
+
+
+def get_len(filepath):
+    # read number of lines in the mose corpus without using python
+    # to deal with it. This is some order of magnitude faster!
+    command = "wc -l " + filepath
+    process = subprocess.run(command.split(" "), stdout=subprocess.PIPE)
+    return int(process.stdout.decode("utf-8").split(" ")[0])
+
+
+def load_dataset(doc_a, doc_b=None):
+    """
+    Since it is often the case that processing of the
+    sequences is more expensive than loading the dataset,
+    we load the whole datasets in memory first.
+    """
+    sequences = []
+    ignored = []
+    count = 0
+
+    len_a = get_len(doc_a)
+    load_a = open(doc_a, "r")
+    if doc_b:
+        len_b = get_len(doc_b)
+        if len_a != len_b:
+            print("[Warning] The datasets are not equal in length.")
+
+        load_b = open(doc_b, "r")
+        with load_a as a, load_b as b:
+            for line in tqdm(zip(a, b), total=len_a):
+                count += 1
+                # remove trailing \n
+                line = [s[:-2] for s in line]
+                if len(line[0]) < 1 and len(line[1]) < 1:
+                    ignored.append(count)
+                    continue
+                sequences.append(line)
+    else:
+        with load_a as a:
+            for line in tqdm(a, total=len_a):
+                count += 1
+                # remove trailing \n
+                line = line[:-2]
+                if len(line) < 1:
+                    ignored.append(count)
+                    continue
+                sequences.append(line)
+
+
+    if len(ignored) > 0:
+        print("[Warning] There were",len(ignored),"ignored sequences.")
+    return sequences
+
+def batch_tokenise(entry):
+
 
 if __name__ == "__main__":
     print("You shouldn't be running this directly.")
+    args = load_args()
+    dataset = load_dataset(args.doc_a, args.doc_b)
+    # load the metrics model
+    metrics = Metrics()

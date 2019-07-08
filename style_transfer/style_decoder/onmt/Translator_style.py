@@ -209,3 +209,4 @@ class Translator(object):
             )
 
         return predBatch, predScore, goldScore
+

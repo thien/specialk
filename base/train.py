@@ -167,14 +167,13 @@ def load_args():
 
     return opt
 
-if __name__ == "__main__":
-    opt = load_args()
+def train_model(opt):
     model = transformer(opt) if opt.model == "transformer" else recurrent(opt)
     print("Setup model wrapper.")
     model.load_dataset()
     print("Loaded data.")
 
-    if opt.encoder_path:
+    if opt.checkpoint_encoder:
         model.load(opt.checkpoint_encoder, opt.checkpoint_decoder)
         if opt.checkpoint_decoder:
             print("Loaded model encoder and decoder.")
@@ -194,3 +193,7 @@ if __name__ == "__main__":
             model.save(epoch=epoch, note="epoch_" + str(epoch))
             model.update_logs(epoch)
     print("Done.")
+
+if __name__ == "__main__":
+    opt = load_args()
+    train_model(opt)

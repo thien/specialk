@@ -1,9 +1,19 @@
+import matplotlib
+matplotlib.use('Agg')
+
 import random
 import numpy as np
 import multiprocessing
 import argparse
+from tqdm import tqdm
+import torch
+
+from train import train_model as train_final_model
+
 from lib.RecurrentModel import RecurrentModel as recurrent
 from lib.TransformerModel import TransformerModel as transformer
+
+
 
 from GPyOpt.methods import BayesianOptimization
 
@@ -46,7 +56,8 @@ def load_args():
                         """)
 
     # training options
-    parser.add_argument('-epochs', type=int, required=True, default=10, help="""
+    parser.add_argument('-epochs', type=int, required=True, default=10, 
+                        help="""
                         Number of epochs for training. (Note
                         that for transformers, the number of
                         sequences become considerably longer.)
@@ -56,6 +67,9 @@ def load_args():
     parser.add_argument('-telegram', type=str, help="""
                         filepath to telegram API private key
                         and chatID to send messages to.
+                        """)
+    parser.add_argument("-verbose", action="store_true", help="""
+                        If enabled, prints updates in terminal.
                         """)
 
     # transformer specific options
@@ -75,9 +89,22 @@ def load_args():
                         Number of attention heads.
                         """)
 
+    parser.add_argument('-embs_share_weight', action='store_true', help="""
+                        If enabled, allows the embeddings of the encoder
+                        and the decoder to share weights.
+                        """)
+    parser.add_argument('-proj_share_weight', action='store_true', help="""
+                        If enabled, allows the projection/generator 
+                        to share weights.
+                        """)
+
     opt = parser.parse_args()
 
-    print(opt)
+    opt.checkpoint_encoder = ""
+    opt.checkpoint_decoder = ""
+    opt.save_model = False
+    opt.bot = False
+   
     return opt
 
 
@@ -88,6 +115,11 @@ domain_transformer = [
         'name': 'learning_rate',
         'type': 'continuous',
         'domain': (0.0001, 0.1)
+    },
+    {
+        'name': 'dropout',
+        'type': 'continuous',
+        'domain': (0.0, 0.6)
     },
     {
         'name': 'n_warmup_steps',
@@ -136,21 +168,30 @@ def fit(f):
     model.reset_metrics()
     model.initiate()
     model.setup_optimiser()
+
     for epoch in tqdm(range(1, opt.epochs+1), desc='Epochs'):
         stats = model.train(epoch)
-
+ 
+            
     """
-    Accuracy metric is easier to interpret. Accuracy however isn’t differentiable so it can’t be used for back-propagation by the learning algorithm. For training models themselves, we'd need a differentiable loss function to act as a good proxy for accuracy.
+    Accuracy metric is easier to interpret. It however isn’t 
+    differentiable so it can’t be used for back-propagation 
+    by the learning algorithm. For training models themselves,
+    we'd need a differentiable loss function to act as a good
+    proxy for accuracy.
 
-    However since we're only looking at the end outcome after training, we can optimise for accuracy for the hyperparameter search.
+    However since we're only looking at the end outcome after
+    training, we can optimise for accuracy for the
+    hyperparameter search.
     """
+
     return model.valid_accs[-1]
 
 
 myBopt = BayesianOptimization(
     f=fit,                   # function to optimize
     domain=domain_transformer,            # box-constrains of the problem
-    initial_design_numdata=10,    # number data initial design
+    initial_design_numdata=5,    # number data initial design
     model_type="GP_MCMC",
     acquisition_type='EI_MCMC',  # EI
     evaluator_type="predictive",  # Expected Improvement
@@ -159,7 +200,7 @@ myBopt = BayesianOptimization(
     maximize=True,
     exact_feval=True)         # May not always give exact results
 
-myBopt.run_optimization(max_iter=10)
+myBopt.run_optimization(max_iter=2)
 # get the best parameters out
 x_best = myBopt.x_opt  # myBopt.X[np.argmin(myBopt.Y)]
 
@@ -169,3 +210,16 @@ print(allocate_var(x_best))
 
 
 # save opt output notes
+
+print("TRAINING BEST MODEL:")
+opt.save_model = True
+opt.log = True
+
+del model
+
+# substitute hyperparameter values
+hyperparams = allocate_var(x_best)
+for key in hyperparams:
+    setattr(opt, key, hyperparams[key])
+
+train_final_model(opt)

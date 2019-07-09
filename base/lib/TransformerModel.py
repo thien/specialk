@@ -79,7 +79,7 @@ class TransformerModel(NMTModel):
                 "log",
                 "model",
                 "save_mode",
-                "telegram_key",
+                "telegram",
                 "save_model",
                 "train_from_state_dict",
                 "batch_size"
@@ -113,7 +113,7 @@ class TransformerModel(NMTModel):
         self.optimiser = ScheduledOptim(
             optim.Adam(
                 filter(lambda x: x.requires_grad, self.model.parameters()),
-                betas=(0.9, 0.98), eps=1e-09, lr=opt.learning_rate),
+                betas=(0.9, 0.98), eps=1e-09, lr=self.opt.learning_rate),
             self.opt.d_model, self.opt.n_warmup_steps)
         print("[Info] optimiser configured.")
 
@@ -199,7 +199,8 @@ class TransformerModel(NMTModel):
             'settings': self.opt
         }
 
-        del checkpoint_encoder['settings'].telegram_key
+        if telegram in checkpoint_encoder['settings']:
+            del checkpoint_encoder['settings'].telegram
 
         checkpoint_decoder = {
             'type': "transformer",
@@ -209,7 +210,8 @@ class TransformerModel(NMTModel):
             'settings': self.opt
         }
 
-        del checkpoint_decoder['settings'].telegram_key
+        if telegram in checkpoint_decoder['settings']:
+            del checkpoint_decoder['settings'].telegram
 
         if not note:
             note = ""

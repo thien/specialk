@@ -30,7 +30,7 @@ class NMTModel:
         self.train_accs = []
         self.valid_accs = []
 
-        if self.bot:
+        if self.opt.telegram:
             self.init_telegram(self.opt.telegram)
 
         atexit.register(self.exit_handler)
@@ -89,7 +89,7 @@ class NMTModel:
     # ----------------------------
     # BASE FUNCTIONS
     # ----------------------------
-    
+
     def reset_metrics(self):
         """
         Resets metrics.

@@ -1,4 +1,4 @@
-# import spacy
+import spacy
 import torch
 import os
 import json
@@ -6,48 +6,55 @@ from tqdm import tqdm
 import argparse
 import multiprocessing
 import subprocess
+from core.utils import get_len, batch_compute
+from rouge import Rouge
+import nltk
+from nltk.translate.bleu_score import sentence_bleu
+# import pandas as pd
+# for emd
+from pyemd import emd
+from gensim.corpora.dictionary import Dictionary
+
+# TODO: need to move spacy to outside s.t. it can be used for multiprocessing.
+# TODO: need to move glove to outside for similar reasons to as spacy.
+# TODO: same for syllables dict.
+
+import warnings
+warnings.filterwarnings("ignore")
+
+# load rouge
+rouge_comp = Rouge()
+# load spacy
+nlp = spacy.load('en_core_web_sm')
+sentencizer = nlp.create_pipe("sentencizer")
+nlp.add_pipe(sentencizer)
+tokenizer = nlp.create_pipe("tokenizer")
 
 class Metrics:
     """
-    Handles performance measurements of either one document
-    or comparisons between two documents.
+    Handles performance measurements of either one tokenised
+    document or comparisons between two tokenised documents.
+
+    MAKE SURE THE DOCUMENTS ARE TOKENISED. (e.g. .atok files
+    or model outputs.)
     """
 
-    def __init__(self):
-        self.running = True
+    def __init__(self, args):
+        self.stopwords = spacy.lang.en.stop_words.STOP_WORDS
 
-    def load(self):
-        self.load_config()
-        self.load_glove()
-        self.load_spacy()
+    def load(self, args):
+        self.load_glove(args.glove_path)
         self.load_syllables_dict()
         return self
 
-    def load_config(self):
-        """
-        Loads config file.
-        """
-        with open("../config.json", "r") as file:
-            self.config = json.load(file)
-        return self
-
-    def load_glove(self):
+    def load_glove(self, glove_path):
         """
         Loads glove dataset.
         """
         # done some performance studies and found that this pandas method is faster than msgpack, json, and pickling.
         # also does not require creating a new file.
-        df = pd.read_csv(config['glove_path'], sep=" ", quoting=3, header=None, index_col=0)
+        df = pd.read_csv(glove_path, sep=" ", quoting=3, header=None, index_col=0)
         self.glove = {key: val.values for key, val in df.T.items()}
-        return self
-
-    def load_spacy(self):
-        # load spacy model if it isn't in memory yet.
-        if not self.spacy:
-            self.spacy = spacy.load('en_core_web_sm')
-            self.sentencizer = self.spacy.create_pipe("sentencizer")
-            self.spacy.add_pipe(self.sentencizer)
-            self.tokenizer = self.spacy.create_pipe("tokenizer")
         return self
 
     def load_syllables_dict(self):
@@ -55,24 +62,44 @@ class Metrics:
         self.cmudict = cmudict.dict()
         return self
 
-    # measurements below
+    # preprocess
 
-    def word_movers_distance(self, document1, document2):
+    def prep(self, sents, tokenise=True):
+        """
+        Preprocess sequence s.t. the same variable
+        can be passed through all the metrics.
+        """
+        if type(sents) != str:
+            # pair of sequences
+            if tokenise:
+                seqs = [x.split(" ") for x in sents]
+                return seqs[0], seqs[1]
+            return sents
+        else:
+            # single sequence
+            if tokenise:
+                seq = sents.split(" ")
+                return seq
+
+    # NMT style measurements
+
+    def wmd(self, sequences):
         """
         Calculates word mover distances between two strings.
+
+        Uses spacy tokenisers input.
         """
         # based on https://github.com/RaRe-Technologies/gensim/blob/18bcd113fd5ed31294a24c7274fcb95df001f88a/gensim/models/keyedvectors.py
         # If pyemd C extension is available, import it.
         # If pyemd is attempted to be used, but isn't installed, ImportError will be raised in wmdistance
-        from pyemd import emd
-        from gensim.corpora.dictionary import Dictionary
 
-        
-        documents = [document1, document2]
+        ref_tokens, hyp_tokens = self.prep(sequences, tokenise=True)
+
+        documents = [ref_tokens, hyp_tokens]
         for i, document in enumerate(documents):
-            document = self.tokenizer(document)
+            # document = self.tokenizer(document)
             # remove stopwords.
-            document = [i.text.lower() for i in document if not i.is_stop]
+            document = [i.lower() for i in document if not i in self.stopwords]
             # remove out-of-vocabulary words.
             document = [token for token in document if token in self.glove]
             documents[i] = document
@@ -123,7 +150,47 @@ class Metrics:
         # Compute WMD.
         return emd(d1, d2, distance_matrix)
 
-    def lex_match_1(self, tokens):
+    def bleu(self, sequences):
+        """
+        calculates BLEU score.
+        """
+        reference, hypothesis = self.prep(sequences, tokenise=True)
+        # print(reference, hypothesis)
+        bleu1 = sentence_bleu([reference], hypothesis, weights=(1, 0, 0, 0))
+        bleu2 = sentence_bleu([reference], hypothesis, weights=(0, 1, 0, 0))
+        bleu3 = sentence_bleu([reference], hypothesis, weights=(0, 0, 1, 0))
+        bleu4 = sentence_bleu([reference], hypothesis, weights=(0, 0, 0, 1))
+
+        return {
+            'bleu_1': bleu1,
+            'bleu_2': bleu2,
+            'bleu_3': bleu3,
+            'bleu_4': bleu4
+        }
+
+    def rouge(self, sequences):
+        """
+        Calculates ROUGE scores (uses an independent library.)
+        """
+        reference, hypothesis = self.prep(sequences, tokenise=False)
+        return rouge_comp.get_scores(hypothesis, reference)[-1]
+
+    def meteor(self, sequences):
+        reference, hypothesis = self.prep(sequences, tokenise=False)
+        # could try NLTK
+        return None
+
+    def perplexity(self, tokens):
+        # not sure how to calculate this
+        return None
+
+    # style transfer intensity
+    # content preservation
+    # naturalness
+
+    # lexical measurements
+
+    def lex_match_1(self, sequence):
         """
         finds ``it v-link ADJ finite/non-finite clause''
         
@@ -136,9 +203,11 @@ class Metrics:
             matches: None if nothing is found,
                     [(match pairs)] otherwise.
         """
+        tokens = self.prep(sequence, tokenise=False)
 
         if type(tokens) != spacy.tokens.doc.Doc:
-            print("Warning: this is not a spacy processed input sequence. Manually processing..")
+            print("Warning: this is not a spacy processed input sequence.\
+                   Manually processing..")
             tokens = self.spacy(tokens)
 
         matches = []
@@ -155,7 +224,7 @@ class Metrics:
             
         return matches if matches else None
 
-    def lex_match_2(self,tokens):
+    def lex_match_2(self, sequence):
         """
         finds ``v-link ADJ prep''
         
@@ -168,6 +237,8 @@ class Metrics:
             matches: None if nothing is found,
                     [(match pairs)] otherwise.
         """
+        tokens = self.prep(sequence, tokenise=False)
+
         if type(tokens) != spacy.tokens.doc.Doc:
             print("Warning: this is not a spacy processed input sequence. Manually processing..")
             tokens = self.spacy(tokens)
@@ -196,7 +267,9 @@ class Metrics:
             
         return matches if matches else None
 
-    def syllables(self,word):
+    # readability measurements
+
+    def syllables(self, word):
         """
         counts syllables in a word.
 
@@ -265,53 +338,38 @@ class Metrics:
             "ari" : ari
         }
 
-    def bleu(self, left, right):
-        """
-        chicken
-        """
-        # could try NLTK
-
-    hypothesis = ['It', 'is', 'a', 'cat', 'at', 'room']
-    reference = ['It', 'is', 'a', 'cat', 'inside', 'the', 'room']
-    #there may be several references
-    BLEUscore = nltk.translate.bleu_score.sentence_bleu([reference], hypothesis)
-    print BLEUscore
-        return None
-    
-    def rouge(self, left, right):
-        """
-        help
-        """
-        # could try NLTK
-        return None
-
-    def meteor(self, left, right):
-        """
-        wat
-        """
-        # could try NLTK
-        return None
-    
-    def perplexity(self, tokens):
-        # not sure how to calculate this
-        return None
-
-    # style transfer intensity
-    # content preservation
-    # naturalness
-
 
 def load_args():
     parser = argparse.ArgumentParser(description="metrics.py")
     # load documents
-    parser.add_argument("-doc_a", required=True, type=str, 
+    parser.add_argument("-reference", required=True, type=str, 
                         help="""
-                        filepath to text file containing MOSES
-                        style sequences.
+                        filepath to reference text file containing
+                        MOSES style sequences.
                         """)
-    parser.add_argument("-doc_b", default=None, type=str, help="""
-                        filepath to text file containing MOSES
-                        style sequences.
+    parser.add_argument("-ref_lang", required=True, type=str,
+                        help="""
+                        Reference document language.
+                        """)
+    parser.add_argument("-hypothesis", default=None, type=str, help="""
+                        filepath to text file containing hypothesis
+                        MOSES style sequences.
+                        """)
+    parser.add_argument("-hyp_lang", default=None, type=str,
+                        help="""
+                        Hypothesis document language.
+                        """)
+
+    parser.add_argument("-output", required=True, type=str, help="""
+                        Location of output json filepath.
+                        """)
+    # additional stuff
+
+    parser.add_argument("-glove_path", type=str, help="""
+                        Filepath to glove embedding weights.
+                        """)
+    parser.add_argument("-lowercase", action="store_true", help="""
+                        If enabled, performs lowercase operation.
                         """)
 
     # load measurement flags
@@ -333,15 +391,7 @@ def load_args():
     return opt
 
 
-def get_len(filepath):
-    # read number of lines in the mose corpus without using python
-    # to deal with it. This is some order of magnitude faster!
-    command = "wc -l " + filepath
-    process = subprocess.run(command.split(" "), stdout=subprocess.PIPE)
-    return int(process.stdout.decode("utf-8").split(" ")[0])
-
-
-def load_dataset(doc_a, doc_b=None):
+def load_dataset(reference_doc, hypothesis_doc=None, lowercase=False):
     """
     Since it is often the case that processing of the
     sequences is more expensive than loading the dataset,
@@ -351,19 +401,22 @@ def load_dataset(doc_a, doc_b=None):
     ignored = []
     count = 0
 
-    len_a = get_len(doc_a)
-    load_a = open(doc_a, "r")
-    if doc_b:
-        len_b = get_len(doc_b)
+    len_a = get_len(reference_doc)
+    load_a = open(reference_doc, "r")
+
+    if hypothesis_doc:
+        len_b = get_len(hypothesis_doc)
         if len_a != len_b:
             print("[Warning] The datasets are not equal in length.")
 
-        load_b = open(doc_b, "r")
+        load_b = open(hypothesis_doc, "r")
         with load_a as a, load_b as b:
             for line in tqdm(zip(a, b), total=len_a):
                 count += 1
-                # remove trailing \n
-                line = [s[:-2] for s in line]
+                # remove trailing spaces
+                line = [s.strip() for s in line]
+                if lowercase:
+                    line = [s.lower() for s in line]
                 if len(line[0]) < 1 and len(line[1]) < 1:
                     ignored.append(count)
                     continue
@@ -372,24 +425,106 @@ def load_dataset(doc_a, doc_b=None):
         with load_a as a:
             for line in tqdm(a, total=len_a):
                 count += 1
-                # remove trailing \n
-                line = line[:-2]
+                # remove trailing spaces
+                line = line.strip()
+                if lowercase:
+                    line = line.lower()
                 if len(line) < 1:
                     ignored.append(count)
                     continue
                 sequences.append(line)
 
-
     if len(ignored) > 0:
         print("[Warning] There were",len(ignored),"ignored sequences.")
     return sequences
 
-def batch_tokenise(entry):
-
 
 if __name__ == "__main__":
-    print("You shouldn't be running this directly.")
     args = load_args()
-    dataset = load_dataset(args.doc_a, args.doc_b)
+    dataset = load_dataset(args.reference, args.hypothesis, args.lowercase)
+    # setup ordering (for multiprocessing purposes)
+    dataset = [(i, dataset[i]) for i in range(len(dataset))]
     # load the metrics model
-    metrics = Metrics()
+    metrics = Metrics(args)
+
+    def operate(sequence, args=args):
+        """
+        computes metric operations against the sequences.
+        """
+        result = {}
+        for key in dir(args):
+            if key[0] == "_":
+                continue
+            if key in dir(Metrics) and getattr(args, key):
+                result[key] = getattr(metrics, key)(sequence)
+        return result
+
+    def op_wrapper(seq):
+        # maintain the order of the sequences since we're
+        # doing batch operations.
+        i, cont = seq
+        return (i, operate(cont))
+
+    results = batch_compute(op_wrapper, dataset)
+    # sort by order and remove ordering tag
+    results = sorted(results, key=lambda x: x[0])
+    results = [x[1] for x in results]
+
+    # need to compute means
+
+    def sniff_keys(ent):
+        """
+        recursively finds keys of some dictionary.
+        returns tuple of keys.
+        """
+        keys = ent.keys()
+        stores = []
+        for key in keys:
+            if type(ent[key]) != dict:
+                entry = key
+                stores.append(entry)
+            else:
+                subset = sniff_keys(ent[key])
+                for subkey in subset:
+                    if type(subkey) == tuple:
+                        stores.append(tuple([key] + list(subkey)))
+                    else:
+                        stores.append(tuple([key, subkey]))
+        stores = list(set(stores))
+        return stores
+
+    def means(results):
+        # get the keys
+        eg = results[0]
+        keys = sniff_keys(eg)
+        keys = sorted(keys)
+        avgs = {key: [] for key in keys}
+  
+        for key in keys:
+            if type(key) != tuple:
+                value = eg[key]
+            else:
+                value = eg
+                for level in key:
+                    value = value[level]
+            avgs[key].append(value)
+
+        for key in avgs:
+            avgs[key] = sum(avgs[key]) / len(avgs[key])
+
+        new_avg = {}
+        for key in avgs:
+            new_avg[str(key)] = avgs[key]
+        
+        return new_avg
+
+    mean = means(results)
+    
+    store = {
+        'mean': mean,
+        'base': results
+    }
+
+    # output results to json.
+    with open(args.output, 'w') as outfile:
+        json.dump(store, outfile)

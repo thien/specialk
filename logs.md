@@ -3,6 +3,16 @@
 - Check for any teacher forcing implemention differences between the models.
 - Save epoch in models (for checkpointing).
 - Note to self: Don't merge the optimisation methods. They're inherently different (see Attn is all you need paper.)
+- Need to consider how to process newspaper articles in metrics.py. Possibly replacing \n tags with a custom token representing a new paragraph.
+
+## 7/09
+
+- Building bayesian hyperopt.
+
+## 7/08
+
+- Initial commit of metrics.py build.
+- Looking into relevant hyperparameter optimisation approaches. (https://botorch.org/tutorials/optimize_stochastic)
 
 ## 7/04
 

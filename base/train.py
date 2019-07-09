@@ -50,6 +50,10 @@ def load_args():
                         help="""
                         Determines whether to save all versions of the model or keep the best version.
                         """)
+    
+    parser.add_argument("-verbose", action="store_true", help="""
+                        If enabled, prints messages to terminal.
+                        """)
 
     # model options.
     parser.add_argument('-model', choices=['transformer', 'recurrent'], 
@@ -164,7 +168,7 @@ def load_args():
     parser.add_argument('-optim', default='adam', 
                         choices=['sgd', 'adagrad', 'adadelta', 'adam'], 
                         help="Gradient optimisation method.")
-    
+
 
     opt = parser.parse_args()
 
@@ -172,6 +176,7 @@ def load_args():
     assert opt.epochs > 0
 
     return opt
+
 
 def train_model(opt):
     model = transformer(opt) if opt.model == "transformer" else recurrent(opt)

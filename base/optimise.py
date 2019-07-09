@@ -13,7 +13,7 @@ from train import train_model as train_final_model
 
 from lib.RecurrentModel import RecurrentModel as recurrent
 from lib.TransformerModel import TransformerModel as transformer
-
+from lib.nmtModel import NMTModel as base
 
 
 from GPyOpt.methods import BayesianOptimization
@@ -157,11 +157,21 @@ def allocate_var(v):
     return d
 
 # initial setup
-model = transformer(opt)
-model.load_dataset()
+prep = base(opt)
+prep.load_dataset()
 
 def fit(f):
     """optimisation function"""
+
+    model = transformer(opt)
+    model.opt.verbose = False
+    # copy dataset
+    model.opt.max_token_seq_len = prep.opt.max_token_seq_len
+    model.training_data = prep.training_data
+    model.validation_data = prep.validation_data
+    model.opt.src_vocab_size = prep.opt.src_vocab_size
+    model.opt.tgt_vocab_size = prep.opt.tgt_vocab_size
+
 
     # substitute hyperparameter values
     hyperparams = allocate_var(f)
@@ -212,12 +222,11 @@ x_best = bayesopt.x_opt
 
 print(allocate_var(x_best))
 
-
 print("TRAINING BEST MODEL:")
 opt.save_model = True
 opt.log = True
 
-del model
+del prep
 
 # substitute hyperparameter values
 hyperparams = allocate_var(x_best)

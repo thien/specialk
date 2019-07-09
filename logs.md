@@ -1,14 +1,41 @@
 # TODO
 
 - Check for any teacher forcing implemention differences between the models.
-- Save epoch in models (for checkpointing).
 - Note to self: Don't merge the optimisation methods. They're inherently different (see Attn is all you need paper.)
-- [x] Need to consider how to process newspaper articles in metrics.py. Possibly replacing \n tags with a custom token representing a new paragraph.
 
-- Need mechanism to deal with detecting memory requirements based on batch and sequence length.
-- Need mechanism to send data to local machine once done.
+---
+
+## Methods
+
+- [ ] Setup early stopping to 2/3 of best outcome (will this affect the bayesian optimiser?)
+- [x] Save epoch in models (for checkpointing).
+- [ ] Need mechanism to send data to local machine once done.
+    - [x] Write `rsync` script to handle transfer to local machine.
+    - [x] Add telegram notifier to tell me when it's time to turn off
+          the azure instance.
+        - [x] Move telegram component to outside models s.t it can be used with `bash`.
+    - [ ] Test it on the azure instance.
+- [ ] Need to fix seq2seq model
+    - [ ] update save method to match transformer.
+    - [ ] fix model training (it's quite broken.)
+- [ ] Need to research how to deal with different batch sizes and sequence lengths.
+    - [ ] Need mechanism to deal with detecting memory requirements based on batch and sequence length.
+    - [ ] Experiment with only lowercase sequences to optimise memory requirements.
+    - [x] Need to consider how to process newspaper articles in metrics.py. Possibly replacing \n tags with a custom token representing a new paragraph.
+- [ ] Train en-fr model and vice versa.
+    - [x] Create dataset.
+    - [ ] Disect prabhumboye en-fr model and compare differences.
+    - [ ] Actually start training the model. (You should build the telegram notifier while you're at it.)
+- [x] Read Training Tips for the Transformer Model.
+- [ ] Fix metrics mechanism (currently experimenting with [`nlg-eval`](https://github.com/Maluuba/nlg-eval) but it's broken somewhere.)
+- [ ] Test that you can train only the decoder.
+- [ ] Setup back-translation dataset for our transformer model.
+
+# History
 
 ## 7/09
+
+Note: Since we're just checking whether it's even possible to do style transfer with transformers, don't worry about the optimisation part yet. That being said, it's built and ready for use when needed. I should worry about getting models out first.
 
 - Updated metrics.py mechanism
 - Initial commit of built bayesian optimiser wrapper script `optimise.py`.

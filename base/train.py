@@ -35,6 +35,12 @@ def load_args():
                         Determines whether to enable logs, which will save status into text files.
                         """)
 
+    parser.add_argument('-directory_name', type=str, default="",
+                        help="""
+                        Name of directory. If set, then it'll use that name instead.
+                        Otherwise it'll generate one based on the timestamp.
+                        """)
+
     parser.add_argument('-save_model', action='store_true',
                         help="""
                         Determines whether to save the model or not.
@@ -81,7 +87,7 @@ def load_args():
                         """)
 
     # debugging options
-    parser.add_argument('-telegram', type=str, help="""
+    parser.add_argument('-telegram', type=str, default="", help="""
                         filepath to telegram API private key
                         and chatID to send messages to.
                         """)
@@ -193,6 +199,7 @@ def train_model(opt):
             model.save(epoch=epoch, note="epoch_" + str(epoch))
             model.update_logs(epoch)
     print("Done.")
+    return model
 
 if __name__ == "__main__":
     opt = load_args()

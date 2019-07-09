@@ -107,13 +107,17 @@ class NMTModel:
         """
         if self.opt.checkpoint_encoder:
             return os.path.split(self.opt.checkpoint_encoder)[0]
-    
+
         # setup parent directory
         basepath = os.path.abspath(os.getcwd())
         basepath = os.path.join(basepath, stores)
-        # setup current model directory
-        directory_name = self.opt.model
-        directory_name += "-" + datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S")
+
+        if self.opt.directory_name:
+            directory_name = self.opt.directory_name
+        else:
+            # setup current model directory
+            directory_name = self.opt.model
+            directory_name += "-" + datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S")
         directory = os.path.join(basepath, directory_name)
         # create container for that folder.
         if self.opt.save_model:

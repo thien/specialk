@@ -3,11 +3,29 @@
 - Check for any teacher forcing implemention differences between the models.
 - Save epoch in models (for checkpointing).
 - Note to self: Don't merge the optimisation methods. They're inherently different (see Attn is all you need paper.)
-- Need to consider how to process newspaper articles in metrics.py. Possibly replacing \n tags with a custom token representing a new paragraph.
+- [x] Need to consider how to process newspaper articles in metrics.py. Possibly replacing \n tags with a custom token representing a new paragraph.
+
+- Need mechanism to deal with detecting memory requirements based on batch and sequence length.
+- Need mechanism to send data to local machine once done.
 
 ## 7/09
 
-- Building bayesian hyperopt.
+- Updated metrics.py mechanism
+- Initial commit of built bayesian optimiser wrapper script `optimise.py`.
+- TODO: wrap it for seq2seq support
+- TODO: need to test training a new decoder only (with a encoder already existing.)
+- TODO: write batch operations for bayesian optimisation for small, medium and large EN-FR models.
+- TODO: create FR-EN models.
+
+Note:
+- train en-fr with raw
+- test: en(styleset)-fr
+- train fr-en with raw
+- train fr-decoder with dataset
+
+- TODO: need method to save best_model_dir in bayeopt
+- make sure we have the style datasets.
+- need to fix metrics (since the installer is broken for some reason)
 
 ## 7/08
 

@@ -186,7 +186,6 @@ class TransformerModel(NMTModel):
                         f.write(pred_line + '\n')
         print('[Info] Finished.')
       
-
     def save(self, epoch=None, note=None):
         """
         Saves model components into file.
@@ -199,7 +198,7 @@ class TransformerModel(NMTModel):
             'settings': self.opt
         }
 
-        if telegram in checkpoint_encoder['settings']:
+        if checkpoint_encoder['settings'].telegram:
             del checkpoint_encoder['settings'].telegram
 
         checkpoint_decoder = {
@@ -210,7 +209,7 @@ class TransformerModel(NMTModel):
             'settings': self.opt
         }
 
-        if telegram in checkpoint_decoder['settings']:
+        if checkpoint_decoder['settings'].telegram:
             del checkpoint_decoder['settings'].telegram
 
         if not note:

@@ -7,6 +7,7 @@ import multiprocessing
 import argparse
 from tqdm import tqdm
 import torch
+import os
 
 from train import train_model as train_final_model
 
@@ -31,7 +32,7 @@ def load_args():
                         help="""
                         Determines whether to enable logs, which will save status into text files.
                         """)
-    parser.add_argument('-save_mode', default='all', choices=['all', 'best'],
+    parser.add_argument('-save_mode', default='best', choices=['all', 'best'],
                         help="""
                         Determines whether to save all versions of the model or keep the best version.
                         """)
@@ -54,6 +55,10 @@ def load_args():
     parser.add_argument("-d_word_vec", type=int, default=300, help="""
                         Dimension size of the token vectors representing words (or characters, or bytes).
                         """)
+    
+    parser.add_argument("-best_model_dir", type=str, required=True, help="""
+                        directory name of the best model.
+                        """)
 
     # training options
     parser.add_argument('-epochs', type=int, required=True, default=10, 
@@ -64,7 +69,7 @@ def load_args():
                         """)
 
     # debugging options
-    parser.add_argument('-telegram', type=str, help="""
+    parser.add_argument('-telegram', type=str, default="", help="""
                         filepath to telegram API private key
                         and chatID to send messages to.
                         """)
@@ -102,6 +107,7 @@ def load_args():
 
     opt.checkpoint_encoder = ""
     opt.checkpoint_decoder = ""
+    opt.directory_name = ""
     opt.save_model = False
     opt.bot = False
    
@@ -150,10 +156,9 @@ def allocate_var(v):
         d[name] = value
     return d
 
-
+# initial setup
 model = transformer(opt)
 model.load_dataset()
-
 
 def fit(f):
     """optimisation function"""
@@ -188,28 +193,25 @@ def fit(f):
     return model.valid_accs[-1]
 
 
-myBopt = BayesianOptimization(
-    f=fit,                   # function to optimize
-    domain=domain_transformer,            # box-constrains of the problem
-    initial_design_numdata=5,    # number data initial design
+bayesopt = BayesianOptimization(
+    f=fit,            
+    domain=domain_transformer,           
+    initial_design_numdata=10,    # number data initial design
     model_type="GP_MCMC",
-    acquisition_type='EI_MCMC',  # EI
-    evaluator_type="predictive",  # Expected Improvement
+    acquisition_type='EI_MCMC',  
+    evaluator_type="predictive",
     batch_size=1,
     num_cores=8,
     maximize=True,
-    exact_feval=True)         # May not always give exact results
+    exact_feval=True)
 
-myBopt.run_optimization(max_iter=2)
+bayesopt.run_optimization(max_iter=10)
+
 # get the best parameters out
-x_best = myBopt.x_opt  # myBopt.X[np.argmin(myBopt.Y)]
+x_best = bayesopt.x_opt
 
 print(allocate_var(x_best))
-# myBopt.plot_convergence()
-# myBopt.plot_acquisition()
 
-
-# save opt output notes
 
 print("TRAINING BEST MODEL:")
 opt.save_model = True
@@ -222,4 +224,14 @@ hyperparams = allocate_var(x_best)
 for key in hyperparams:
     setattr(opt, key, hyperparams[key])
 
-train_final_model(opt)
+opt.directory_name = opt.best_model_dir
+del opt.best_model_dir
+
+model = train_final_model(opt)
+
+bayesopt.plot_convergence(filename=os.path.join(model.opt.directory,"convergence.pdf"))
+bayesopt.plot_acquisition(filename=os.path.join(model.opt.directory,"acquisition.pdf"))
+bayesopt.save_report(report_file=os.path.join(model.opt.directory,"REPORT"))
+
+print(model.opt)
+print("finished bopt.")

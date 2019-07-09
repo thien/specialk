@@ -1,35 +1,47 @@
-# TODO
+## Tasks
 
-- Check for any teacher forcing implemention differences between the models.
 - Note to self: Don't merge the optimisation methods. They're inherently different (see Attn is all you need paper.)
-
----
-
-## Methods
-
+- [ ] Check for any teacher forcing implementation differences between the models.
 - [ ] Setup early stopping to 2/3 of best outcome (will this affect the bayesian optimiser?)
-- [x] Save epoch in models (for checkpointing).
+
 - [ ] Need mechanism to send data to local machine once done.
+    - [ ] Test it on the azure instance.
     - [x] Write `rsync` script to handle transfer to local machine.
     - [x] Add telegram notifier to tell me when it's time to turn off
           the azure instance.
         - [x] Move telegram component to outside models s.t it can be used with `bash`.
-    - [ ] Test it on the azure instance.
+
 - [ ] Need to fix seq2seq model
     - [ ] update save method to match transformer.
     - [ ] fix model training (it's quite broken.)
+
 - [ ] Need to research how to deal with different batch sizes and sequence lengths.
     - [ ] Need mechanism to deal with detecting memory requirements based on batch and sequence length.
     - [ ] Experiment with only lowercase sequences to optimise memory requirements.
     - [x] Need to consider how to process newspaper articles in metrics.py. Possibly replacing \n tags with a custom token representing a new paragraph.
+
 - [ ] Train en-fr model and vice versa.
     - [x] Create dataset.
-    - [ ] Disect prabhumboye en-fr model and compare differences.
+    - [x] ~~Disect prabhumboye en-fr model and compare differences.~~ Can confirm that they only release the weights.
     - [ ] Actually start training the model. (You should build the telegram notifier while you're at it.)
-- [x] Read Training Tips for the Transformer Model.
-- [ ] Fix metrics mechanism (currently experimenting with [`nlg-eval`](https://github.com/Maluuba/nlg-eval) but it's broken somewhere.)
+
+
 - [ ] Test that you can train only the decoder.
+
+- [ ] Setup political data dataset for our models.
+    - [x] Create `bash` script to automate the whole process of downloading and extracting.
+    - [ ] ~~Create method to train classifier.~~ (Dataset is already made.)[http://tts.speech.cs.cmu.edu/style_models/political_classifier.tar] but you'll want to make sure that the classifier can use it.
+    - [ ] Create method to preprocess political dataset for model training.
 - [ ] Setup back-translation dataset for our transformer model.
+
+## Done
+
+- [x] Read Training Tips for the Transformer Model.
+- [x] Fix metrics mechanism (currently experimenting with [`nlg-eval`](https://github.com/Maluuba/nlg-eval) but it's broken somewhere.)
+- [x] ~~Need to reference data that was used to train the models.~~ Not necessary as you'll be adding it to `translate.py` and you're just `bash`ing.
+- [x] Save epoch in models (for checkpointing).
+
+---
 
 # History
 

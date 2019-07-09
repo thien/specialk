@@ -21,8 +21,7 @@ else
     echo -n "downloading global_voices.." 
     wget -O machine_translation/global_voices/dataset.tgz -q http://casmacat.eu/corpus/global-voices-tar-balls/training.tgz
     echo " done."
-    # need to extract the corpus.
-    echo "finished extracting the dataset."
+    echo "finished downloading the dataset."
 fi
 
 # extract dataset.

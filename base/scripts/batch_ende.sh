@@ -34,11 +34,15 @@ python3 train.py -data $DATA -log $true -save_model -model $MODEL -epoch $EP -d_
 # TRANSLATE
 # TESTDATA="../datasets/multi30k/test.en.atok"
 # VOCAB="models/nmt_ende.pt"
-# # ENCODER='models/transformer-19-06-26-18-12-36/encoder_epoch_14_accu_51.533.chkpt'
-# # DECODER='models/transformer-19-06-26-18-12-36/decoder_epoch_14_accu_51.533.chkpt'
-# # OUTPUT="models/transformer-19-06-26-18-12-36/outputs.txt"
-# # # python translate.py -model trained.chkpt -vocab data/multi30k.atok.low.pt -src data/multi30k/test.en.atok -no_cuda
-# # python3 translate.py -model $MODEL -checkpoint_encoder $ENCODER -checkpoint_decoder $DECODER -vocab $VOCAB -src $TESTDATA -output $OUTPUT
+# BASEDIR="models/transformer-19-06-26-18-12-36/"
+# ENCODER='encoder_epoch_14_accu_51.533.chkpt'
+# DECODER='decoder_epoch_14_accu_51.533.chkpt'
+# OUTPUT="outputs.txt"
+# EVALTXT="eval.txt"
+
+# python3 translate.py -model $MODEL -checkpoint_encoder $BASEDIR$ENCODER -checkpoint_decoder $BASEDIR$DECODER -vocab $VOCAB -src $TESTDATA -output $BASEDIR$OUTPUT -cuda
+
+# nlg-eval --hypothesis=$BASEDIR$OUTPUT --references=$TESTDATA > $BASEDIR$EVALTXT
 
 # # -----------------------
 # # RECURRENT

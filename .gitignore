@@ -1,3 +1,4 @@
+telegram.json
 base/telegram.json
 *.ipynb
 .pytest_cache

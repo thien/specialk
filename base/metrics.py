@@ -8,9 +8,13 @@ import multiprocessing
 import subprocess
 from core.utils import get_len, batch_compute
 from rouge import Rouge
-import nltk
+from metrics.meteor.meteor import Meteor
+
+from nltk.corpus import cmudict
 from nltk.translate.bleu_score import sentence_bleu
-# import pandas as pd
+import pandas as pd
+import numpy as np
+
 # for emd
 from pyemd import emd
 from gensim.corpora.dictionary import Dictionary
@@ -29,6 +33,8 @@ nlp = spacy.load('en_core_web_sm')
 sentencizer = nlp.create_pipe("sentencizer")
 nlp.add_pipe(sentencizer)
 tokenizer = nlp.create_pipe("tokenizer")
+# load meteor
+meteor = Meteor()
 
 class Metrics:
     """
@@ -58,7 +64,6 @@ class Metrics:
         return self
 
     def load_syllables_dict(self):
-        from nltk.corpus import cmudict
         self.cmudict = cmudict.dict()
         return self
 
@@ -129,7 +134,7 @@ class Metrics:
                 if t2 not in docset2 or distance_matrix[i, j] != 0.0:
                     continue
                 # Compute Euclidean distance between word vectors.
-                distance_matrix[i, j] = distance_matrix[j, i] = np.sqrt(np.sum((glove[t1] - self.glove[t2])**2))
+                distance_matrix[i, j] = distance_matrix[j, i] = np.sqrt(np.sum((self.glove[t1] - self.glove[t2])**2))
 
         if np.sum(distance_matrix) == 0.0:
             # `emd` gets stuck if the distance matrix contains only zeros.
@@ -148,7 +153,9 @@ class Metrics:
         d1,d2 = nbow(document1),nbow(document2)
 
         # Compute WMD.
-        return emd(d1, d2, distance_matrix)
+        return {
+            "value":emd(d1, d2, distance_matrix)
+        }
 
     def bleu(self, sequences):
         """
@@ -178,6 +185,8 @@ class Metrics:
     def meteor(self, sequences):
         reference, hypothesis = self.prep(sequences, tokenise=False)
         # could try NLTK
+        score = meteor.compute_score(hypothesis, reference)
+        print(score)
         return None
 
     def perplexity(self, tokens):
@@ -446,6 +455,8 @@ if __name__ == "__main__":
     dataset = [(i, dataset[i]) for i in range(len(dataset))]
     # load the metrics model
     metrics = Metrics(args)
+    if args.glove_path:
+        metrics.load_glove(args.glove_path)
 
     def operate(sequence, args=args):
         """

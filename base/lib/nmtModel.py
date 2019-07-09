@@ -89,6 +89,15 @@ class NMTModel:
     # ----------------------------
     # BASE FUNCTIONS
     # ----------------------------
+    
+    def reset_metrics(self):
+        """
+        Resets metrics.
+        """
+        self.train_losses = []
+        self.valid_losses = []
+        self.train_accs = []
+        self.valid_accs = []
 
     def init_dir(self, stores):
         """

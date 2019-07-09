@@ -141,8 +141,9 @@ def load_args():
                         [concat|sum]""")
     parser.add_argument('-rnn_size', type=int, default=500,
                         help='Size of LSTM hidden states')
+
     #learning rate
-    parser.add_argument('-learning_rate', type=float, default=1.0,
+    parser.add_argument('-learning_rate', type=float, default=0.001,
                         help="""Starting learning rate. If adagrad/adadelta/adam is
                         used, then this is the global learning rate. Recommended
                         settings: sgd = 1, adagrad = 0.1, adadelta = 1, adam = 0.001""")
@@ -154,7 +155,7 @@ def load_args():
     parser.add_argument('-start_decay_at', type=int, default=8,
                         help="""Start decaying every epoch after and including this
                         epoch""")
-    parser.add_argument('-optim', default='sgd', 
+    parser.add_argument('-optim', default='adam', 
                         choices=['sgd', 'adagrad', 'adadelta', 'adam'], 
                         help="Gradient optimisation method.")
     

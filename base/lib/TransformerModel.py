@@ -113,7 +113,7 @@ class TransformerModel(NMTModel):
         self.optimiser = ScheduledOptim(
             optim.Adam(
                 filter(lambda x: x.requires_grad, self.model.parameters()),
-                betas=(0.9, 0.98), eps=1e-09),
+                betas=(0.9, 0.98), eps=1e-09, lr=opt.learning_rate),
             self.opt.d_model, self.opt.n_warmup_steps)
         print("[Info] optimiser configured.")
 

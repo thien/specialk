@@ -308,6 +308,8 @@ class TransformerModel(NMTModel):
         else:
             self.model.train()
 
+        # print(self.model)
+
         total_loss, n_word_total, n_word_correct = 0, 0, 0
 
         label = "Training" if not validation else "Validation"
@@ -315,6 +317,8 @@ class TransformerModel(NMTModel):
             # prepare data
             src_seq, src_pos, tgt_seq, tgt_pos = map(
                 lambda x: x.to(self.device), batch)
+
+            # print("INPUT:", src_seq.shape, tgt_seq.shape)
             gold = tgt_seq[:, 1:]
             if not validation:
                 self.optimiser.zero_grad()
@@ -334,6 +338,16 @@ class TransformerModel(NMTModel):
             total_loss += loss.item()
             n_word_total += gold.ne(self.constants.PAD).sum().item()
             n_word_correct += n_correct
+
+            # clear memory
+            # del src_seq
+            # del src_pos
+            # del tgt_seq
+            # del tgt_pos
+            # del gold
+            # del pred
+            # del batch
+            # torch.cuda.empty_cache()
 
         loss_per_word = total_loss/n_word_total
         accuracy = n_word_correct/n_word_total

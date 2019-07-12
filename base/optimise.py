@@ -184,8 +184,15 @@ def fit(f):
     model.initiate()
     model.setup_optimiser()
 
+    best = None
     for epoch in tqdm(range(1, opt.epochs+1), desc='Epochs'):
         stats = model.train(epoch)
+        # early stopping mechanism
+        current = model.valid_accs[-1]
+        if best is None:
+            best = current
+        else:
+            # we'll hardfix our b
  
             
     """

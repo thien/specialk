@@ -117,13 +117,20 @@ then
     echo "corpus already merged."
 else
     echo -n "merging datasets.."
-    cd machine_translation
-    cat europarl/europarl.en global_voices/globalvoices.en hansards/hansards.en > corpus_enfr.en
-    cat europarl/europarl.fr global_voices/globalvoices.fr hansards/hansards.fr > corpus_enfr.fr
+    # cd machine_translation
+
+    python3 merge.py -left machine_translation/europarl/europarl.en machine_translation/global_voices/globalvoices.en  machine_translation/hansards/hansards.en -right machine_translation/europarl/europarl.fr machine_translation/global_voices/globalvoices.fr machine_translation/hansards/hansards.fr -left_out machine_translation/corpus_enfr.en -right_out machine_translation/corpus_enfr.fr
+    # cat europarl/europarl.en global_voices/globalvoices.en hansards/hansards.en > corpus_enfr.en.raw
+    # cat europarl/europarl.fr global_voices/globalvoices.fr hansards/hansards.fr > corpus_enfr.fr.raw
+    # # removing blank lines
+    # sed '/^[[:space:]]*$/d' corpus_enfr.en.raw > corpus_enfr.en
+    # sed '/^[[:space:]]*$/d' corpus_enfr.fr.raw > corpus_enfr.fr
+    # rm corpus_enfr.en.raw
+    # rm corpus_enfr.fr.raw
     echo " done."
     echo -n "number of sequences: "
-    wc -l < corpus_enfr.en
-    cd ..
+    wc -l < machine_translation/corpus_enfr.en 
+    
 fi 
 
 #

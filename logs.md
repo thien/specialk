@@ -1,12 +1,14 @@
 ## Tasks
 
 - Note to self: Don't merge the optimisation methods. They're inherently different (see Attn is all you need paper.)
+
 - [ ] Check for any teacher forcing implementation differences between the models.
 - [ ] Setup early stopping to 2/3 of best outcome (will this affect the bayesian optimiser?)
 
 - [ ] Need mechanism to send data to local machine once done.
     - [ ] Test it on the azure instance.
     - [x] Write `rsync` script to handle transfer to local machine.
+    - [ ] Need method to securely store keys/passwords on azure instance s.t. `rsync` can be autonomous.
     - [x] Add telegram notifier to tell me when it's time to turn off
           the azure instance.
         - [x] Move telegram component to outside models s.t it can be used with `bash`.
@@ -23,16 +25,28 @@
 - [ ] Train en-fr model and vice versa.
     - [x] Create dataset.
     - [x] ~~Disect prabhumboye en-fr model and compare differences.~~ Can confirm that they only release the weights.
-    - [ ] Actually start training the model. (You should build the telegram notifier while you're at it.)
-
+    - [x] EN-FR dataset is full of blank sequences (we can't have that!!!) I'll need to sort that out.
+    - [ ] Actually start training the model.
+        - [x] Create `bash` script for handling this.
+        - [x] Train S model. (EN-FR and FR-EN)
+        - [ ] Perform `translation.py` tests (This is broken somehow.)
+    - [x] ~~Fix memory leak issue with larger datasets (Present on Transformer??)~~ It's caused by having no cap on the vocabulary size.
+    - [ ] Add scripts for `translation.py` with those models for the datasets.
+    - [ ] We should test performance on lowercase.
 
 - [ ] Test that you can train only the decoder.
 
 - [ ] Setup political data dataset for our models.
     - [x] Create `bash` script to automate the whole process of downloading and extracting.
     - [ ] ~~Create method to train classifier.~~ (Dataset is already made.)[http://tts.speech.cs.cmu.edu/style_models/political_classifier.tar] but you'll want to make sure that the classifier can use it.
-    - [ ] Create method to preprocess political dataset for model training.
+    - [ ] Create method to preprocess political dataset for model training. (Need to check translated political data is there.)
+
 - [ ] Setup back-translation dataset for our transformer model.
+
+- [ ] Think about how the newspaper dataset can fit into our transformer models.
+- [x] Need to look into ethics of scraping each newspaper.
+- [ ] Analysis on article lengths.
+
 
 ## Done
 
@@ -45,7 +59,30 @@
 
 # History
 
+## 7/12
+
+- Need to look into performance of sentence level, multiple sentence level, paragraph level, and document level performance.
+- Need to analyse the dataset we have already
+- Need to look into BPE encoding.
+- Need to find a method to understand how to optimise the memory use on the GPU (looking into a script that determines the memory usage based on parameters - http://jacobkimmel.github.io/pytorch_estimating_model_size/)
+- Can't do hyperparamter tuning until the end. (Looks like we'll be pressed for time considering the training performance of our models)
+
+## 7/11
+
+- Continuing to train the medium sized models. It looks like that more data improves the performance of the model. 
+- Analysed corpus terms and conditions to determine whether they can be used or not. (For ethical purposes)
+- Started looking into how we could start to fit longer sequences into the model.
+
+## 7/10
+
+- Trained EN-FR 50K dataset. There seems to be a GPU memory leak since when using the larger datsets it starts to break. I'll need to look into this.
+- Reimplemented the dataset building mechanism since there was a bunch of blank sequences.
+- Need to cap the vocabulary size.
+
 ## 7/09
+
+- Currently waiting for a test run of the hyperoptimiser against the `en-de` multi30k dataset. Once this is done, I'll start training an `de-en` dataset so we can test for back translation. Note that performance will be limited since the number of sequences is naturally limited.
+- I'll want to train some base runs of the `en-fr` models and reverse on the azure machine. It'll give us some baseline models that we can try to beat.
 
 Note: Since we're just checking whether it's even possible to do style transfer with transformers, don't worry about the optimisation part yet. That being said, it's built and ready for use when needed. I should worry about getting models out first.
 

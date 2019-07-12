@@ -68,6 +68,12 @@ def load_args():
                         decoded sentences"""
                         )
 
+    # debugging options
+    parser.add_argument('-telegram', type=str, default="", help="""
+                        filepath to telegram API private key
+                        and chatID to send messages to.
+                        """)
+
     opt = parser.parse_args()
 
     opt.save_model = False

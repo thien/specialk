@@ -62,3 +62,5 @@ python3 train.py -data $DATA -log $true -save_model -model $MODEL -epoch $EP -d_
 # OUTPUT="models/recurrent-19-07-01-19-57-44/outputs.txt"
 # # python translate.py -model trained.chkpt -vocab data/multi30k.atok.low.pt -src data/multi30k/test.en.atok -no_cuda
 # python3 translate.py -model $MODEL -checkpoint_encoder $ENCODER -checkpoint_decoder $DECODER -vocab $VOCAB -src $TESTDATA -output $OUTPUT -cuda
+ 
+ 

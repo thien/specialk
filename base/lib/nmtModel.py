@@ -120,8 +120,9 @@ class NMTModel:
             directory_name += "-" + datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S")
         directory = os.path.join(basepath, directory_name)
         # create container for that folder.
-        if self.opt.save_model:
-            os.mkdir(directory)
+        if not os.path.isdir(directory):
+            if self.opt.save_model:
+                os.mkdir(directory)
         return directory 
 
     def init_logs(self):

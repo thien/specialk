@@ -55,6 +55,7 @@ def load_file(filepath, max_sequence_limit, formatting, case_sensitive=True, max
             if len(words) > max_sequence_limit:
                 num_trimmed_sentences += 1
             sequence = words[:max_sequence_limit]
+            
             if sequence:
                 sequence = [Constants.SOS_WORD] + sequence + [Constants.EOS_WORD]
                 sequences.append(sequence)

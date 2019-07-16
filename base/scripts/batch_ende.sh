@@ -27,22 +27,22 @@ fi
 DATA="models/nmt_ende.pt"
 echo "ready"
 MODEL="transformer"
-EP=15
-MODELDIM=512
-python3 train.py -data $DATA -log $true -save_model -model $MODEL -epoch $EP -d_word_vec $MODELDIM -d_model $MODELDIM -cuda
+# EP=15
+# MODELDIM=512
+# python3 train.py -data $DATA -log $true -save_model -model $MODEL -epoch $EP -d_word_vec $MODELDIM -d_model $MODELDIM -cuda
 
 # TRANSLATE
-# TESTDATA="../datasets/multi30k/test.en.atok"
-# VOCAB="models/nmt_ende.pt"
-# BASEDIR="models/transformer-19-06-26-18-12-36/"
-# ENCODER='encoder_epoch_14_accu_51.533.chkpt'
-# DECODER='decoder_epoch_14_accu_51.533.chkpt'
-# OUTPUT="outputs.txt"
-# EVALTXT="eval.txt"
+TESTDATA="../datasets/multi30k/test.en.atok"
+VOCAB="models/nmt_ende.pt"
+BASEDIR="models/transformer-19-06-26-18-12-36/"
+ENCODER='encoder_epoch_14_accu_51.533.chkpt'
+DECODER='decoder_epoch_14_accu_51.533.chkpt'
+OUTPUT="outputs.txt"
+EVALTXT="eval.txt"
 
-# python3 translate.py -model $MODEL -checkpoint_encoder $BASEDIR$ENCODER -checkpoint_decoder $BASEDIR$DECODER -vocab $VOCAB -src $TESTDATA -output $BASEDIR$OUTPUT -cuda
+python3 translate.py -model $MODEL -checkpoint_encoder $BASEDIR$ENCODER -checkpoint_decoder $BASEDIR$DECODER -vocab $VOCAB -src $TESTDATA -output $BASEDIR$OUTPUT -cuda
 
-# nlg-eval --hypothesis=$BASEDIR$OUTPUT --references=$TESTDATA > $BASEDIR$EVALTXT
+nlg-eval --hypothesis=$BASEDIR$OUTPUT --references=$TESTDATA > $BASEDIR$EVALTXT
 
 # # -----------------------
 # # RECURRENT

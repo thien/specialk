@@ -188,7 +188,7 @@ class NMTModel:
         # print(settings)
         # load test sequences
         token_instances = load_file(test_datapath, 
-                                    settings.max_token_seq_len,
+                                    settings.max_word_seq_len,
                                     settings.format,
                                     settings.case_sensitive)
         # convert test sequences into IDx

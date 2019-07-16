@@ -182,7 +182,7 @@ class TransformerModel(NMTModel):
         idx2word = test_loader.dataset.tgt_idx2word
 
         with open(self.opt.output, 'w') as f:
-            for batch in tqdm(test_loader, desc='  - (Test)', leave=False):
+            for batch in tqdm(test_loader, desc='Translating', leave=False):
                 # get sequences through beam search.
                 all_hyp, _ = translator.translate_batch(*batch)
                 # save outputs

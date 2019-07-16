@@ -2,6 +2,9 @@
 
 - Note to self: Don't merge the optimisation methods. They're inherently different (see Attn is all you need paper.)
 
+- [ ] Need to fix scraping of The Times.
+- [ ] Include scraping of the New York Times.
+
 - [ ] Check for any teacher forcing implementation differences between the models.
 - [ ] Setup early stopping to 2/3 of best outcome (will this affect the bayesian optimiser?)
 
@@ -29,10 +32,12 @@
     - [ ] Actually start training the model.
         - [x] Create `bash` script for handling this.
         - [x] Train S model. (EN-FR and FR-EN)
-        - [ ] Perform `translation.py` tests (This is broken somehow.)
+        - [ ] Perform `translation.py` tests (This is broken somehow.) (Waiting for the models to finish training before I can go ahead and test this out.)
     - [x] ~~Fix memory leak issue with larger datasets (Present on Transformer??)~~ It's caused by having no cap on the vocabulary size.
     - [ ] Add scripts for `translation.py` with those models for the datasets.
-    - [ ] We should test performance on lowercase.
+    - [ ] We should test performance on lowercase. (waiting for models to train)
+    - [ ] Test performance with BPE encoders.
+    
 
 - [ ] Test that you can train only the decoder.
 
@@ -45,7 +50,15 @@
 
 - [ ] Think about how the newspaper dataset can fit into our transformer models.
 - [x] Need to look into ethics of scraping each newspaper.
-- [ ] Analysis on article lengths.
+- [ ] Analysis on article lengths. We'll build a `python3` script that produces `pdfs` of everything we need in terms of understanding the distribution of the articles:
+    - [ ] Article Lengths
+    - [ ] Average lengths of the articles
+    - [ ] Keyword Distributions of each outlet
+
+- [ ] Need to create method to store BPE encoder.
+
+- [ ] Need to download more articles (at least 10k articles from each outlet.)
+- [ ] Need to start writing up distribution of article metadata and ethics properly.
 
 
 ## Done
@@ -58,6 +71,15 @@
 ---
 
 # History
+
+## 7/15
+
+- Lots of TODOs:
+    - Need to start by changing the background report to facilitate changes wanted by markers
+    - Need to build a python script that deals with looking into stats of the newspapers
+    - Need to store BPE encoder models
+    - Need to set up bash scripts to deal with training classifiers
+    - Need to implement that formality measurement.
 
 ## 7/12
 

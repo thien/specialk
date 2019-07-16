@@ -67,6 +67,11 @@ def load_args():
                         help="""If verbose is set, will output the n_best
                         decoded sentences"""
                         )
+    # parser.add_argument("-lowercase", action="store_true", help="""
+    #                     If enabled, sets input characters as lowercase.
+    #                     """)
+
+    parser.add_argument("-verbose", action="store_true")
 
     # debugging options
     parser.add_argument('-telegram', type=str, default="", help="""
@@ -82,7 +87,7 @@ def load_args():
 
     return opt
 
-
+import torch
 if __name__ == "__main__":
     opt = load_args()
     # load encoder and decoder
@@ -92,18 +97,36 @@ if __name__ == "__main__":
     print("Setup model wrapper.")
     model.load(opt.checkpoint_encoder, opt.checkpoint_decoder)
     print("Initiated model and weights.")
+    # print(model.model)
+    print(model.model.encoder.src_word_emb)
+    print(model.model.decoder.tgt_word_emb)
+    # print(model.model)
     # load test data
     test_loader, max_token_seq_len = model.load_testdata(opt.src, opt.vocab)
-    # idx2word = test_loader.dataset.tgt_idx2word
-    # load output file.
+    # # idx2word = test_loader.dataset.tgt_idx2word
+    # # load output file.
+
+    # print(test_loader)
+    # print(test_loader)
+    
+    # mins = []
+    # maxs = []
+    # for ent in test_loader:
+    #     tok, ent_len = ent
+    #     mins.append(torch.min(ent_len).item())
+    #     maxs.append(torch.max(ent_len).item())
+    # print(min(mins))
+    # print(max(maxs))
+
+    # print(model.model.encoder.src_word_emb(torch.tensor([0,8573])))
     model.translate(test_loader, max_token_seq_len)
-    # with open(opt.output, 'w') as f:
-    #     # setup test loader.
-    #     for batch in tqdm(test_loader, mininterval=2, desc='  - (Test)', leave=False):
-    #         print(batch)
-    #         hypotheses, scores = model.translate_batch(*batch)
-    #         for sequences in hypotheses:
-    #             for sequence in sequences:
-    #                 line = " ".join([idx2word[t] for t in sequence])
-    #                 f.write(line + "\n")
+    with open(opt.output, 'w') as f:
+        # setup test loader.
+        for batch in tqdm(test_loader, mininterval=2, desc='  - (Test)', leave=False):
+            print(batch)
+            hypotheses, scores = model.translate_batch(*batch)
+            for sequences in hypotheses:
+                for sequence in sequences:
+                    line = " ".join([idx2word[t] for t in sequence])
+                    f.write(line + "\n")
     print("Done.")

@@ -5,3 +5,7 @@ Bleu_4: 0.053935
 METEOR: 0.151274
 ROUGE_L: 0.268381
 CIDEr: 0.482671
+SkipThoughtsCosineSimilairty: 0.825869
+EmbeddingAverageCosineSimilairty: 0.807582
+VectorExtremaCosineSimilarity: 0.595600
+GreedyMatchingScore: 0.725936

@@ -25,12 +25,11 @@ def parse(text, formatting):
     formatting -> one of 'word', 'character'.
     """
     assert type(text) == str
-    assert formatting in ['word', 'character']
+    assert formatting in ['word', 'character', 'bpe']
 
-    if formatting == "word":
-        return text.split()
     if formatting == "character":
         return [i for i in text]
+    return text.split()
 
 def load_file(filepath, max_sequence_limit, formatting, case_sensitive=True, max_train_seq=None):
     """
@@ -55,14 +54,14 @@ def load_file(filepath, max_sequence_limit, formatting, case_sensitive=True, max
             if len(words) > max_sequence_limit:
                 num_trimmed_sentences += 1
             sequence = words[:max_sequence_limit]
-            
+
             if sequence:
                 sequence = [Constants.SOS_WORD] + sequence + [Constants.EOS_WORD]
                 sequences.append(sequence)
             else:
                 # TODO: what's going on here?
                 sequences.append([Constants.SOS_WORD, Constants.UNK_WORD, Constants.EOS_WORD])
-            count += 1
+            count += 1      
             if max_train_seq and count > max_train_seq:
                 break
 
@@ -171,8 +170,8 @@ if __name__ == "__main__":
 
     # load training and validation data.
     for g in dataset:
-        src = load_file(dataset[g]['src'], opt.max_word_seq_len, opt.format, opt.case_sensitive, opt.max_train_seq)
-        tgt = load_file(dataset[g]['tgt'], opt.max_word_seq_len, opt.format, opt.case_sensitive, opt.max_train_seq)
+        src, src_bpe = load_file(dataset[g]['src'], opt.max_word_seq_len, opt.format, opt.case_sensitive, opt.max_train_seq)
+        tgt, tgt_bpe = load_file(dataset[g]['tgt'], opt.max_word_seq_len, opt.format, opt.case_sensitive, opt.max_train_seq)
         if len(src) != len(tgt):
             print('[Warning] The {} sequence counts are not equal.'.format(g))
         # remove empty instances
@@ -181,42 +180,70 @@ if __name__ == "__main__":
         dataset[g]['src'], dataset[g]['tgt'] = src, tgt
 
     # build vocabulary
-    if opt.share_vocab:
-        print('[Info] Building shared vocabulary for source and target sequences.')
-        word2idx = build_vocabulary_idx(dataset['train']['src'] + dataset['train']['tgt'], opt.min_word_count, opt.vocab_size)
-        src_word2idx, tgt_word2idx = word2idx
-        print('[Info] Vocabulary size: {}'.format(len(word2idx)))
+    bpe_enabled = opt.format.lower() == "bpe"
+    if bpe_enabled:
+        # building bpe vocabulary
+        if opt.share_vocab:
+            print('[Info] Building shared vocabulary for source and target sequences.')
+            # build and train encoder
+            corpus = dataset['train']['src'] + dataset['train']['tgt']
+            bpe = bpe_encoder(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=Constants.UNK_WORD, PAD=Constants.PAD_WORD)
+            bpe.fit(corpus)
+            src_bpe, tgt_bpe = bpe
+        else:
+            print("[Info] Building voculabulary for source.")
+            # build and train src and tgt encoder
+            src_bpe = bpe_encoder(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=Constants.UNK_WORD, PAD=Constants.PAD_WORD)
+            src_bpe.fit(dataset['train']['src'])
+            tgt_bpe = bpe_encoder(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=Constants.UNK_WORD, PAD=Constants.PAD_WORD)
+            tgt_bpe.fit(dataset['train']['tgt'])
+        # translate sequences
+        for g in tqdm(dataset, desc="Converting tokens into IDs"):
+            for key in dataset[g]:
+                if key == "src":
+                    mthd = src_bpe
+                else:
+                    mthd = tgt_bpe
+                mthd.mute()
+                dataset[g][key] = [[f for f in mthd.transform([x])] for x in tqdm(dataset[g][key])]
+
     else:
-        print("[Info] Building voculabulary for source.")
-        src_word2idx = build_vocabulary_idx(dataset['train']['src'], opt.min_word_count, opt.vocab_size)
-        tgt_word2idx = build_vocabulary_idx(dataset['train']['tgt'], opt.min_word_count, opt.vocab_size)
-        print('[Info] Vocabulary sizes -> Source: {}, Target: {}'.format(len(src_word2idx), len(tgt_word2idx)))
-    # convert words in sequences to indexes.
-    for g in tqdm(dataset, desc="Converting tokens into IDs"):
-        for key in dataset[g]:
-            if key == "src":
-                dataset[g][key] = seq2idx(dataset[g][key], src_word2idx)
-            else:
-                dataset[g][key] = seq2idx(dataset[g][key], tgt_word2idx)
-    # needs to be a method to throw away sequences with lots of UNK tokens.
-    print()
-    
-    # setup data to store.
-    data = {
-        'settings' : opt,
-        'dict' : {
-            'src' : src_word2idx,
-            'tgt' : tgt_word2idx
-        },
-        'train' : {
-            'src' : dataset['train']['src'],
-            'tgt' : dataset['train']['tgt']
-        },
-        'valid' : {
-            'src' : dataset['valid']['src'],
-            'tgt' : dataset['valid']['tgt']
+        if opt.share_vocab:
+            print('[Info] Building shared vocabulary for source and target sequences.')
+            word2idx = build_vocabulary_idx(dataset['train']['src'] + dataset['train']['tgt'], opt.min_word_count, opt.vocab_size)
+            src_word2idx, tgt_word2idx = word2idx
+            print('[Info] Vocabulary size: {}'.format(len(word2idx)))
+        else:
+            print("[Info] Building voculabulary for source.")
+            src_word2idx = build_vocabulary_idx(dataset['train']['src'], opt.min_word_count, opt.vocab_size)
+            tgt_word2idx = build_vocabulary_idx(dataset['train']['tgt'], opt.min_word_count, opt.vocab_size)
+            print('[Info] Vocabulary sizes -> Source: {}, Target: {}'.format(len(src_word2idx), len(tgt_word2idx)))
+        # convert words in sequences to indexes.
+        for g in tqdm(dataset, desc="Converting tokens into IDs"):
+            for key in dataset[g]:
+                if key == "src":
+                    dataset[g][key] = seq2idx(dataset[g][key], src_word2idx)
+                else:
+                    dataset[g][key] = seq2idx(dataset[g][key], tgt_word2idx)
+        # needs to be a method to throw away sequences with lots of UNK tokens.
+        print()
+        
+        # setup data to store.
+        data = {
+            'settings' : opt,
+            'dict' : {
+                'src' : src_word2idx if not bpe_enabled else src_bpe.vocabs_to_dict(False),
+                'tgt' : tgt_word2idx if not bpe_enabled else tgt_bpe.vocabs_to_dict(False)
+            },
+            'train' : {
+                'src' : dataset['train']['src'],
+                'tgt' : dataset['train']['tgt']
+            },
+            'valid' : {
+                'src' : dataset['valid']['src'],
+                'tgt' : dataset['valid']['tgt']
+            }
         }
-    }
 
     # dump information.
     filename = opt.save_name + ".pt"

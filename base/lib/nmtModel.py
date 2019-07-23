@@ -179,6 +179,9 @@ class NMTModel:
                 self.src_bpe.from_dict(data['dict']['src'])
                 self.tgt_bpe.from_dict(data['dict']['tgt'])
 
+                # self.src_bpe = BPE.from_dict(data['dict']['src'])
+                # self.tgt_bpe = BPE.from_dict(data['dict']['tgt'])
+
         datasets = self.init_dataloaders(data, self.opt)
         self.training_data, self.validation_data = datasets
 
@@ -208,16 +211,21 @@ class NMTModel:
         is_bpe = settings.format.lower() == "bpe"
         if is_bpe:
             # load test data
-            bpe_src = BPE(4096, ngram_min=1, ngram_max=2, pct_bpe=0.8)
-            bpe_src = bpe_src.load(data['dict']['src'])
+            # bpe_src = BPE(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=constants.UNK_WORD, PAD=constants.PAD_WORD, word_tokenizer=self.parse)
+            bpe_src = BPE.from_dict(data['dict']['src'])
             # convert test sequences into IDx
             test_src_insts = bpe_src.transform(token_instances)
             test_src_insts = [i for i in test_src_insts]
             # setup data loader
+            src_word2idx = data['dict']['src']
+            tgt_word2idx = data['dict']['tgt']
+            src_word2idx = {**src_word2idx['byte_pairs'], **src_word2idx['words']}
+            tgt_word2idx = {**tgt_word2idx['byte_pairs'], **tgt_word2idx['words']}
+            
             test_loader = torch.utils.data.DataLoader(
                 TranslationDataset(
-                    src_word2idx=data['dict']['src'],
-                    tgt_word2idx=data['dict']['tgt'],
+                    src_word2idx=src_word2idx,
+                    tgt_word2idx=tgt_word2idx,
                     src_insts=test_src_insts),
                 num_workers=2,
                 batch_size=self.opt.batch_size,

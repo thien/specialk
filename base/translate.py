@@ -9,6 +9,7 @@ import argparse
 from tqdm import tqdm
 from lib.TransformerModel import TransformerModel as transformer
 from lib.RecurrentModel import RecurrentModel as recurrent
+from core.bpe import Encoder as BPE
 
 def load_args():
     parser = argparse.ArgumentParser(description="train.py")
@@ -100,17 +101,29 @@ if __name__ == "__main__":
     # load test data
     test_loader, max_token_seq_len, is_bpe = model.load_testdata(opt.src, opt.vocab)
     
+    if is_bpe: 
+        # setup bpe decoder
+        bpe_tgt = BPE.from_dict(torch.load(opt.vocab)['dict']['tgt'])
+
     # translate sequences
     hypotheses = model.translate(test_loader, max_token_seq_len)
 
     lines = []
 
     if is_bpe:
-        idx2w = test_loader.dataset.tgt_idx2word
-        # setup bpe decoder
-        bpe_tgt = BPE(4096, ngram_min=1, ngram_max=2, pct_bpe=0.8)
-        bpe_tgt = bpe_tgt.load(idx2w)
-        lines = bpe_tgt.inverse_transform(hypotheses)
+        # transform sequences
+        hypotheses = [x[0] for x in hypotheses]
+        sequences = bpe_tgt.inverse_transform(hypotheses)
+        # clip sequences based on position of EOS token.
+        for x in sequences:
+            x = x.split()
+            index = 0
+            for j in range(len(x)):
+                if x[j] == model.constants.EOS_WORD:
+                    index = j
+                    break
+            line = " ".join(x[:index])
+            lines.append(line)
     else:
         # convert sequences back into text
         idx2w = test_loader.dataset.tgt_idx2word

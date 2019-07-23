@@ -231,7 +231,7 @@ class TransformerModel(NMTModel):
             else:
                 # assumes self.opt.save_mode = "best"
                 if self.valid_accs[-1] >= max(self.valid_accs):
-                    model_name += ".chkpt"
+                    model_name = ".chkpt"
                     ready_to_save = True
                     if self.opt.verbose:
                         print(
@@ -329,7 +329,7 @@ class TransformerModel(NMTModel):
             loss, n_correct = self.performance(
                 pred, gold, smoothing=self.opt.label_smoothing)
 
-            ewhy
+            # ewhy
 
             if not validation:
                 # backwards propagation

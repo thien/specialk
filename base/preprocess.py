@@ -211,7 +211,6 @@ if __name__ == "__main__":
             for key in dataset[g]:
                 bpe_method = src_bpe if key == "src" else tgt_bpe
                 bpe_method.mute()
-                # dataset[g][key] = 
                 dataset[g][key] = [f for f in bpe_method.transform(tqdm(dataset[g][key]))]
 
     else:

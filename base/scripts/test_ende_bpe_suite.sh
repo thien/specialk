@@ -3,7 +3,7 @@ cd ..
 
 VOCAB="models/nmt_ende_bpe"
 FORMAT="bpe"
-MAXLEN="100"
+MAXLEN="150"
 
 
 # setup dataset preprocessing.
@@ -34,10 +34,10 @@ MODEL="transformer"
 DIRNAME="ende_test_bpe"
 EP=15
 MODELDIM=512
-BATCHSIZE=1
-# python3 train.py -data $VOCAB$PT -log $true -save_model -model $MODEL -epoch $EP -d_word_vec $MODELDIM -d_model $MODELDIM -save_mode "best" -directory_name $DIRNAME -batch_size $BATCHSIZE -cuda 
+BATCHSIZE=64
+python3 train.py -data $VOCAB$PT -log $true -save_model -model $MODEL -epoch $EP -d_word_vec $MODELDIM -d_model $MODELDIM -save_mode "best" -directory_name $DIRNAME -batch_size $BATCHSIZE -cuda 
 
-python3 train.py -data $VOCAB$PT -log $true -model $MODEL -epoch $EP -d_word_vec $MODELDIM -d_model $MODELDIM -cuda -batch_size $BATCHSIZE
+# python3 train.py -data $VOCAB$PT -log $true -model $MODEL -epoch $EP -d_word_vec $MODELDIM -d_model $MODELDIM -cuda -batch_size $BATCHSIZE
 
 # # TRANSLATE
 # TESTDATA="../datasets/multi30k/test.en.atok"

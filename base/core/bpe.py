@@ -1,7 +1,10 @@
 # coding=utf-8
-""" An encoder which learns byte pair encodings for white-space separated text.  Can tokenize, encode, and decode. 
+""" 
+An encoder which learns byte pair encodings for white-space separated text.  
 
-Taken from:
+Can tokenize, encode, and decode. 
+
+Modified codebase from:
 https://github.com/soaxelbrooke/python-bpe/tree/master/bpe
 """
 from collections import Counter
@@ -15,11 +18,19 @@ from nltk.tokenize import wordpunct_tokenize
 from tqdm import tqdm
 import toolz
 import json
+import os
+
+if os.getcwd().split("/")[-1] == "core":
+    import constants as Constants
+else:
+    import core.constants as Constants
 
 DEFAULT_EOW = '__eow'
 DEFAULT_SOW = '__sow'
-DEFAULT_UNK = '__unk'
-DEFAULT_PAD = '__pad'
+# DEFAULT_UNK = '__unk'
+DEFAULT_UNK = Constants.UNK_WORD
+# DEFAULT_PAD = '__pad'
+DEFAULT_PAD = Constants.PAD_WORD
 
 
 class Encoder:
@@ -38,7 +49,8 @@ class Encoder:
         self.sow_len = len(SOW)
         self.UNK = UNK
         self.PAD = PAD
-        self.required_tokens = list(set(required_tokens or []).union({self.UNK, self.PAD}))
+        # self.required_tokens = list(set(required_tokens or []).union({self.UNK, self.PAD}))
+        self.required_tokens = [self.PAD, self.UNK, Constants.SOS_WORD, Constants.EOS_WORD, Constants.BLO_WORD]
         self.vocab_size = vocab_size
         self.pct_bpe = pct_bpe
         self.word_vocab_size = max([int(vocab_size * (1 - pct_bpe)), len(self.required_tokens or [])])
@@ -89,8 +101,11 @@ class Encoder:
         # type: (Encoder, Iterable[str]) -> Dict[str, int]
         """ Build vocab from self.word_vocab_size most common tokens in provided sentences """
         word_counts = Counter(word for word in toolz.concat(map(self.word_tokenizer, sentences)))
+
+        i = 0
         for token in set(self.required_tokens or []):
-            word_counts[token] = int(2**63)
+            word_counts[token] = int(2**63) - i
+            i += 1
         sorted_word_counts = sorted(word_counts.items(), key=lambda p: -p[1])
         return {word: idx for idx, (word, count) in enumerate(sorted_word_counts[:self.word_vocab_size])}
 
@@ -108,6 +123,10 @@ class Encoder:
                 self.trim_vocab(10 * self.bpe_vocab_size, vocab)
 
         sorted_bpe_counts = sorted(vocab.items(), key=lambda p: -p[1])[:self.bpe_vocab_size]
+
+        # here we need to remove bp based on whether they're in word_vocab already
+        sorted_bpe_counts = [x for x in sorted_bpe_counts if x[0] not in self.word_vocab]
+
         return {bp: idx + self.word_vocab_size for idx, (bp, count) in enumerate(sorted_bpe_counts)}
 
     def fit(self, text):
@@ -120,6 +139,7 @@ class Encoder:
 
         remaining_words = [word for word in toolz.concat(map(self.word_tokenizer, _text))
                            if word not in self.word_vocab]
+        # print(remaining_words)
         self.bpe_vocab = self.learn_bpe_vocab(remaining_words)
 
         self.inverse_word_vocab = {idx: token for token, idx in self.word_vocab.items()}

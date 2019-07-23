@@ -231,7 +231,7 @@ class TransformerModel(NMTModel):
             else:
                 # assumes self.opt.save_mode = "best"
                 if self.valid_accs[-1] >= max(self.valid_accs):
-                    model_name = note + ".chkpt"
+                    model_name += ".chkpt"
                     ready_to_save = True
                     if self.opt.verbose:
                         print(
@@ -306,6 +306,8 @@ class TransformerModel(NMTModel):
 
         # print(self.model)
 
+        # print(self.model)
+
         total_loss, n_word_total, n_word_correct = 0, 0, 0
 
         label = "Training" if not validation else "Validation"
@@ -314,15 +316,20 @@ class TransformerModel(NMTModel):
             src_seq, src_pos, tgt_seq, tgt_pos = map(
                 lambda x: x.to(self.device), batch)
 
-            # print("INPUT:", src_seq.shape, tgt_seq.shape)
+    
             gold = tgt_seq[:, 1:]
             if not validation:
                 self.optimiser.zero_grad()
             # compute forward propagation
+            # print("SRC:",src_seq)
+            # print("TGT:", tgt_seq)
             pred = self.model(src_seq, src_pos, tgt_seq, tgt_pos)
+            # print("PRED:", pred)
             # compute performance
             loss, n_correct = self.performance(
                 pred, gold, smoothing=self.opt.label_smoothing)
+
+            ewhy
 
             if not validation:
                 # backwards propagation

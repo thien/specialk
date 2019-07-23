@@ -19,17 +19,19 @@ def get_num_seqs(filepath):
     process = subprocess.run(command.split(" "), stdout=subprocess.PIPE)
     return int(process.stdout.decode("utf-8").split(" ")[0])
 
-def parse(text, formatting):
+def parse(text, formatting="word"):
     """
     text -> string of sentence.
     formatting -> one of 'word', 'character'.
     """
     assert type(text) == str
-    assert formatting in ['word', 'character', 'bpe']
+    assert formatting in ['word', 'bpe']
 
-    if formatting == "character":
-        return [i for i in text]
-    return text.split()
+
+    if formatting == "word":
+        return text.split()
+    # otherwise default the response
+    return text
 
 def load_file(filepath, max_sequence_limit, formatting, case_sensitive=True, max_train_seq=None):
     """
@@ -50,17 +52,24 @@ def load_file(filepath, max_sequence_limit, formatting, case_sensitive=True, max
         for sentence in tqdm(f, total=get_num_seqs(filepath)):
             if not case_sensitive:
                 sentence = sentence.lower()
-            words = parse(sentence, formatting)
+            words = parse(sentence)
             if len(words) > max_sequence_limit:
                 num_trimmed_sentences += 1
             sequence = words[:max_sequence_limit]
 
             if sequence:
                 sequence = [Constants.SOS_WORD] + sequence + [Constants.EOS_WORD]
-                sequences.append(sequence)
             else:
                 # TODO: what's going on here?
-                sequences.append([Constants.SOS_WORD, Constants.UNK_WORD, Constants.EOS_WORD])
+                sequence = [Constants.SOS_WORD, Constants.UNK_WORD, Constants.EOS_WORD]
+
+            # if we have a BPE method then encode it back into a sentence
+            # since the BPE parser will tokenise it again afterwards.
+            if formatting.lower() == "bpe":
+                sequence = " ".join(sequence)
+
+            sequences.append(sequence)
+
             count += 1      
             if max_train_seq and count > max_train_seq:
                 break
@@ -170,8 +179,8 @@ if __name__ == "__main__":
 
     # load training and validation data.
     for g in dataset:
-        src, src_bpe = load_file(dataset[g]['src'], opt.max_word_seq_len, opt.format, opt.case_sensitive, opt.max_train_seq)
-        tgt, tgt_bpe = load_file(dataset[g]['tgt'], opt.max_word_seq_len, opt.format, opt.case_sensitive, opt.max_train_seq)
+        src = load_file(dataset[g]['src'], opt.max_word_seq_len, opt.format, opt.case_sensitive, opt.max_train_seq)
+        tgt = load_file(dataset[g]['tgt'], opt.max_word_seq_len, opt.format, opt.case_sensitive, opt.max_train_seq)
         if len(src) != len(tgt):
             print('[Warning] The {} sequence counts are not equal.'.format(g))
         # remove empty instances
@@ -187,25 +196,23 @@ if __name__ == "__main__":
             print('[Info] Building shared vocabulary for source and target sequences.')
             # build and train encoder
             corpus = dataset['train']['src'] + dataset['train']['tgt']
-            bpe = bpe_encoder(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=Constants.UNK_WORD, PAD=Constants.PAD_WORD)
+            bpe = bpe_encoder(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=Constants.UNK_WORD, PAD=Constants.PAD_WORD, word_tokenizer=parse)
             bpe.fit(corpus)
             src_bpe, tgt_bpe = bpe
         else:
             print("[Info] Building voculabulary for source.")
             # build and train src and tgt encoder
-            src_bpe = bpe_encoder(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=Constants.UNK_WORD, PAD=Constants.PAD_WORD)
+            src_bpe = bpe_encoder(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=Constants.UNK_WORD, PAD=Constants.PAD_WORD, word_tokenizer=parse)
             src_bpe.fit(dataset['train']['src'])
-            tgt_bpe = bpe_encoder(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=Constants.UNK_WORD, PAD=Constants.PAD_WORD)
+            tgt_bpe = bpe_encoder(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=Constants.UNK_WORD, PAD=Constants.PAD_WORD, word_tokenizer=parse)
             tgt_bpe.fit(dataset['train']['tgt'])
         # translate sequences
         for g in tqdm(dataset, desc="Converting tokens into IDs"):
             for key in dataset[g]:
-                if key == "src":
-                    mthd = src_bpe
-                else:
-                    mthd = tgt_bpe
-                mthd.mute()
-                dataset[g][key] = [[f for f in mthd.transform([x])] for x in tqdm(dataset[g][key])]
+                bpe_method = src_bpe if key == "src" else tgt_bpe
+                bpe_method.mute()
+                # dataset[g][key] = 
+                dataset[g][key] = [f for f in bpe_method.transform(tqdm(dataset[g][key]))]
 
     else:
         if opt.share_vocab:
@@ -225,25 +232,25 @@ if __name__ == "__main__":
                     dataset[g][key] = seq2idx(dataset[g][key], src_word2idx)
                 else:
                     dataset[g][key] = seq2idx(dataset[g][key], tgt_word2idx)
-        # needs to be a method to throw away sequences with lots of UNK tokens.
-        print()
-        
-        # setup data to store.
-        data = {
-            'settings' : opt,
-            'dict' : {
-                'src' : src_word2idx if not bpe_enabled else src_bpe.vocabs_to_dict(False),
-                'tgt' : tgt_word2idx if not bpe_enabled else tgt_bpe.vocabs_to_dict(False)
-            },
-            'train' : {
-                'src' : dataset['train']['src'],
-                'tgt' : dataset['train']['tgt']
-            },
-            'valid' : {
-                'src' : dataset['valid']['src'],
-                'tgt' : dataset['valid']['tgt']
-            }
+    # needs to be a method to throw away sequences with lots of UNK tokens.
+    print()
+    
+    # setup data to store.
+    data = {
+        'settings' : opt,
+        'dict' : {
+            'src' : src_word2idx if not bpe_enabled else src_bpe.vocabs_to_dict(False),
+            'tgt' : tgt_word2idx if not bpe_enabled else tgt_bpe.vocabs_to_dict(False)
+        },
+        'train' : {
+            'src' : dataset['train']['src'],
+            'tgt' : dataset['train']['tgt']
+        },
+        'valid' : {
+            'src' : dataset['valid']['src'],
+            'tgt' : dataset['valid']['tgt']
         }
+    }
 
     # dump information.
     filename = opt.save_name + ".pt"

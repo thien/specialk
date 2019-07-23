@@ -15,6 +15,7 @@ import datetime
 import atexit
 import telebot
 import json
+import numpy as np
 
 from preprocess import load_file, seq2idx
 
@@ -33,6 +34,10 @@ class NMTModel:
 
         if self.opt.telegram:
             self.init_telegram(self.opt.telegram)
+
+        # bpe holders.
+        self.src_bpe = None
+        self.tgt_bpe = None
 
         atexit.register(self.exit_handler)
     # -------------------------
@@ -166,6 +171,14 @@ class NMTModel:
         data = torch.load(self.opt.data)
         # the token sequence length is determined by `preprocess.py`
         self.opt.max_token_seq_len = data['settings'].max_token_seq_len
+        # here we need to check whether the dataset is BPE or not.
+        if 'byte_pairs' in data['dict']['src']:
+            if '__sow' in data['dict']['src']['byte_pairs']:
+                self.src_bpe = BPE(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=constants.UNK_WORD, PAD=constants.PAD_WORD, word_tokenizer=self.parse)
+                self.tgt_bpe = BPE(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=constants.UNK_WORD, PAD=constants.PAD_WORD, word_tokenizer=self.parse)
+                self.src_bpe.from_dict(data['dict']['src'])
+                self.tgt_bpe.from_dict(data['dict']['tgt'])
+
         datasets = self.init_dataloaders(data, self.opt)
         self.training_data, self.validation_data = datasets
 
@@ -229,13 +242,24 @@ class NMTModel:
     @staticmethod
     def init_dataloaders(data, opt):
         """
-        Initiates memory efficient dataloaders for feeding 
-        into the models.
+        Initiates memory efficient vanilla dataloaders for feeding 
+        into the models. (Assumes dataset is not BPE)
         """
+        src_word2idx = data['dict']['src']
+        tgt_word2idx = data['dict']['tgt']
+        # check if we have BPE dictionaries
+        is_bpe = False
+        if 'byte_pairs' in src_word2idx:
+            if '__sow' in src_word2idx['byte_pairs']:
+                is_bpe = True
+                # we have BPE
+                src_word2idx = {**src_word2idx['byte_pairs'], **src_word2idx['words']}
+                tgt_word2idx = {**tgt_word2idx['byte_pairs'], **tgt_word2idx['words']}
+
         train_loader = torch.utils.data.DataLoader(
             TranslationDataset(
-                src_word2idx=data['dict']['src'],
-                tgt_word2idx=data['dict']['tgt'],
+                src_word2idx=src_word2idx,
+                tgt_word2idx=tgt_word2idx,
                 src_insts=data['train']['src'],
                 tgt_insts=data['train']['tgt']),
             num_workers=2,
@@ -245,8 +269,8 @@ class NMTModel:
 
         valid_loader = torch.utils.data.DataLoader(
             TranslationDataset(
-                src_word2idx=data['dict']['src'],
-                tgt_word2idx=data['dict']['tgt'],
+                src_word2idx=src_word2idx,
+                tgt_word2idx=tgt_word2idx,
                 src_insts=data['valid']['src'],
                 tgt_insts=data['valid']['tgt']),
             num_workers=2,
@@ -287,3 +311,7 @@ class NMTModel:
         """
         if self.bot:
             self.bot.send_message(self.bot_chatid, msg)
+
+    @staticmethod
+    def parse(x):
+        return x.split()

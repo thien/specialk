@@ -178,22 +178,18 @@ class TransformerModel(NMTModel):
         translator = Translator(self.opt, new=False)
         translator.model = self.model
         translator.max_token_seq_len = max_token_seq_len
-        # translator.model_opt = self.opt
-        idx2word = test_loader.dataset.tgt_idx2word
 
-        with open(self.opt.output, 'w') as f:
-            for batch in tqdm(test_loader, desc='Translating', leave=False):
-                # get sequences through beam search.
-                all_hyp, _ = translator.translate_batch(*batch)
-                # save outputs
-                for idx_seqs in all_hyp:
-                    for idx_seq in idx_seqs:
-                        tokens = [idx2word[idx]
-                                  for idx in idx_seq if idx != self.constants.EOS]
-                        pred_line = ' '.join(tokens)
-                        f.write(pred_line + '\n')
+        hypotheses = []
+    
+        for batch in tqdm(test_loader, desc='Translating', leave=False):
+            # get sequences through beam search.
+            all_hyp, _ = translator.translate_batch(*batch)
+            for sequence in all_hyp:
+                hypotheses.append(sequence)
+                    
         if self.opt.verbose:
             print('[Info] Finished.')
+        return hypotheses
 
     def save(self, epoch=None, note=None):
         """

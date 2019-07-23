@@ -2,11 +2,14 @@
 
 - Note to self: Don't merge the optimisation methods. They're inherently different (see Attn is all you need paper.)
 
-- [ ] Need to fix scraping of The Times.
-- [ ] Include scraping of the New York Times.
 
-- [ ] Check for any teacher forcing implementation differences between the models.
-- [ ] Setup early stopping to 2/3 of best outcome (will this affect the bayesian optimiser?)
+- [ ] Setup political data dataset for our models.
+    - [x] Create `bash` script to automate the whole process of downloading and extracting.
+    - [x] ~~Create method to train classifier.~~ (Dataset is already made.)[http://tts.speech.cs.cmu.edu/style_models/political_classifier.tar] but you'll want to make sure that the classifier can use it.
+    - [x] Need to translate the political dataset. (need to write `bash` scripts for this)
+    - [x] Create method to preprocess political dataset for model training. (Need to check translated political data is there.)
+    - [ ] Translate political data for initial tests.
+    - [ ] Test that you can train only the decoder.
 
 - [ ] Need mechanism to send data to local machine once done.
     - [ ] Test it on the azure instance.
@@ -15,54 +18,60 @@
     - [x] Add telegram notifier to tell me when it's time to turn off
           the azure instance.
         - [x] Move telegram component to outside models s.t it can be used with `bash`.
+    - [ ] Train XL model on azure machine.
+    
+- [ ] Include scraping of the New York Times?
+- [ ] Check for any teacher forcing implementation differences between the models.
+- [ ] Setup early stopping to 2/3 of best outcome (will this affect the bayesian optimiser?)
 
 - [ ] Need to fix seq2seq model
     - [ ] update save method to match transformer.
     - [ ] fix model training (it's quite broken.)
+    - [ ] Heck you don't need to fix it. You can just train the models with the dataset we have on their repo and test performance on the political dataset afterwards.
 
 - [ ] Need to research how to deal with different batch sizes and sequence lengths.
     - [ ] Need mechanism to deal with detecting memory requirements based on batch and sequence length.
-    - [ ] Experiment with only lowercase sequences to optimise memory requirements.
+    - [x] Experiment with only lowercase sequences to optimise memory requirements.
     - [x] Need to consider how to process newspaper articles in metrics.py. Possibly replacing \n tags with a custom token representing a new paragraph.
 
-- [ ] Train en-fr model and vice versa.
-    - [x] Create dataset.
-    - [x] ~~Disect prabhumboye en-fr model and compare differences.~~ Can confirm that they only release the weights.
-    - [x] EN-FR dataset is full of blank sequences (we can't have that!!!) I'll need to sort that out.
-    - [ ] Actually start training the model.
-        - [x] Create `bash` script for handling this.
-        - [x] Train S model. (EN-FR and FR-EN)
-        - [ ] Perform `translation.py` tests (This is broken somehow.) (Waiting for the models to finish training before I can go ahead and test this out.)
-    - [x] ~~Fix memory leak issue with larger datasets (Present on Transformer??)~~ It's caused by having no cap on the vocabulary size.
-    - [ ] Add scripts for `translation.py` with those models for the datasets.
-    - [ ] We should test performance on lowercase. (waiting for models to train)
-    - [ ] Test performance with BPE encoders.
-    
+- [ ] Deal with tokenisation method in BPE encoder to make it more aligned with tokenisers already utilised.
+- [ ] Test performance with BPE encoders.
 
-- [ ] Test that you can train only the decoder.
-
-- [ ] Setup political data dataset for our models.
-    - [x] Create `bash` script to automate the whole process of downloading and extracting.
-    - [ ] ~~Create method to train classifier.~~ (Dataset is already made.)[http://tts.speech.cs.cmu.edu/style_models/political_classifier.tar] but you'll want to make sure that the classifier can use it.
-    - [ ] Create method to preprocess political dataset for model training. (Need to check translated political data is there.)
-
-- [ ] Setup back-translation dataset for our transformer model.
-
-- [ ] Think about how the newspaper dataset can fit into our transformer models.
-- [x] Need to look into ethics of scraping each newspaper.
 - [ ] Analysis on article lengths. We'll build a `python3` script that produces `pdfs` of everything we need in terms of understanding the distribution of the articles:
-    - [ ] Article Lengths
-    - [ ] Average lengths of the articles
-    - [ ] Keyword Distributions of each outlet
+    - [x] Average lengths of the articles
+    - [x] Keyword Distributions of each outlet
+    - [ ] Additional statistics using the thing we built earlier. (This will help us to differentiate the differences between "quality papers" and not.)
 
-- [ ] Need to create method to store BPE encoder.
-
-- [ ] Need to download more articles (at least 10k articles from each outlet.)
+- [ ] Need to download more articles (maybe at least 10k articles from each outlet?)
 - [ ] Need to start writing up distribution of article metadata and ethics properly.
 
 
 ## Done
 
+- [x] Think about how the newspaper dataset can fit into our transformer models. (Smaller batch size and BPE, and also trained with larger sequences.)
+- [x] Need to look into ethics of scraping each newspaper.
+
+- [x] Need to fix scraping of The Times.
+    - [x] Fix current dataset (did not store sessions properly.)
+    - [x] Update scraper to include new configuration
+
+- [x] ~~Fix memory leak issue with larger datasets (Present on Transformer??)~~ It's caused by having no cap on the vocabulary size.
+
+- [x] Add scripts for `translation.py` with those models for the datasets.
+- [x] Need to create method to store BPE encoder.
+
+- [x] Train en-fr model and vice versa.
+    - [x] Create dataset.
+    - [x] ~~Disect prabhumboye en-fr model and compare differences.~~ Can confirm that they only release the weights.
+    - [x] EN-FR dataset is full of blank sequences (we can't have that!!!) I'll need to sort that out.
+    - [x] Actually start training the model.
+        - [x] Create `bash` script for handling this.
+        - [x] Train S model. (EN-FR and FR-EN)
+        - [x] Perform `translation.py` tests (This is broken somehow.) (Waiting for the models to finish training before I can go ahead and test this out.)
+        - [x] Need to compute back translation results.
+        - [x] Need to make chart of results.
+        - [x] We should test performance on lowercase. (waiting for models to train)
+        
 - [x] Read Training Tips for the Transformer Model.
 - [x] Fix metrics mechanism (currently experimenting with [`nlg-eval`](https://github.com/Maluuba/nlg-eval) but it's broken somewhere.)
 - [x] ~~Need to reference data that was used to train the models.~~ Not necessary as you'll be adding it to `translate.py` and you're just `bash`ing.
@@ -71,6 +80,21 @@
 ---
 
 # History
+
+
+## 7/19
+
+- Computed stats on sequence lengths, BPE, and distributions of data in the dataset. 
+- Finished chart build design for above stats.
+- Setup stat rebuild for baseline results computed earlier (needed lots of memory to compute)
+- Need to setup azure machine to compute bpe training
+- Need to start style transfer setup
+## 7/17
+
+- Transfer models to Azure machine
+- Setup BPE models
+- Need to train models for longer
+- Need to verify back translation
 
 ## 7/15
 

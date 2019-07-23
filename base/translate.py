@@ -97,36 +97,32 @@ if __name__ == "__main__":
     print("Setup model wrapper.")
     model.load(opt.checkpoint_encoder, opt.checkpoint_decoder)
     print("Initiated model and weights.")
-    # print(model.model)
-    print(model.model.encoder.src_word_emb)
-    print(model.model.decoder.tgt_word_emb)
-    # print(model.model)
     # load test data
-    test_loader, max_token_seq_len = model.load_testdata(opt.src, opt.vocab)
-    # # idx2word = test_loader.dataset.tgt_idx2word
-    # # load output file.
-
-    # print(test_loader)
-    # print(test_loader)
+    test_loader, max_token_seq_len, is_bpe = model.load_testdata(opt.src, opt.vocab)
     
-    # mins = []
-    # maxs = []
-    # for ent in test_loader:
-    #     tok, ent_len = ent
-    #     mins.append(torch.min(ent_len).item())
-    #     maxs.append(torch.max(ent_len).item())
-    # print(min(mins))
-    # print(max(maxs))
+    # translate sequences
+    hypotheses = model.translate(test_loader, max_token_seq_len)
 
-    # print(model.model.encoder.src_word_emb(torch.tensor([0,8573])))
-    model.translate(test_loader, max_token_seq_len)
+    lines = []
+
+    if is_bpe:
+        idx2w = test_loader.dataset.tgt_idx2word
+        # setup bpe decoder
+        bpe_tgt = BPE(4096, ngram_min=1, ngram_max=2, pct_bpe=0.8)
+        bpe_tgt = bpe_tgt.load(idx2w)
+        lines = bpe_tgt.inverse_transform(hypotheses)
+    else:
+        # convert sequences back into text
+        idx2w = test_loader.dataset.tgt_idx2word
+        for sequence in hypotheses:
+            for token_i in sequence:
+                tokens = [idx2w[i] for i in token_i if i != model.constants.EOS]
+                line = " ".join(tokens)
+                lines.append(line)
+        
+    # write outputs to file
     with open(opt.output, 'w') as f:
-        # setup test loader.
-        for batch in tqdm(test_loader, mininterval=2, desc='  - (Test)', leave=False):
-            print(batch)
-            hypotheses, scores = model.translate_batch(*batch)
-            for sequences in hypotheses:
-                for sequence in sequences:
-                    line = " ".join([idx2word[t] for t in sequence])
-                    f.write(line + "\n")
+        for line in lines:
+            f.write(line + "\n")
+
     print("Done.")

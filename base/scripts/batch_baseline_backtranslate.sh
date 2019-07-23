@@ -19,9 +19,9 @@ EVALTXT="eval.txt"
 BEAMSIZE=3
 BATCHSIZE=1024
 
-python3 translate.py -model $MODEL -checkpoint_encoder $BASEDIR$ENCODER -checkpoint_decoder $BASEDIR$DECODER -vocab $VOCAB -src $TESTDATA -output $BASEDIR$OUTPUT -batch_size $BATCHSIZE -beam_size $BEAMSIZE -cuda
+# python3 translate.py -model $MODEL -checkpoint_encoder $BASEDIR$ENCODER -checkpoint_decoder $BASEDIR$DECODER -vocab $VOCAB -src $TESTDATA -output $BASEDIR$OUTPUT -batch_size $BATCHSIZE -beam_size $BEAMSIZE -cuda
 
-# nlg-eval --hypothesis=$BASEDIR$OUTPUT --references=$TESTDATA > $BASEDIR$EVALTXT
+# nlg-eval --hypothesis=$BASEDIR$OUTPUT --reference s=$TESTDATA > $BASEDIR$EVALTXT
 
 MODEL="transformer"
 FILEPATH="../datasets/machine_translation/"
@@ -65,3 +65,16 @@ SAVENAME_SM_FREN=$m$SM_FREN
 SAVENAME_MD_FREN=$m$MD_FREN
 SAVENAME_LG_FREN=$m$LG_FREN
 SAVENAME_FR_FREN=$m$FR_FREN
+
+# 50k
+
+# 500k
+
+# lg
+
+echo $SAVENAME_SM_ENFR
+echo $SAVENAME_MD_ENFR
+echo $SAVENAME_LG_ENFR
+echo $SAVENAME_SM_FREN
+echo $SAVENAME_MD_FREN
+echo $SAVENAME_LG_FREN

@@ -1,0 +1,11 @@
+Bleu_1: 0.275373
+Bleu_2: 0.121274
+Bleu_3: 0.061851
+Bleu_4: 0.035363
+METEOR: 0.127351
+ROUGE_L: 0.266053
+CIDEr: 0.347136
+SkipThoughtsCosineSimilairty: 0.759757
+EmbeddingAverageCosineSimilairty: 0.876606
+VectorExtremaCosineSimilarity: 0.464029
+GreedyMatchingScore: 0.667600

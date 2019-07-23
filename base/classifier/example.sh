@@ -13,5 +13,5 @@
 BESTMODEL="political_model_acc_88.64_loss_0.00_e13.pt"
 
 # Test the classifier accuracy
-python3 cnn_translate.py -gpu 0 -model $BESTMODEL -src ../data/political_data/democratic_only.test.en -tgt 'democratic' -label0 democratic -label1 republican
+python3 cnn_translate.py -gpu 0 -model $BESTMODEL -src ../../datasets/political_data/political_data/democratic_only.test.en -tgt 'democratic' -label0 democratic -label1 republican
 

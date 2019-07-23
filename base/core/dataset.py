@@ -3,6 +3,7 @@ import torch
 import torch.utils.data
 import os
 
+# deal with constants
 if os.getcwd().split("/")[-1] == "core":
     import constants as Constants
 else:
@@ -15,18 +16,24 @@ def paired_collate_fn(insts):
     return (*src_insts, *tgt_insts)
 
 def collate_fn(insts):
-    ''' Pad the instance to the max seq length in batch '''
+    """
+    Pads the instance to the max sequence length
+    in the batch.
+    """
 
     max_len = max(len(inst) for inst in insts)
 
+    # pad sequences.
     batch_seq = np.array([
         inst + [Constants.PAD] * (max_len - len(inst))
         for inst in insts])
 
+    # calculate sequence lengths.
     batch_pos = np.array([
         [pos_i+1 if w_i != Constants.PAD else 0
          for pos_i, w_i in enumerate(inst)] for inst in batch_seq])
 
+    # convert sequences into pytorch.
     batch_seq = torch.LongTensor(batch_seq)
     batch_pos = torch.LongTensor(batch_pos)
 

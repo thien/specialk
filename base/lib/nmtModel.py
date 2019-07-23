@@ -8,6 +8,7 @@ import torch
 import math
 import core.constants as constants
 from core.dataset import TranslationDataset, collate_fn, paired_collate_fn
+from core.bpe import Encoder as BPE
 import os
 import torch.utils.data
 import datetime
@@ -191,20 +192,38 @@ class NMTModel:
                                     settings.max_word_seq_len,
                                     settings.format,
                                     settings.case_sensitive)
-        # convert test sequences into IDx
-        test_src_insts = seq2idx(token_instances, data['dict']['src'])
-        # setup data loaders.
-        test_loader = torch.utils.data.DataLoader(
-            TranslationDataset(
-                src_word2idx=data['dict']['src'],
-                tgt_word2idx=data['dict']['tgt'],
-                src_insts=test_src_insts),
-            num_workers=2,
-            batch_size=self.opt.batch_size,
-            collate_fn=collate_fn)
-            
+        is_bpe = settings.format.lower() == "bpe"
+        if is_bpe:
+            # load test data
+            bpe_src = BPE(4096, ngram_min=1, ngram_max=2, pct_bpe=0.8)
+            bpe_src = bpe_src.load(data['dict']['src'])
+            # convert test sequences into IDx
+            test_src_insts = bpe_src.transform(token_instances)
+            test_src_insts = [i for i in test_src_insts]
+            # setup data loader
+            test_loader = torch.utils.data.DataLoader(
+                TranslationDataset(
+                    src_word2idx=data['dict']['src'],
+                    tgt_word2idx=data['dict']['tgt'],
+                    src_insts=test_src_insts),
+                num_workers=2,
+                batch_size=self.opt.batch_size,
+                collate_fn=collate_fn)
+
+        else:
+            # convert test sequences into IDx
+            test_src_insts = seq2idx(token_instances, data['dict']['src'])
+            # setup data loaders.
+            test_loader = torch.utils.data.DataLoader(
+                TranslationDataset(
+                    src_word2idx=data['dict']['src'],
+                    tgt_word2idx=data['dict']['tgt'],
+                    src_insts=test_src_insts),
+                num_workers=2,
+                batch_size=self.opt.batch_size,
+                collate_fn=collate_fn)
         
-        return test_loader, settings.max_token_seq_len
+        return test_loader, settings.max_token_seq_len, is_bpe
 
 
     @staticmethod

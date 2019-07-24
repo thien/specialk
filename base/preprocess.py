@@ -20,7 +20,6 @@ def parse(text, formatting="word"):
     assert type(text) == str
     assert formatting in ['word', 'bpe']
 
-
     if formatting == "word":
         return text.split()
     # otherwise default the response

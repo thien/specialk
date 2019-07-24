@@ -109,4 +109,8 @@ if __name__ == "__main__":
         }
     }
 
-    
+    # dump information.
+    filename = opt.save_name + ".pt"
+    print('[Info] Dumping the processed data to pickle file', filename)
+    torch.save(data, filename)
+    print('[Info] Done.')

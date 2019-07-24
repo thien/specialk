@@ -219,8 +219,11 @@ class NMTModel:
             # setup data loader
             src_word2idx = data['dict']['src']
             tgt_word2idx = data['dict']['tgt']
-            src_word2idx = {**src_word2idx['byte_pairs'], **src_word2idx['words']}
-            tgt_word2idx = {**tgt_word2idx['byte_pairs'], **tgt_word2idx['words']}
+
+            src_byte_pairs = {x+"_": y for x,y in src_word2idx['byte_pairs'].items()}
+            tgt_byte_pairs = {x+"_": y for x,y in tgt_word2idx['byte_pairs'].items()}
+            src_word2idx = {**src_byte_pairs, **src_word2idx['words']}
+            tgt_word2idx = {**tgt_byte_pairs, **tgt_word2idx['words']}
             
             test_loader = torch.utils.data.DataLoader(
                 TranslationDataset(
@@ -261,8 +264,10 @@ class NMTModel:
             if '__sow' in src_word2idx['byte_pairs']:
                 is_bpe = True
                 # we have BPE
-                src_word2idx = {**src_word2idx['byte_pairs'], **src_word2idx['words']}
-                tgt_word2idx = {**tgt_word2idx['byte_pairs'], **tgt_word2idx['words']}
+                src_byte_pairs = {x+"_": y for x,y in src_word2idx['byte_pairs'].items()}
+                tgt_byte_pairs = {x+"_": y for x,y in tgt_word2idx['byte_pairs'].items()}
+                src_word2idx = {**src_byte_pairs, **src_word2idx['words']}
+                tgt_word2idx = {**tgt_byte_pairs, **tgt_word2idx['words']}
 
         train_loader = torch.utils.data.DataLoader(
             TranslationDataset(

@@ -224,21 +224,21 @@ class TransformerModel(NMTModel):
         if self.opt.save_model:
             ready_to_save = False
             if self.opt.save_mode == "all":
-                model_name = note + \
-                    '_accu_{accu:3.3f}.chkpt'.format(
+                model_name = "_" + note + \
+                    '_accu_{accu:3.3f}'.format(
                         accu=100*self.valid_accs[-1])
                 ready_to_save = True
             else:
                 # assumes self.opt.save_mode = "best"
                 if self.valid_accs[-1] >= max(self.valid_accs):
-                    model_name = ".chkpt"
+                    model_name = ""
                     ready_to_save = True
                     if self.opt.verbose:
                         print(
                             '    - [Info] The checkpoint file has been updated.')
             if ready_to_save:
-                encoder_name = "encoder_" + model_name
-                decoder_name = "decoder_" + model_name
+                encoder_name = "encoder" + model_name + ".chkpt"
+                decoder_name = "decoder" + model_name + ".chkpt"
                 # setup directory to save this at.
                 encoder_filepath = os.path.join(
                     self.opt.directory, encoder_name)
@@ -302,11 +302,19 @@ class TransformerModel(NMTModel):
         if validation:
             self.model.eval()
         else:
-            self.model.train()
+            # self.model.train()
+            # deal with pretrained models.
+            if self.opt.freeze_encoder:
+                self.model.encoder.eval()
+            else:
+                self.model.encoder.train()
 
-        # print(self.model)
-
-        # print(self.model)
+            if self.opt.freeze_decoder:
+                self.model.decoder.eval()
+                self.model.generator.eval()
+            else:
+                self.model.decoder.train()
+                self.model.generator.train()
 
         total_loss, n_word_total, n_word_correct = 0, 0, 0
 
@@ -321,10 +329,7 @@ class TransformerModel(NMTModel):
             if not validation:
                 self.optimiser.zero_grad()
             # compute forward propagation
-            # print("SRC:",src_seq)
-            # print("TGT:", tgt_seq)
             pred = self.model(src_seq, src_pos, tgt_seq, tgt_pos)
-            # print("PRED:", pred)
             # compute performance
             loss, n_correct = self.performance(
                 pred, gold, smoothing=self.opt.label_smoothing)

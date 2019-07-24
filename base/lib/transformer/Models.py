@@ -221,7 +221,6 @@ class Transformer(nn.Module):
 
         tgt_seq, tgt_pos = tgt_seq[:, :-1], tgt_pos[:, :-1]
 
-        # print("INPUT:", src_seq.shape, tgt_seq.shape)
         enc_output, *_ = self.encoder(src_seq, src_pos)
         dec_output, *_ = self.decoder(tgt_seq, tgt_pos, src_seq, enc_output)
         seq_logit = self.generator(dec_output) * self.x_logit_scale

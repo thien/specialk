@@ -21,6 +21,7 @@
     - [ ] Train XL model on azure machine.
     
 - [ ] Include scraping of the New York Times?
+- [ ] Include scraping of the independent
 - [ ] Check for any teacher forcing implementation differences between the models.
 - [ ] Setup early stopping to 2/3 of best outcome (will this affect the bayesian optimiser?)
 
@@ -34,8 +35,12 @@
     - [x] Experiment with only lowercase sequences to optimise memory requirements.
     - [x] Need to consider how to process newspaper articles in metrics.py. Possibly replacing \n tags with a custom token representing a new paragraph.
 
-- [ ] Deal with tokenisation method in BPE encoder to make it more aligned with tokenisers already utilised.
-- [ ] Test performance with BPE encoders.
+- [x] Deal with tokenisation method in BPE encoder to make it more aligned with tokenisers already utilised.
+- [x] Test performance with BPE encoders.
+- [ ] Fix max sequence length in BPE encoders during `preprocessing.py` and `translate.py`
+- [ ] Test if train decoder only works.
+- [ ] Fix python downloader.py
+- [ ] Need to add method to add UNK tokens in translate.py for empty sequences.
 
 - [ ] Analysis on article lengths. We'll build a `python3` script that produces `pdfs` of everything we need in terms of understanding the distribution of the articles:
     - [x] Average lengths of the articles
@@ -44,7 +49,6 @@
 
 - [ ] Need to download more articles (maybe at least 10k articles from each outlet?)
 - [ ] Need to start writing up distribution of article metadata and ethics properly.
-
 
 ## Done
 

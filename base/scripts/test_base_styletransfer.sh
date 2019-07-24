@@ -59,6 +59,7 @@ python3 train.py \
     -batch_size $BATCHSIZE \
     -save_model \
     -log \
+    -new_directory \
     -cuda 
 
 python3 core/telegram.py -m "Finished training democrat no freeze."
@@ -78,6 +79,7 @@ python3 train.py \
     -save_model \
     -log \
     -freeze_encoder \
+    -new_directory \
     -cuda
 
 python3 core/telegram.py -m "Finished training democrat freeze."
@@ -96,6 +98,7 @@ python3 train.py \
     -batch_size $BATCHSIZE \
     -save_model \
     -log \
+    -new_directory \
     -cuda 
 
 python3 core/telegram.py -m "Finished training republican no freeze."
@@ -115,6 +118,7 @@ python3 train.py \
     -save_model \
     -log \
     -freeze_encoder \
+    -new_directory \
     -cuda 
 
 python3 core/telegram.py -m "Finished training republican freeze."

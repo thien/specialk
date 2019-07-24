@@ -112,7 +112,8 @@ class NMTModel:
         create a new folder.
         """
         if self.opt.checkpoint_encoder:
-            return os.path.split(self.opt.checkpoint_encoder)[0]
+            if not self.opt.new_directory:
+                return os.path.split(self.opt.checkpoint_encoder)[0]
 
         # setup parent directory
         basepath = os.path.abspath(os.getcwd())

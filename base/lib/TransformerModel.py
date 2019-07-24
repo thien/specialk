@@ -77,6 +77,7 @@ class TransformerModel(NMTModel):
                 "checkpoint_decoder",
                 "cuda",
                 "directory",
+                "directory_name",
                 "data",
                 "log",
                 "model",

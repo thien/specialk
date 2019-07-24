@@ -25,6 +25,10 @@ def load_args():
                         If training from a checkpoint, then this is the path to the pretrained model.
                         """)
     
+    parser.add_argument("-new_directory", action="store_true", help="""
+                        If enabled, creates a new directory instead of using the directory where the encoder is loaded. (Assumes that the checkpoint_encoder flag is activated.)
+                        """)
+    
     parser.add_argument('-log', action='store_true',
                         help="""
                         Determines whether to enable logs, which will save status into text files.

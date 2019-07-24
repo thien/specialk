@@ -120,9 +120,13 @@ if __name__ == "__main__":
             index = 0
             for j in range(len(x)):
                 if x[j] == model.constants.EOS_WORD:
+                    if j == 0:
+                        continue
                     index = j
                     break
             line = " ".join(x[:index])
+            if len(line.strip()) < 1:
+                line = model.constants.UNK_WORD
             lines.append(line)
     else:
         # convert sequences back into text

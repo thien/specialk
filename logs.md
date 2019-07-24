@@ -9,7 +9,6 @@
     - [x] Need to translate the political dataset. (need to write `bash` scripts for this)
     - [x] Create method to preprocess political dataset for model training. (Need to check translated political data is there.)
     - [ ] Translate political data for initial tests.
-    - [ ] Test that you can train only the decoder.
 
 - [ ] Need mechanism to send data to local machine once done.
     - [ ] Test it on the azure instance.
@@ -20,11 +19,6 @@
         - [x] Move telegram component to outside models s.t it can be used with `bash`.
     - [ ] Train XL model on azure machine.
     
-- [ ] Include scraping of the New York Times?
-- [ ] Include scraping of the independent
-- [ ] Check for any teacher forcing implementation differences between the models.
-- [ ] Setup early stopping to 2/3 of best outcome (will this affect the bayesian optimiser?)
-
 - [ ] Need to fix seq2seq model
     - [ ] update save method to match transformer.
     - [ ] fix model training (it's quite broken.)
@@ -35,12 +29,12 @@
     - [x] Experiment with only lowercase sequences to optimise memory requirements.
     - [x] Need to consider how to process newspaper articles in metrics.py. Possibly replacing \n tags with a custom token representing a new paragraph.
 
-- [x] Deal with tokenisation method in BPE encoder to make it more aligned with tokenisers already utilised.
-- [x] Test performance with BPE encoders.
-- [ ] Fix max sequence length in BPE encoders during `preprocessing.py` and `translate.py`
 - [ ] Test if train decoder only works.
 - [ ] Fix python downloader.py
-- [ ] Need to add method to add UNK tokens in translate.py for empty sequences.
+- [ ] Include scraping of the New York Times?
+- [ ] Include scraping of the independent
+- [ ] Check for any teacher forcing implementation differences between the models.
+- [ ] Setup early stopping to 2/3 of best outcome (will this affect the bayesian optimiser?)
 
 - [ ] Analysis on article lengths. We'll build a `python3` script that produces `pdfs` of everything we need in terms of understanding the distribution of the articles:
     - [x] Average lengths of the articles
@@ -52,6 +46,10 @@
 
 ## Done
 
+- [x] Need to add method to add UNK tokens in translate.py for empty sequences.
+- [x] Deal with tokenisation method in BPE encoder to make it more aligned with tokenisers already utilised.
+- [x] Test performance with BPE encoders.
+- [x] Fix max sequence length in BPE encoders during `preprocessing.py` and `translate.py`
 - [x] Think about how the newspaper dataset can fit into our transformer models. (Smaller batch size and BPE, and also trained with larger sequences.)
 - [x] Need to look into ethics of scraping each newspaper.
 

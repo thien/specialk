@@ -5,19 +5,12 @@ from core.bpe import Encoder as bpe_encoder
 import subprocess
 from tqdm import tqdm
 from functools import reduce
+from core.utils import get_len
+from copy import deepcopy as copy
 
 """
 Preprocesses mose style code to pytorch ready files.
 """
- 
-
-def get_num_seqs(filepath):
-    """
-    Counts number of lines in a given file.
-    """
-    command = "wc -l " + filepath
-    process = subprocess.run(command.split(" "), stdout=subprocess.PIPE)
-    return int(process.stdout.decode("utf-8").split(" ")[0])
 
 def parse(text, formatting="word"):
     """
@@ -33,52 +26,29 @@ def parse(text, formatting="word"):
     # otherwise default the response
     return text
 
-def load_file(filepath, max_sequence_limit, formatting, case_sensitive=True, max_train_seq=None):
+
+def load_args():
+    desc = """
+    preprocess.py
+
+    deals with convering the mose style datasets into data that can be interpreted by the neural models (for machine translation or style transfer).
     """
-    loads text from file.
+    parser = argparse.ArgumentParser(description=desc)
+    parser.add_argument('-train_src', required=True)
+    parser.add_argument('-train_tgt', required=True)
+    parser.add_argument('-valid_src', required=True)
+    parser.add_argument('-valid_tgt', required=True)
+    parser.add_argument('-save_name', required=True)
+    parser.add_argument("-vocab_size", type=int, default=40000)
+    parser.add_argument('-format', required=True, default='word', help="Determines whether to tokenise by word level, character level, or bytepair level.")
+    parser.add_argument('-max_train_seq', default=None, type=int, help="""Determines the maximum number of training sequences.""")
+    parser.add_argument('-max_len', '--max_word_seq_len', type=int, default=50)
+    parser.add_argument('-min_word_count', type=int, default=5, help="Minimum number of occurences before a word can be considered in the vocabulary.")
+    parser.add_argument('-case_sensitive', action='store_true', help="Determines whether to keep it case sensitive or not.")
+    parser.add_argument('-share_vocab', action='store_true', default=False)
+    parser.add_argument('-verbose', default=True, help="Output logs or not.")
+    return parser.parse_args()
 
-    Args:
-    filepath: location of moses formatted file to read.
-    max_sequence_limit: maximum sequence length.
-    formatting: see parse()
-    case_sensitive: boolean.
-    """
-    sequences = []
-    num_trimmed_sentences = 0
-
-    breaker = 10
-    count = 0 
-    with open(filepath) as f:
-        for sentence in tqdm(f, total=get_num_seqs(filepath)):
-            if not case_sensitive:
-                sentence = sentence.lower()
-            words = parse(sentence)
-            if len(words) > max_sequence_limit:
-                num_trimmed_sentences += 1
-            sequence = words[:max_sequence_limit]
-
-            if sequence:
-                sequence = [Constants.SOS_WORD] + sequence + [Constants.EOS_WORD]
-            else:
-                # TODO: what's going on here?
-                sequence = [Constants.SOS_WORD, Constants.UNK_WORD, Constants.EOS_WORD]
-
-            # if we have a BPE method then encode it back into a sentence
-            # since the BPE parser will tokenise it again afterwards.
-            if formatting.lower() == "bpe":
-                sequence = " ".join(sequence)
-
-            sequences.append(sequence)
-
-            count += 1      
-            if max_train_seq and count > max_train_seq:
-                break
-
-    print('[Info] Loaded {} sequences from {}'.format(len(sequences),filepath))
-
-    if num_trimmed_sentences > 0:
-        print('[Warning] Found {} sequences that needed to be trimmed to the maximum sequence length {}.'.format(num_trimmed_sentences, max_sequence_limit))
-    return sequences
 
 def build_vocabulary_idx(sentences, min_word_count, vocab_size=None):
     """
@@ -130,39 +100,39 @@ def build_vocabulary_idx(sentences, min_word_count, vocab_size=None):
     print("[Info] Ignored word count = {}".format(ignored_word_count))
     return word2idx
 
+
 def seq2idx(sequences, w2i):
     """
     Maps words to idx sequences.
     """
     return [[w2i.get(w, Constants.UNK) for w in s] for s in tqdm(sequences)]
 
-def load_args():
-    desc = """
-    preprocess.py
 
-    deals with convering the mose style datasets into data that can be interpreted by the neural models (for machine translation or style transfer).
+def load_file(filepath, formatting, case_sensitive=True, max_train_seq=None):
     """
-    parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument('-train_src', required=True)
-    parser.add_argument('-train_tgt', required=True)
-    parser.add_argument('-valid_src', required=True)
-    parser.add_argument('-valid_tgt', required=True)
-    parser.add_argument('-save_name', required=True)
-    parser.add_argument("-vocab_size", type=int, default=40000)
-    parser.add_argument('-format', required=True, default='word', help="Determines whether to tokenise by word level, character level, or bytepair level.")
-    parser.add_argument('-max_train_seq', default=None, type=int, help="""Determines the maximum number of training sequences.""")
-    parser.add_argument('-max_len', '--max_word_seq_len', type=int, default=50)
-    parser.add_argument('-min_word_count', type=int, default=5, help="Minimum number of occurences before a word can be considered in the vocabulary.")
-    parser.add_argument('-case_sensitive', action='store_true', help="Determines whether to keep it case sensitive or not.")
-    parser.add_argument('-share_vocab', action='store_true', default=False)
-    parser.add_argument('-verbose', default=True, help="Output logs or not.")
-    return parser.parse_args()
+    Loads text from file.
+    """
+    sequences = []
+    
+    count = 0
+    with open(filepath) as f:
+        for line in tqdm(f, total=get_len(filepath)):
+            if not case_sensitive:
+                line = line.lower()
+            line = line.strip()
+            sequences.append(line)
+            count += 1
+            if max_train_seq and count > max_train_seq:
+                break
+    
+    print('[Info] Loaded {} sequences from {}'.format(len(sequences),filepath))
+    return sequences
 
 if __name__ == "__main__":
-
     opt = load_args()
-
-    # set up the max token sequence length to include <s> and </s>
+    # check if bpe is used.
+    bpe_enabled = opt.format.lower() == "bpe"
+    # setup the max token sequence length to include <s> and </s>
     opt.max_token_seq_len = opt.max_word_seq_len + 2
 
     # restructure code for readability
@@ -176,44 +146,49 @@ if __name__ == "__main__":
             'tgt' : opt.valid_tgt
         }
     }
-
-    # load training and validation data.
+    
+    raw = copy(dataset)
+    
+    # load files
     for g in dataset:
-        src = load_file(dataset[g]['src'], opt.max_word_seq_len, opt.format, opt.case_sensitive, opt.max_train_seq)
-        tgt = load_file(dataset[g]['tgt'], opt.max_word_seq_len, opt.format, opt.case_sensitive, opt.max_train_seq)
+        source, target = dataset[g]['src'], dataset[g]['tgt']
+        src = load_file(source, opt.format, opt.case_sensitive, opt.max_train_seq)
+        tgt = load_file(target, opt.format, opt.case_sensitive, opt.max_train_seq)
         if len(src) != len(tgt):
             print('[Warning] The {} sequence counts are not equal.'.format(g))
         # remove empty instances
         src,tgt = list(zip(*[(s, t) for s, t in zip(src, tgt) if s and t]))
+        raw[g]['src'], raw[g]['tgt'] = src, tgt
+    
 
-        dataset[g]['src'], dataset[g]['tgt'] = src, tgt
-
-    # build vocabulary
-    bpe_enabled = opt.format.lower() == "bpe"
+    # learn vocabulary
     if bpe_enabled:
         # building bpe vocabulary
         if opt.share_vocab:
             print('[Info] Building shared vocabulary for source and target sequences.')
             # build and train encoder
-            corpus = dataset['train']['src'] + dataset['train']['tgt']
+            corpus = raw['train']['src'] + raw['train']['tgt']
             bpe = bpe_encoder(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=Constants.UNK_WORD, PAD=Constants.PAD_WORD, word_tokenizer=parse)
+        
             bpe.fit(corpus)
             src_bpe, tgt_bpe = bpe
         else:
             print("[Info] Building voculabulary for source.")
             # build and train src and tgt encoder
             src_bpe = bpe_encoder(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=Constants.UNK_WORD, PAD=Constants.PAD_WORD, word_tokenizer=parse)
-            src_bpe.fit(dataset['train']['src'])
             tgt_bpe = bpe_encoder(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=Constants.UNK_WORD, PAD=Constants.PAD_WORD, word_tokenizer=parse)
-            tgt_bpe.fit(dataset['train']['tgt'])
-        # translate sequences
-        for g in tqdm(dataset, desc="Converting tokens into IDs"):
-            for key in dataset[g]:
-                bpe_method = src_bpe if key == "src" else tgt_bpe
-                bpe_method.mute()
-                dataset[g][key] = [f for f in bpe_method.transform(tqdm(dataset[g][key]))]
-
+            src_bpe.fit(raw['train']['src'])
+            tgt_bpe.fit(raw['train']['tgt'])
     else:
+        # note that we need to tokenise the sequences here.
+        for g in dataset:
+            source, target = raw[g]['src'], raw[g]['tgt']
+            source = [seq.split()[:opt.max_word_seq_len] for seq in source]
+            target = [seq.split()[:opt.max_word_seq_len] for seq in target]
+            dataset[g]['src'], dataset[g]['tgt'] = source, target
+
+        del raw 
+
         if opt.share_vocab:
             print('[Info] Building shared vocabulary for source and target sequences.')
             word2idx = build_vocabulary_idx(dataset['train']['src'] + dataset['train']['tgt'], opt.min_word_count, opt.vocab_size)
@@ -224,17 +199,52 @@ if __name__ == "__main__":
             src_word2idx = build_vocabulary_idx(dataset['train']['src'], opt.min_word_count, opt.vocab_size)
             tgt_word2idx = build_vocabulary_idx(dataset['train']['tgt'], opt.min_word_count, opt.vocab_size)
             print('[Info] Vocabulary sizes -> Source: {}, Target: {}'.format(len(src_word2idx), len(tgt_word2idx)))
-        # convert words in sequences to indexes.
+            
+    # convert sequences
+    if bpe_enabled:
         for g in tqdm(dataset, desc="Converting tokens into IDs"):
             for key in dataset[g]:
-                if key == "src":
-                    dataset[g][key] = seq2idx(dataset[g][key], src_word2idx)
-                else:
-                    dataset[g][key] = seq2idx(dataset[g][key], tgt_word2idx)
-    # needs to be a method to throw away sequences with lots of UNK tokens.
-    print()
-    
-    # setup data to store.
+                bpe_method = src_bpe if key == "src" else tgt_bpe
+                bpe_method.mute()
+                dataset[g][key] = [f for f in bpe_method.transform(tqdm(raw[g][key]))]
+    else:
+        for g in tqdm(dataset, desc="Converting tokens into IDs"):
+            for key in dataset[g]:
+                method = src_word2idx if key == "src" else tgt_word2idx
+                dataset[g][key] = seq2idx(dataset[g][key], method)
+
+    # trim sequence lengths for bpe
+    if bpe_enabled:
+        for g in tqdm(dataset, desc="Trimming Sequences"):
+            for key in dataset[g]:
+                sequences = dataset[g][key]
+                # it's much easier to just refer back to the original sentence and
+                # trim tokens from there.
+                for i in range(len(sequences)):
+                    sequence = sequences[i]
+                    if len(sequence) <= opt.max_word_seq_len:
+                        continue
+                    
+                    subtract = 1
+                    bpe_method = src_bpe if key == "src" else tgt_bpe
+                    while len(sequence) > opt.max_word_seq_len:
+                        reference = raw[g][key][i].split()
+                        reference = reference[:-subtract]
+                        reference = " ".join(reference)
+                        subtract += 1
+                        sequence = [x for x in bpe_method.transform(reference)][0]
+                    # replace newly trimmed sequence.
+                    dataset[g][key][i] = sequence
+
+    # add <s>, </s>
+    # (At this stage, all of the sequences are tokenised, so you'll need to input
+    #  the ID values of SOS and EOS instead.)
+    for g in tqdm(dataset, desc="Adding SOS, EOS tokens"):
+        SOS, EOS = Constants.SOS, Constants.EOS
+        for key in dataset[g]:
+            dataset[g][key] = [[SOS] + x + [EOS] for x in dataset[g][key]]
+
+    # setup data to save.
     data = {
         'settings' : opt,
         'dict' : {

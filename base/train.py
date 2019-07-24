@@ -163,7 +163,14 @@ def load_args():
     parser.add_argument('-optim', default='adam', 
                         choices=['sgd', 'adagrad', 'adadelta', 'adam'], 
                         help="Gradient optimisation method.")
-
+    
+    # style transfer specific features
+    parser.add_argument("-freeze_encoder", action="store_true", help="""
+                        If enabled, freezes learning of the encoder.
+                        """)
+    parser.add_argument("-freeze_decoder", action="store_true", help="""
+                        If enabled, freezes learning of the decoder.
+                        """)
 
     opt = parser.parse_args()
 

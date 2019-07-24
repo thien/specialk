@@ -15,11 +15,6 @@ def load_args():
     parser.add_argument('-data', required=True,
                         help='path to the *.pt file that was computed through preprocess.py')
 
-    # parser.add_argument('-model_name', default="model",
-    #                     help="""
-    #                     Model filename (the model will be saved as <model_name>_epochN_PPL.pt where PPL is the validation perplexity.
-    #                     """)
-
     parser.add_argument('-checkpoint_encoder', default="", type=str,
                         help="""
                         If training from a checkpoint, then this is the path to the pretrained encoder.

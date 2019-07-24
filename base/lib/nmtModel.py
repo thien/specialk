@@ -137,6 +137,19 @@ class NMTModel:
         """
         self.log_train_file = os.path.join(self.opt.directory,"train.log")
         self.log_valid_file = os.path.join(self.opt.directory,"valid.log")
+        # check if log files exists already.
+        # if it does, then we need to increment the log name
+        step = 1
+        while os.path.isfile(self.log_train_file):
+            filename = "train_" + str(step) + ".log"
+            self.log_train_file = os.path.join(self.opt.directory,filename)
+            step += 1
+        step = 1
+        while os.path.isfile(self.log_valid_file):
+            filename = "valid_" + str(step) + ".log"
+            self.log_valid_file = os.path.join(self.opt.directory,filename)
+            step += 1
+        
         print('[Info] Training performance will be written to file: {} and {}'.format(
             self.log_train_file, self.log_valid_file))
 
@@ -174,13 +187,12 @@ class NMTModel:
         # here we need to check whether the dataset is BPE or not.
         if 'byte_pairs' in data['dict']['src']:
             if '__sow' in data['dict']['src']['byte_pairs']:
-                self.src_bpe = BPE(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=constants.UNK_WORD, PAD=constants.PAD_WORD, word_tokenizer=self.parse)
-                self.tgt_bpe = BPE(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=constants.UNK_WORD, PAD=constants.PAD_WORD, word_tokenizer=self.parse)
-                self.src_bpe.from_dict(data['dict']['src'])
-                self.tgt_bpe.from_dict(data['dict']['tgt'])
-
-                # self.src_bpe = BPE.from_dict(data['dict']['src'])
-                # self.tgt_bpe = BPE.from_dict(data['dict']['tgt'])
+                # self.src_bpe = BPE(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=constants.UNK_WORD, PAD=constants.PAD_WORD, word_tokenizer=self.parse)
+                # self.tgt_bpe = BPE(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=constants.UNK_WORD, PAD=constants.PAD_WORD, word_tokenizer=self.parse)
+                # self.src_bpe.from_dict(data['dict']['src'])
+                # self.tgt_bpe.from_dict(data['dict']['tgt'])
+                self.src_bpe = BPE.from_dict(data['dict']['src'])
+                self.tgt_bpe = BPE.from_dict(data['dict']['tgt'])
 
         datasets = self.init_dataloaders(data, self.opt)
         self.training_data, self.validation_data = datasets

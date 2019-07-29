@@ -18,7 +18,6 @@ boto3==1.9.101
 botocore==1.12.101
 bottle==0.12.13
 bpemb==0.3.0
-Brlapi==0.6.6
 bz2file==0.98
 certbot==0.31.0
 certbot-nginx==0.31.0

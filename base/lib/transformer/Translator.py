@@ -15,7 +15,10 @@ class Translator(object):
 
     def __init__(self, opt, new=True):
         self.opt = opt
-        self.device = torch.device('cuda' if opt.cuda else 'cpu')
+        if opt.cuda_device:
+            self.device = torch.device('cuda:'+str(opt.cuda_device))
+        else:
+            self.device = torch.device('cuda' if opt.cuda else 'cpu')
 
         if new:
             checkpoint = torch.load(opt.model)
@@ -138,14 +141,8 @@ class Translator(object):
         with torch.no_grad():
             #-- Encode
             src_seq, src_pos = src_seq.to(self.device), src_pos.to(self.device)
-
-            # print("HELLO")
-
             
-
             src_enc, *_ = self.model.encoder(src_seq, src_pos)
-
-            # print("BYE")
 
             #-- Repeat data for beam search
             n_bm = self.opt.beam_size

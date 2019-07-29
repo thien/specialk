@@ -22,7 +22,12 @@ from preprocess import load_file, seq2idx
 class NMTModel:
     def __init__(self, opt, models_folder="models"):
         self.opt = opt
-        self.device = torch.device('cuda' if opt.cuda else 'cpu')
+
+        if opt.cuda_device:
+            self.device = torch.device('cuda:'+str(opt.cuda_device))
+        else:
+            self.device = torch.device('cuda' if opt.cuda else 'cpu')
+
         self.constants = constants
         self.opt.directory = self.init_dir(stores=models_folder)
         
@@ -40,6 +45,7 @@ class NMTModel:
         self.tgt_bpe = None
 
         atexit.register(self.exit_handler)
+
     # -------------------------
     # OVERLOADED FUNCTIONS
     # These functions are to be overwritten by whatever is declared
@@ -188,10 +194,6 @@ class NMTModel:
         # here we need to check whether the dataset is BPE or not.
         if 'byte_pairs' in data['dict']['src']:
             if '__sow' in data['dict']['src']['byte_pairs']:
-                # self.src_bpe = BPE(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=constants.UNK_WORD, PAD=constants.PAD_WORD, word_tokenizer=self.parse)
-                # self.tgt_bpe = BPE(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=constants.UNK_WORD, PAD=constants.PAD_WORD, word_tokenizer=self.parse)
-                # self.src_bpe.from_dict(data['dict']['src'])
-                # self.tgt_bpe.from_dict(data['dict']['tgt'])
                 self.src_bpe = BPE.from_dict(data['dict']['src'])
                 self.tgt_bpe = BPE.from_dict(data['dict']['tgt'])
 
@@ -224,7 +226,8 @@ class NMTModel:
         is_bpe = settings.format.lower() == "bpe"
         if is_bpe:
             # load test data
-            # bpe_src = BPE(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=constants.UNK_WORD, PAD=constants.PAD_WORD, word_tokenizer=self.parse)
+            # TODO: fix preprocessing method for BPE when loading test data.
+            # TODO: this is a night fix we'll need to clean the code debt later.
             bpe_src = BPE.from_dict(data['dict']['src'])
             # convert test sequences into IDx
             test_src_insts = bpe_src.transform(token_instances)
@@ -250,6 +253,12 @@ class NMTModel:
         else:
             # convert test sequences into IDx
             test_src_insts = seq2idx(token_instances, data['dict']['src'])
+            # trim sequence lengths
+            test_src_insts = [seq[:settings.max_word_seq_len] for seq in test_src_insts]
+            # add SOS and EOS
+            SOS, EOS = constants.SOS, constants.EOS
+            test_src_insts = [[SOS] + x + [EOS] for x in test_src_insts]
+            
             # setup data loaders.
             test_loader = torch.utils.data.DataLoader(
                 TranslationDataset(

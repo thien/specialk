@@ -38,6 +38,8 @@ meteor = Meteor()
 
 class Metrics:
     """
+    Handles additional performance measurements ontop
+    of whatever nlg-eval does.
     Handles performance measurements of either one tokenised
     document or comparisons between two tokenised documents.
 
@@ -229,9 +231,10 @@ class Metrics:
                 if tokens[index+1].pos_ == "VERB" and tokens[index+2].pos_ == "ADJ":
                     matches.append((index, (token, tokens[index+1], tokens[index+2])))
                     index = index + 2
-            index += 1
+            else:
+                index += 1
             
-        return matches if matches else None
+        return matches if matches else []
 
     def lex_match_2(self, sequence):
         """
@@ -274,7 +277,7 @@ class Metrics:
                     index = next_index + 2
             index += 1
             
-        return matches if matches else None
+        return matches if matches else []
 
     # readability measurements
 

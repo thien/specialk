@@ -52,6 +52,10 @@ def load_args():
                         Determines whether to use CUDA or not. (You should.)
                         """)
 
+    parser.add_argument("-cuda_device", type=int, help="""
+                        Determines which GPU to use for computation.
+                        """)
+
     # debugging options
     parser.add_argument('-telegram_key', help="""
                         filepath to telegram API private key to send messages to.
@@ -83,6 +87,7 @@ def load_args():
     opt = parser.parse_args()
 
     opt.save_model = False
+    opt.new_directory = False
 
     # validation.
 

@@ -65,6 +65,10 @@ def load_args():
                         Determines whether to use CUDA or not. (You should.)
                         """)
 
+    parser.add_argument("-cuda_device", type=int, help="""
+                        Determines which GPU to use for computation.
+                        """)
+
     parser.add_argument('-batch_size', type=int, default=64, help="""
                         Determines batch size of input data, for feeding into the models.
                         """)

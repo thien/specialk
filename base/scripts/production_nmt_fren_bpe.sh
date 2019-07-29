@@ -24,7 +24,7 @@ SAVENAME_FR_FREN=$m$FR_FREN
 
 # Train nmt models.
 
-EP=15
+EP=10
 MODELDIM=512
 BATCHSIZE=64
 
@@ -32,7 +32,7 @@ FREN_DIRNAME="fren_bpe"
 
 python3 train.py \
     -log $true \
-    -batch_size $BSIZE \
+    -batch_size $BATCHSIZE \
     -model $MODEL \
     -epoch $EP \
     -d_word_vec $MODELDIM \

@@ -1,3 +1,4 @@
+cd ..
 
 # Preprocessing the dataset.
 FILEPATH="../datasets/machine_translation/"
@@ -36,11 +37,12 @@ python3 train.py \
     -epoch $EP \
     -d_word_vec $MODELDIM \
     -d_model $MODELDIM \
-    -cuda \
     -data $SAVENAME_FR_FREN$PTF \
     -save_model \
     -save_mode best \
-    -directory_name FREN_DIRNAME
+    -directory_name FREN_DIRNAME \
+    -cuda \
+    -cuda_device 1
 
 python3 core/telegram.py -m "[Snorlax] Finished training fr-en models."
 

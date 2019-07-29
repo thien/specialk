@@ -2,6 +2,8 @@
 # Note that this will utilise the whole sequence
 # at token length 500, with BPE encodings.
 
+cd ..
+
 # Preprocessing the dataset.
 FILEPATH="../datasets/machine_translation/"
 TRAIN_EN=$FILEPATH"corpus_enfr.train.en"

@@ -1,4 +1,6 @@
 
+cd ..
+
 # Preprocessing the dataset.
 FILEPATH="../datasets/machine_translation/"
 TRAIN_EN=$FILEPATH"corpus_enfr.train.en"

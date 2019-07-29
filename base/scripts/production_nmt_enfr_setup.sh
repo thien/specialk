@@ -14,7 +14,7 @@ TEST_EN=$FILEPATH"corpus_enfr.test.en"
 TEST_FR=$FILEPATH"corpus_enfr.test.fr"
 
 FORMAT="bpe"
-MAXLEN="300"
+MAXLEN="200"
 PTF=".pt"
 B="_base"
 m="models/"

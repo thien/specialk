@@ -107,6 +107,16 @@ else
     echo "done."
 fi
 
+if [ -e machine_translation/commentary/news-commentary-v11.fr-en.fr ]
+then
+    echo "news commentary corpus already created."
+else
+    echo -n "Downloading News commentary dataset."
+    cd machine_translation/commentary
+    ./express.sh
+    cd ../..
+    echo "done."
+fi
 
 #
 # MERGING DATASETS
@@ -119,7 +129,21 @@ else
     echo -n "merging datasets.."
     # cd machine_translation
 
-    python3 merge.py -left machine_translation/europarl/europarl.en machine_translation/global_voices/globalvoices.en  machine_translation/hansards/hansards.en -right machine_translation/europarl/europarl.fr machine_translation/global_voices/globalvoices.fr machine_translation/hansards/hansards.fr -left_out machine_translation/corpus_enfr.en -right_out machine_translation/corpus_enfr.fr
+    python3 merge.py \
+        -left \
+        machine_translation/europarl/europarl.en \
+        machine_translation/global_voices/globalvoices.en \
+        machine_translation/hansards/hansards.en \
+        machine_translation/commentary/news-commentary-v11.fr-en.en \
+        -right \
+        machine_translation/europarl/europarl.fr \
+        machine_translation/global_voices/globalvoices.fr \
+        machine_translation/hansards/hansards.fr \
+        machine_translation/commentary/news-commentary-v11.fr-en.fr \
+        -left_out \
+        machine_translation/corpus_enfr.en \
+        -right_out \
+        machine_translation/corpus_enfr.fr
     # cat europarl/europarl.en global_voices/globalvoices.en hansards/hansards.en > corpus_enfr.en.raw
     # cat europarl/europarl.fr global_voices/globalvoices.fr hansards/hansards.fr > corpus_enfr.fr.raw
     # # removing blank lines
@@ -158,6 +182,12 @@ then
     echo "dataset already created."
 else
     echo "splitting dataset into training, validation and test data."
-    python3 splitter.py -source_a machine_translation/corpus_enfr.en.atok -source_b machine_translation/corpus_enfr.fr.atok -a_label en -b_label fr -verbose $true
+    python3 splitter.py \
+    -source_a machine_translation/corpus_enfr.en.atok \
+    -source_b machine_translation/corpus_enfr.fr.atok \
+    -a_label en \
+    -b_label fr \
+    -verbose $true \
+    -ratio 95:3:2
     echo "finished splitting dataset into training, validation, and test data."
 fi

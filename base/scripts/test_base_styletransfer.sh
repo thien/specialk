@@ -33,7 +33,7 @@ fi
 MODEL="transformer"
 EP=15
 MODELDIM=512
-BATCHSIZE=64
+BATCHSIZE=32
 
 REF_ENCODER="models/nmt_fren_lg_lower_30k_v_base/encoder_epoch_15_accu_41.363.chkpt"
 REF_DECODER="models/nmt_fren_lg_lower_30k_v_base/decoder_epoch_15_accu_41.363.chkpt"
@@ -46,82 +46,82 @@ ENCODER="encoder.chkpt"
 DECODER="decoder.chkpt"
 
 # democrat no freeze
-python3 train.py \
-    -checkpoint_encoder $REF_ENCODER \
-    -checkpoint_decoder $REF_DECODER \
-    -directory_name $DEM_MODELDIR \
-    -data $DEM_DATASET \
-    -model $MODEL \
-    -epoch $EP \
-    -d_word_vec $MODELDIM \
-    -d_model $MODELDIM \
-    -save_mode "best" \
-    -batch_size $BATCHSIZE \
-    -save_model \
-    -log \
-    -new_directory \
-    -cuda 
+# python3 train.py \
+#     -checkpoint_encoder $REF_ENCODER \
+#     -checkpoint_decoder $REF_DECODER \
+#     -directory_name $DEM_MODELDIR \
+#     -data $DEM_DATASET \
+#     -model $MODEL \
+#     -epoch $EP \
+#     -d_word_vec $MODELDIM \
+#     -d_model $MODELDIM \
+#     -save_mode "best" \
+#     -batch_size $BATCHSIZE \
+#     -save_model \
+#     -log \
+#     -new_directory \
+#     -cuda 
 
-python3 core/telegram.py -m "Finished training democrat no freeze."
+# python3 core/telegram.py -m "Finished training democrat no freeze."
 
-# democrat freeze
-python3 train.py \
-    -checkpoint_encoder $REF_ENCODER \
-    -checkpoint_decoder $REF_DECODER \
-    -directory_name $DEM_MODELDIR"_freeze" \
-    -data $DEM_DATASET \
-    -model $MODEL \
-    -epoch $EP \
-    -d_word_vec $MODELDIM \
-    -d_model $MODELDIM \
-    -save_mode "best" \
-    -batch_size $BATCHSIZE \
-    -save_model \
-    -log \
-    -freeze_encoder \
-    -new_directory \
-    -cuda
+# # democrat freeze
+# python3 train.py \
+#     -checkpoint_encoder $REF_ENCODER \
+#     -checkpoint_decoder $REF_DECODER \
+#     -directory_name $DEM_MODELDIR"_freeze" \
+#     -data $DEM_DATASET \
+#     -model $MODEL \
+#     -epoch $EP \
+#     -d_word_vec $MODELDIM \
+#     -d_model $MODELDIM \
+#     -save_mode "best" \
+#     -batch_size $BATCHSIZE \
+#     -save_model \
+#     -log \
+#     -freeze_encoder \
+#     -new_directory \
+#     -cuda
 
-python3 core/telegram.py -m "Finished training democrat freeze."
+# python3 core/telegram.py -m "Finished training democrat freeze."
 
-# republican no freeze
-python3 train.py \
-    -checkpoint_encoder $REF_ENCODER \
-    -checkpoint_decoder $REF_DECODER \
-    -directory_name $REP_MODELDIR \
-    -data $REP_DATASET \
-    -model $MODEL \
-    -epoch $EP \
-    -d_word_vec $MODELDIM \
-    -d_model $MODELDIM \
-    -save_mode "best" \
-    -batch_size $BATCHSIZE \
-    -save_model \
-    -log \
-    -new_directory \
-    -cuda 
+# # republican no freeze
+# python3 train.py \
+#     -checkpoint_encoder $REF_ENCODER \
+#     -checkpoint_decoder $REF_DECODER \
+#     -directory_name $REP_MODELDIR \
+#     -data $REP_DATASET \
+#     -model $MODEL \
+#     -epoch $EP \
+#     -d_word_vec $MODELDIM \
+#     -d_model $MODELDIM \
+#     -save_mode "best" \
+#     -batch_size $BATCHSIZE \
+#     -save_model \
+#     -log \
+#     -new_directory \
+#     -cuda 
 
-python3 core/telegram.py -m "Finished training republican no freeze."
+# python3 core/telegram.py -m "Finished training republican no freeze."
 
-# republican freeze
-python3 train.py \
-    -checkpoint_encoder $REF_ENCODER \
-    -checkpoint_decoder $REF_DECODER \
-    -directory_name $REP_MODELDIR"_freeze" \
-    -data $REP_DATASET \
-    -model $MODEL \
-    -epoch $EP \
-    -d_word_vec $MODELDIM \
-    -d_model $MODELDIM \
-    -save_mode "best" \
-    -batch_size $BATCHSIZE \
-    -save_model \
-    -log \
-    -freeze_encoder \
-    -new_directory \
-    -cuda 
+# # republican freeze
+# python3 train.py \
+#     -checkpoint_encoder $REF_ENCODER \
+#     -checkpoint_decoder $REF_DECODER \
+#     -directory_name $REP_MODELDIR"_freeze" \
+#     -data $REP_DATASET \
+#     -model $MODEL \
+#     -epoch $EP \
+#     -d_word_vec $MODELDIM \
+#     -d_model $MODELDIM \
+#     -save_mode "best" \
+#     -batch_size $BATCHSIZE \
+#     -save_model \
+#     -log \
+#     -freeze_encoder \
+#     -new_directory \
+#     -cuda 
 
-python3 core/telegram.py -m "Finished training republican freeze."
+# python3 core/telegram.py -m "Finished training republican freeze."
 
 # now we need to translate those sequences.
 DEM_TESTSET="../datasets/political_data/democratic_only.test.fr"
@@ -129,41 +129,83 @@ REP_TESTSET="../datasets/political_data/republican_only.test.fr"
 OUTPUT="outputs.txt"
 EVALTXT="eval.txt"
 
-# democrat no freeze
-python3 translate.py \
-    -model $MODEL \
-    -checkpoint_encoder "models/"$DEM_MODELDIR"/"$ENCODER \
-    -checkpoint_decoder "models/"$DEM_MODELDIR"/"$DECODER \
-    -vocab $DEM_DATASET \
-    -src $DEM_TESTSET \
-    -output "results/baseline/democrat_nofreeze.txt" \
-    -cuda
+# # democrat no freeze
+# python3 translate.py \
+#     -model $MODEL \
+#     -checkpoint_encoder "models/"$DEM_MODELDIR"/"$ENCODER \
+#     -checkpoint_decoder "models/"$DEM_MODELDIR"/"$DECODER \
+#     -vocab $DEM_DATASET \
+#     -src $DEM_TESTSET \
+#     -output "results/baseline/democrat_nofreeze.txt" \
+#     -cuda
 
-python3 core/telegram.py -m "Finished translating democrat no freeze."
+# python3 core/telegram.py -m "Finished translating democrat no freeze."
 
-# democrat freeze
-python3 translate.py \
-    -model $MODEL \
-    -checkpoint_encoder "models/"$DEM_MODELDIR"_freeze/"$ENCODER \
-    -checkpoint_decoder "models/"$DEM_MODELDIR"_freeze/"$DECODER \
-    -vocab $DEM_DATASET \
-    -src $DEM_TESTSET \
-    -output "results/baseline/democrat_freeze.txt" \
-    -cuda
+# # democrat freeze
+# python3 translate.py \
+#     -model $MODEL \
+#     -checkpoint_encoder "models/"$DEM_MODELDIR"_freeze/"$ENCODER \
+#     -checkpoint_decoder "models/"$DEM_MODELDIR"_freeze/"$DECODER \
+#     -vocab $DEM_DATASET \
+#     -src $DEM_TESTSET \
+#     -output "results/baseline/democrat_freeze.txt" \
+#     -cuda
 
-python3 core/telegram.py -m "Finished translating democrat freeze."
+# python3 core/telegram.py -m "Finished translating democrat freeze."
 
-# republican no freeze
-python3 translate.py \
-    -model $MODEL \
-    -checkpoint_encoder "models/"$REP_MODELDIR"/"$ENCODER \
-    -checkpoint_decoder "models/"$REP_MODELDIR"/"$DECODER \
-    -vocab $REP_DATASET \
-    -src $REP_TESTSET \
-    -output "results/baseline/republican_nofreeze.txt" \
-    -cuda
+# # republican no freeze
+# python3 translate.py \
+#     -model $MODEL \
+#     -checkpoint_encoder "models/"$REP_MODELDIR"/"$ENCODER \
+#     -checkpoint_decoder "models/"$REP_MODELDIR"/"$DECODER \
+#     -vocab $REP_DATASET \
+#     -src $REP_TESTSET \
+#     -output "results/baseline/republican_nofreeze.txt" \
+#     -cuda
 
-python3 core/telegram.py -m "Finished translating republican no freeze."
+# python3 core/telegram.py -m "Finished translating republican no freeze."
+
+# # republican freeze
+# python3 translate.py \
+#     -model $MODEL \
+#     -checkpoint_encoder "models/"$REP_MODELDIR"_freeze/"$ENCODER \
+#     -checkpoint_decoder "models/"$REP_MODELDIR"_freeze/"$DECODER \
+#     -vocab $REP_DATASET \
+#     -src $REP_TESTSET \
+#     -output "results/baseline/republican_freeze.txt" \
+#     -cuda
+
+# python3 core/telegram.py -m "Finished translating republican freeze."
+
+# baseline democrat
+# python3 translate.py \
+#     -model $MODEL \
+#     -checkpoint_encoder $REF_ENCODER \
+#     -checkpoint_decoder $REF_DECODER \
+#     -vocab $DEM_DATASET \
+#     -src $DEM_TESTSET \
+#     -output "results/baseline/baseline_democrat.txt" \
+#     -cuda
+
+# python3 core/telegram.py -m "Finished translating democrat baseline."
+
+# # baseline republican
+# python3 translate.py \
+#     -model $MODEL \
+#     -checkpoint_encoder $REF_ENCODER \
+#     -checkpoint_decoder $REF_DECODER \
+#     -vocab $DEM_DATASET \
+#     -src $DEM_TESTSET \
+#     -output "results/baseline/baseline_republican.txt" \
+#     -cuda
+
+# python3 core/telegram.py -m "Finished translating republican baseline."
+
+# need to translate regular translation output using the style transfer models and see what's going on.
+
+
+NMT_EN_TEST="../datasets/machine_translation/corpus_enfr.test.en.sm"
+NMT_FR_TEST="../datasets/machine_translation/corpus_enfr.test.fr.sm"
 
 # republican freeze
 python3 translate.py \
@@ -171,35 +213,26 @@ python3 translate.py \
     -checkpoint_encoder "models/"$REP_MODELDIR"_freeze/"$ENCODER \
     -checkpoint_decoder "models/"$REP_MODELDIR"_freeze/"$DECODER \
     -vocab $REP_DATASET \
-    -src $REP_TESTSET \
-    -output "results/baseline/republican_freeze.txt" \
+    -src $NMT_FR_TEST \
+    -output "results/baseline/republican_freeze_using_base_out.txt" \
     -cuda
 
-python3 core/telegram.py -m "Finished translating republican freeze."
 
-# baseline democrat
+python3 core/telegram.py -m "Finished translating republican with nmt."
+
+
 python3 translate.py \
     -model $MODEL \
-    -checkpoint_encoder $REF_ENCODER \
-    -checkpoint_decoder $REF_ENCODER \
+    -checkpoint_encoder "models/"$DEM_MODELDIR"_freeze/"$ENCODER \
+    -checkpoint_decoder "models/"$DEM_MODELDIR"_freeze/"$DECODER \
     -vocab $DEM_DATASET \
-    -src $DEM_TESTSET \
-    -output "results/baseline/baseline_democrat.txt" \
+    -src $NMT_EN_TEST \
+    -output "results/baseline/democrat_freeze_using_base_out.txt" \
     -cuda
 
-python3 core/telegram.py -m "Finished translating democrat baseline."
 
-# baseline republican
-python3 translate.py \
-    -model $MODEL \
-    -checkpoint_encoder $REF_ENCODER \
-    -checkpoint_decoder $REF_ENCODER \
-    -vocab $DEM_DATASET \
-    -src $DEM_TESTSET \
-    -output "results/baseline/baseline_republican.txt" \
-    -cuda
 
-python3 core/telegram.py -m "Finished translating republican baseline."
+python3 core/telegram.py -m "Finished translating democrat with nmt."
 
 
 DEM_TESTSET_EN="../datasets/political_data/democratic_only.test.en"
@@ -207,26 +240,35 @@ REP_TESTSET_EN="../datasets/political_data/republican_only.test.en"
 
 RESDIR="results/baseline/"
 
-nlg-eval --hypothesis=$RESDIR"democrat_nofreeze.txt" --references=$DEM_TESTSET_EN > $RESDIR"democrat_nofreeze.stat.txt"
 
-python3 core/telegram.py -m "Finished computing stats for democrat_nofreeze"
+nlg-eval --hypothesis=$RESDIR"democrat_freeze_using_base_out.txt" --references=$NMT_EN_TEST > $RESDIR"democrat_freeze_nmt.stat.txt"
 
-nlg-eval --hypothesis=$RESDIR"democrat_freeze.txt" --references=$DEM_TESTSET_EN > $RESDIR"democrat_freeze.stat.txt"
+nlg-eval --hypothesis=$RESDIR"republican_freeze_using_base_out.txt" --references=$NMT_EN_TEST > $RESDIR"republican_freeze_nmt.stat.txt"
 
-python3 core/telegram.py -m "Finished computing stats for democrat_freeze"
 
-nlg-eval --hypothesis=$RESDIR"republican_nofreeze.txt" --references=$REP_TESTSET_EN > $RESDIR"republican_nofreeze.stat.txt"
+python3 core/telegram.py -m "Finished calculating stats."
 
-python3 core/telegram.py -m "Finished computing stats for republican_nofreeze"
 
-nlg-eval --hypothesis=$RESDIR"republican_freeze.txt" --references=$REP_TESTSET_EN > $RESDIR"republican_freeze.stat.txt"
+# nlg-eval --hypothesis=$RESDIR"democrat_nofreeze.txt" --references=$DEM_TESTSET_EN > $RESDIR"democrat_nofreeze.stat.txt"
 
-python3 core/telegram.py -m "Finished computing stats for republican_freeze"
+# python3 core/telegram.py -m "Finished computing stats for democrat_nofreeze"
 
-nlg-eval --hypothesis=$RESDIR"baseline_democrat.txt" --references=$DEM_TESTSET_EN > $RESDIR"baseline_democrat.stat.txt"
+# nlg-eval --hypothesis=$RESDIR"democrat_freeze.txt" --references=$DEM_TESTSET_EN > $RESDIR"democrat_freeze.stat.txt"
 
-python3 core/telegram.py -m "Finished computing stats for baseline_democrat"
+# python3 core/telegram.py -m "Finished computing stats for democrat_freeze"
+#echo $RESDIR"republican_nofreeze.txt"
+#nlg-eval --hypothesis=$RESDIR"republican_nofreeze.txt" --references=$REP_TESTSET_EN > $RESDIR"republican_nofreeze.stat.txt"
 
-nlg-eval --hypothesis=$RESDIR"baseline_republican.txt" --references=$REP_TESTSET_EN > $RESDIR"baseline_republican.stat.txt"
+#python3 core/telegram.py -m "Finished computing stats for republican_nofreeze"
 
-python3 core/telegram.py -m "Finished computing stats for baseline_republican"
+# nlg-eval --hypothesis=$RESDIR"republican_freeze.txt" --references=$REP_TESTSET_EN > $RESDIR"republican_freeze.stat.txt"
+
+# python3 core/telegram.py -m "Finished computing stats for republican_freeze"
+
+# nlg-eval --hypothesis=$RESDIR"baseline_democrat.txt" --references=$DEM_TESTSET_EN > $RESDIR"baseline_democrat.stat.txt"
+
+# python3 core/telegram.py -m "Finished computing stats for baseline_democrat"
+
+# nlg-eval --hypothesis=$RESDIR"baseline_republican.txt" --references=$REP_TESTSET_EN > $RESDIR"baseline_republican.stat.txt"
+
+# python3 core/telegram.py -m "Finished computing stats for baseline_republican"

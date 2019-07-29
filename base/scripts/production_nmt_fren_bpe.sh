@@ -24,9 +24,9 @@ SAVENAME_FR_FREN=$m$FR_FREN
 
 # Train nmt models.
 
-EP=10
+EP=5
 MODELDIM=512
-BATCHSIZE=64
+BATCHSIZE=32
 MODEL="transformer"
 
 FREN_DIRNAME="fren_bpe"

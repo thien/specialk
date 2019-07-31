@@ -6,14 +6,22 @@ from tqdm import tqdm
 import argparse
 import multiprocessing
 import subprocess
+
+import pandas as pd
+import numpy as np
+
+
 from core.utils import get_len, batch_compute
+from core.sentenciser import *
+
 from rouge import Rouge
 from metrics.meteor.meteor import Meteor
 
-from nltk.corpus import cmudict
+from nltk.corpus import cmudict,stopwords
 from nltk.translate.bleu_score import sentence_bleu
-import pandas as pd
-import numpy as np
+from nltk import pos_tag
+from nltk import RegexpParser
+from nltk import word_tokenize
 
 # for emd
 from pyemd import emd
@@ -29,12 +37,15 @@ warnings.filterwarnings("ignore")
 # load rouge
 rouge_comp = Rouge()
 # load spacy
-nlp = spacy.load('en_core_web_sm')
-sentencizer = nlp.create_pipe("sentencizer")
-nlp.add_pipe(sentencizer)
-tokenizer = nlp.create_pipe("tokenizer")
+# nlp = spacy.load('en_core_web_sm')
+# sentencizer = nlp.create_pipe("sentencizer")
+# nlp.add_pipe(sentencizer)
+# tokenizer = nlp.create_pipe("tokenizer")
 # load meteor
 meteor = Meteor()
+
+
+DEFAULT_GLOVE_PATH="/home/t/Data/Datasets/glove/glove.6B.200d.txt"
 
 class Metrics:
     """
@@ -48,14 +59,14 @@ class Metrics:
     """
 
     def __init__(self, args):
-        self.stopwords = spacy.lang.en.stop_words.STOP_WORDS
+        self.stopwords = set(stopwords.words('english'))
+        self.cmudict = cmudict.dict()
 
     def load(self, args):
         self.load_glove(args.glove_path)
-        self.load_syllables_dict()
         return self
 
-    def load_glove(self, glove_path):
+    def load_glove(self, glove_path=DEFAULT_GLOVE_PATH):
         """
         Loads glove dataset.
         """
@@ -65,9 +76,6 @@ class Metrics:
         self.glove = {key: val.values for key, val in df.T.items()}
         return self
 
-    def load_syllables_dict(self):
-        self.cmudict = cmudict.dict()
-        return self
 
     # preprocess
 
@@ -87,6 +95,45 @@ class Metrics:
             if tokenise:
                 seq = sents.split(" ")
                 return seq
+    
+    @staticmethod
+    def tokenize(x):
+        return word_tokenize(x)
+
+    @staticmethod
+    def basic_stats(paragraphs):
+        """
+        Assumes the paragraphs are tokenised.
+        """
+        tokens = []
+        sentence_lengths = []
+        num_tokens_in_paragraph = []
+        for paragraph in paragraphs:
+            paragraph_tokens = []
+            for sentence in paragraph:
+                sentence_lengths.append(len(sentence))
+                for token in sentence:
+                    paragraph_tokens.append(token)
+            tokens = tokens + paragraph_tokens
+            num_tokens_in_paragraph.append(len(paragraph_tokens))
+        
+        num_tokens = len(tokens)
+        num_paragraphs = len(paragraphs)
+        num_sentences = len(sentence_lengths)
+        
+        avg_token_length = sum([len(t) for t in tokens])/num_tokens if num_tokens > 0 else 0
+        avg_sentence_length = sum(sentence_lengths)/num_sentences
+        avg_paragraph_length = sum(num_tokens_in_paragraph)/len(paragraphs)
+        
+        return {
+            "num_tokens" : num_tokens,
+            "num_paragraphs" : num_paragraphs,
+            "num_sentences" : num_sentences,
+            "avg_token_length" : avg_token_length,
+            "avg_sentence_length" : avg_sentence_length,
+            "avg_paragraph_length" : avg_paragraph_length,
+            "sentence_lengths" : sentence_lengths,
+        }
 
     # NMT style measurements
 
@@ -191,9 +238,6 @@ class Metrics:
         print(score)
         return None
 
-    def perplexity(self, tokens):
-        # not sure how to calculate this
-        return None
 
     # style transfer intensity
     # content preservation
@@ -201,7 +245,7 @@ class Metrics:
 
     # lexical measurements
 
-    def lex_match_1(self, sequence):
+    def lex_match_1(self, tokens):
         """
         finds ``it v-link ADJ finite/non-finite clause''
         
@@ -209,34 +253,33 @@ class Metrics:
             "It's unclear what Teresa May is planning."
         
         params:
-            tokens: tokenized sentence from nlp(sentence)
+            tokens: pos tagged sequence (e.g. `pos_tag(word_tokenize(string_of_article))` )
         returns:
             matches: None if nothing is found,
                     [(match pairs)] otherwise.
         """
-        tokens = self.prep(sequence, tokenise=False)
-
-        if type(tokens) != spacy.tokens.doc.Doc:
-            print("Warning: this is not a spacy processed input sequence.\
-                   Manually processing..")
-            tokens = self.spacy(tokens)
-
-        matches = []
 
         index_limit = len(tokens)
         index = 0
+        matches = []
         while index < index_limit:
-            token = tokens[index]
-            if token.text.lower() == "it":
-                if tokens[index+1].pos_ == "VERB" and tokens[index+2].pos_ == "ADJ":
-                    matches.append((index, (token, tokens[index+1], tokens[index+2])))
-                    index = index + 2
-            else:
-                index += 1
+            token, tag = tokens[index]
             
-        return matches if matches else []
+            if token.lower() == "it":
+                if index+2 < index_limit:
+                    if tokens[index+1][1][0] == "V":
+                        if tokens[index+2][1][0] == "J":
+    #                       if tokens[index+3][1][0] == "W":
+                            group = tuple([str(tokens[index+i][0]) for i in range(3)])
+                            matches.append((index, group))
+                        index = index + 2
+                else:
+                    break
+            index += 1
+        return matches
+        
 
-    def lex_match_2(self, sequence):
+    def lex_match_2(self, tokens):
         """
         finds ``v-link ADJ prep''
         
@@ -244,40 +287,34 @@ class Metrics:
             "..he was responsible for all for.."
         
         params:
-            tokens: tokenized sentence from nlp(sentence)
+            tokens: pos tagged sequence (e.g. `pos_tag(word_tokenize(string_of_article))` )
         returns:
             matches: None if nothing is found,
                     [(match pairs)] otherwise.
         """
-        tokens = self.prep(sequence, tokenise=False)
-
-        if type(tokens) != spacy.tokens.doc.Doc:
-            print("Warning: this is not a spacy processed input sequence. Manually processing..")
-            tokens = self.spacy(tokens)
-
-        matches = []
-
         index_limit = len(tokens)
         index = 0
+        matches = []
         while index < index_limit:
-            token = tokens[index]
-            if token.pos_ == "VERB":
+            token, tag = tokens[index]
+            
+            if tag[0] == "V":
                 group = [token]
                 next_index = index+1
                 # detect any adverbs before adj and adp.
                 # e.g. "be *very, very,* embarrassing.."
-                while tokens[next_index].pos_ == "ADV":
+                while (next_index < index_limit) and (tokens[next_index][1][0] == "R"):
                     group.append(tokens[next_index])
                     next_index += 1
-        
-                if tokens[next_index].pos_ == "ADJ" and tokens[next_index+1].pos_ == "ADP":
-                    group.append(tokens[next_index])
-                    group.append(tokens[next_index+1])
-                    matches.append((index, tuple(group)))
-                    index = next_index + 2
+                
+                if next_index+1 < index_limit:
+                    if tokens[next_index][1][0] == "J" and tokens[next_index+1][1] == "IN":
+                        group.append(tokens[next_index][0])
+                        group.append(tokens[next_index+1][0])
+                        matches.append((index, tuple(group)))
+                        index = next_index + 2
             index += 1
-            
-        return matches if matches else []
+        return matches
 
     # readability measurements
 
@@ -288,9 +325,9 @@ class Metrics:
         returns int.
         """
         word = word.lower()
-        if self.cmudict:
-            if word in self.cmudict:
-                return max([len(list(y for y in x if y[-1].isdigit())) for x in d[word.lower()]])
+    
+        if word in self.cmudict:
+            return max([len(list(y for y in x if y[-1].isdigit())) for x in self.cmudict[word]])
         
         # imperfect but good enough calculation.
         # based on implementation from:
@@ -316,22 +353,21 @@ class Metrics:
             numVowels -= 1
         return numVowels if numVowels > 0 else 1
 
-    def readability(self, article):
+    def readability(self, article, tokenised=False):
         """
         Takes as input a string.
         Returns readability score of 0-100.
         """
-
-        sentences = self.spacy(article).sents
+        
+        sentences = find_sentences(article)
         n_sents = 0
         n_words = 0
         n_sylls = 0
         n_chars = 0
         for sentence in sentences:
             n_sents += 1
-            for word in self.tokenizer(str(sentence)):
-                word = str(word).lower()
-                num_syllables = self.syllables(word)
+            for word in self.tokenize(sentence):
+                num_syllables = self.syllables(word.lower())
                 if num_syllables > 0:
                     n_words += 1
                     n_sylls += num_syllables
@@ -377,7 +413,7 @@ def load_args():
                         """)
     # additional stuff
 
-    parser.add_argument("-glove_path", type=str, help="""
+    parser.add_argument("-glove_path", type=str, default=DEFAULT_GLOVE_PATH, help="""
                         Filepath to glove embedding weights.
                         """)
     parser.add_argument("-lowercase", action="store_true", help="""

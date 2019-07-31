@@ -188,6 +188,6 @@ else
     -a_label en \
     -b_label fr \
     -verbose $true \
-    -ratio 95:3:2
+    -ratio 97:2:1
     echo "finished splitting dataset into training, validation, and test data."
 fi

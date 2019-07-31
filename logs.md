@@ -3,6 +3,10 @@
 - Note to self: Don't merge the optimisation methods. They're inherently different (see Attn is all you need paper.)
 
 
+
+Need to fix BPE (URGENT)
+NEED TO TRAIN EN-FR AND FR-EN on deployment.
+
 - [ ] Setup political data dataset for our models.
     - [x] Create `bash` script to automate the whole process of downloading and extracting.
     - [x] ~~Create method to train classifier.~~ (Dataset is already made.)[http://tts.speech.cs.cmu.edu/style_models/political_classifier.tar] but you'll want to make sure that the classifier can use it.
@@ -83,6 +87,11 @@
 
 # History
 
+## 7/28
+
+- Need to cut articles of a particular length?
+- More data for NMT models
+- Setup NMT for seq2seq (with our data).
 
 ## 7/19
 

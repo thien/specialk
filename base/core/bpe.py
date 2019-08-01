@@ -50,7 +50,7 @@ class Encoder:
         self.UNK = UNK
         self.PAD = PAD
         # self.required_tokens = list(set(required_tokens or []).union({self.UNK, self.PAD}))
-        self.required_tokens = [self.PAD, self.UNK, Constants.SOS_WORD, Constants.EOS_WORD, Constants.BLO_WORD]
+        self.required_tokens = required_tokens if required_tokens else Constants.get_tokens()
         self.vocab_size = vocab_size
         self.pct_bpe = pct_bpe
         self.word_vocab_size = max([int(vocab_size * (1 - pct_bpe)), len(self.required_tokens or [])])
@@ -103,7 +103,7 @@ class Encoder:
         word_counts = Counter(word for word in toolz.concat(map(self.word_tokenizer, sentences)))
 
         i = 0
-        for token in set(self.required_tokens or []):
+        for token in self.required_tokens:
             word_counts[token] = int(2**63) - i
             i += 1
         sorted_word_counts = sorted(word_counts.items(), key=lambda p: -p[1])

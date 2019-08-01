@@ -107,6 +107,25 @@ def seq2idx(sequences, w2i):
     return [[w2i.get(w, Constants.UNK) for w in s] for s in tqdm(sequences)]
 
 
+def reclip(ref_seq, bpe_seq, enc, max_len):
+    """
+    Checks if the BPE encoded sequence is shorter than
+    the max len. Otherwise, it'll trim the original
+    sequence s.t. it fits within the max length of
+    the sequence.
+    """
+    if len(bpe_seq) <= max_len:
+        return bpe_seq
+        
+    subtract = 1
+    while len(bpe_seq) > max_len:
+        reference = " ".join(ref_seq.split()[:-subtract])
+        subtract += 1
+        bpe_seq = [x for x in enc.transform(reference)][0]
+    # replace newly trimmed sequence.
+    return bpe_seq
+
+
 def load_file(filepath, formatting, case_sensitive=True, max_train_seq=None):
     """
     Loads text from file.
@@ -219,27 +238,31 @@ if __name__ == "__main__":
                 sequences = dataset[g][key]
                 # it's much easier to just refer back to the original sentence and
                 # trim tokens from there.
+                bpe_method = src_bpe if key == "src" else tgt_bpe
                 for i in range(len(sequences)):
-                    sequence = sequences[i]
-                    if len(sequence) <= opt.max_word_seq_len:
-                        continue
+                    ref_seq = raw[g][key][i]
+                    bpe_seq = sequences[i]
+                    dataset[g][key][i] = reclip(ref_seq, bpe_seq, bpe_method, opt.max_word_seq_len)
+
+                    # if len(sequence) <= opt.max_word_seq_len:
+                    #     continue
                     
-                    subtract = 1
-                    bpe_method = src_bpe if key == "src" else tgt_bpe
-                    while len(sequence) > opt.max_word_seq_len:
-                        reference = raw[g][key][i].split()
-                        reference = reference[:-subtract]
-                        reference = " ".join(reference)
-                        subtract += 1
-                        sequence = [x for x in bpe_method.transform(reference)][0]
-                    # replace newly trimmed sequence.
-                    dataset[g][key][i] = sequence
+                    # subtract = 1
+                    # bpe_method = src_bpe if key == "src" else tgt_bpe
+                    # while len(sequence) > opt.max_word_seq_len:
+                    #     reference = raw[g][key][i].split()
+                    #     reference = reference[:-subtract]
+                    #     reference = " ".join(reference)
+                    #     subtract += 1
+                    #     sequence = [x for x in bpe_method.transform(reference)][0]
+                    # # replace newly trimmed sequence.
+                    # dataset[g][key][i] = sequence
 
     # add <s>, </s>
     # (At this stage, all of the sequences are tokenised, so you'll need to input
     #  the ID values of SOS and EOS instead.)
+    SOS, EOS = Constants.SOS, Constants.EOS
     for g in tqdm(dataset, desc="Adding SOS, EOS tokens"):
-        SOS, EOS = Constants.SOS, Constants.EOS
         for key in dataset[g]:
             dataset[g][key] = [[SOS] + x + [EOS] for x in dataset[g][key]]
 

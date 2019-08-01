@@ -11,6 +11,7 @@ from lib.TransformerModel import TransformerModel as transformer
 
 def load_args():
     parser = argparse.ArgumentParser(description="train.py")
+    parser.add_argument("-f", help="Don't use this. it's not for anything. (For Notebooks)")
     # data options
     parser.add_argument('-data', required=True,
                         help='path to the *.pt file that was computed through preprocess.py')
@@ -180,12 +181,7 @@ def load_args():
                         If enabled, freezes learning of the decoder.
                         """)
 
-    opt = parser.parse_args()
-
-    # validation.
-    assert opt.epochs > 0
-
-    return opt
+    return parser
 
 
 def train_model(opt):
@@ -218,4 +214,8 @@ def train_model(opt):
 
 if __name__ == "__main__":
     opt = load_args()
+    opt = opt.parse_args()
+    # validation.
+    assert opt.epochs > 0
+    
     train_model(opt)

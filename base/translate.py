@@ -9,7 +9,7 @@ import argparse
 from tqdm import tqdm
 from lib.TransformerModel import TransformerModel as transformer
 from lib.RecurrentModel import RecurrentModel as recurrent
-from core.bpe import Encoder as BPE
+
 
 def load_args():
     parser = argparse.ArgumentParser(description="train.py")
@@ -72,9 +72,6 @@ def load_args():
                         help="""If verbose is set, will output the n_best
                         decoded sentences"""
                         )
-    # parser.add_argument("-lowercase", action="store_true", help="""
-    #                     If enabled, sets input characters as lowercase.
-    #                     """)
 
     parser.add_argument("-verbose", action="store_true")
 
@@ -103,48 +100,6 @@ if __name__ == "__main__":
     print("Setup model wrapper.")
     model.load(opt.checkpoint_encoder, opt.checkpoint_decoder)
     print("Initiated model and weights.")
-    # load test data
-    test_loader, max_token_seq_len, is_bpe = model.load_testdata(opt.src, opt.vocab)
-    
-    if is_bpe: 
-        # setup bpe decoder
-        bpe_tgt = BPE.from_dict(torch.load(opt.vocab)['dict']['tgt'])
 
     # translate sequences
-    hypotheses = model.translate(test_loader, max_token_seq_len)
-
-    lines = []
-
-    if is_bpe:
-        # transform sequences
-        hypotheses = [x[0] for x in hypotheses]
-        sequences = bpe_tgt.inverse_transform(hypotheses)
-        # clip sequences based on position of EOS token.
-        for x in sequences:
-            x = x.split()
-            index = 0
-            for j in range(len(x)):
-                if x[j] == model.constants.EOS_WORD:
-                    if j == 0:
-                        continue
-                    index = j
-                    break
-            line = " ".join(x[:index])
-            if len(line.strip()) < 1:
-                line = model.constants.UNK_WORD
-            lines.append(line)
-    else:
-        # convert sequences back into text
-        idx2w = test_loader.dataset.tgt_idx2word
-        for sequence in hypotheses:
-            for token_i in sequence:
-                tokens = [idx2w[i] for i in token_i if i != model.constants.EOS]
-                line = " ".join(tokens)
-                lines.append(line)
-        
-    # write outputs to file
-    with open(opt.output, 'w') as f:
-        for line in lines:
-            f.write(line + "\n")
-
-    print("Done.")
+    hypotheses = model.translate()

@@ -16,8 +16,8 @@ import atexit
 import telebot
 import json
 import numpy as np
-
-from preprocess import load_file, seq2idx
+from preprocess import load_file, seq2idx, reclip
+from tqdm import tqdm
 
 class NMTModel:
     def __init__(self, opt, models_folder="models"):
@@ -224,14 +224,27 @@ class NMTModel:
                                     settings.format,
                                     settings.case_sensitive)
         is_bpe = settings.format.lower() == "bpe"
+        SOS, EOS = constants.SOS, constants.EOS
+
+        decoder = None
+
+        print("settings.max_token_seq_len", settings.max_token_seq_len)
         if is_bpe:
             # load test data
             # TODO: fix preprocessing method for BPE when loading test data.
             # TODO: this is a night fix we'll need to clean the code debt later.
             bpe_src = BPE.from_dict(data['dict']['src'])
+            decoder = BPE.from_dict(data['dict']['tgt'])
             # convert test sequences into IDx
             test_src_insts = bpe_src.transform(token_instances)
             test_src_insts = [i for i in test_src_insts]
+            # some of the sequences made may be too long, so we'll need to fix that.
+            for i in tqdm(range(len(token_instances)), desc="Reclipping Test Sequences"):
+                raw = token_instances[i]
+                encoded = test_src_insts[i]
+                test_src_insts[i] = reclip(raw, encoded, bpe_src, settings.max_token_seq_len-2)
+                test_src_insts[i] = [SOS] + test_src_insts[i] + [EOS]
+
             # setup data loader
             src_word2idx = data['dict']['src']
             tgt_word2idx = data['dict']['tgt']
@@ -256,7 +269,6 @@ class NMTModel:
             # trim sequence lengths
             test_src_insts = [seq[:settings.max_word_seq_len] for seq in test_src_insts]
             # add SOS and EOS
-            SOS, EOS = constants.SOS, constants.EOS
             test_src_insts = [[SOS] + x + [EOS] for x in test_src_insts]
             
             # setup data loaders.
@@ -268,8 +280,10 @@ class NMTModel:
                 num_workers=2,
                 batch_size=self.opt.batch_size,
                 collate_fn=collate_fn)
+            
+            decoder = data['dict']['tgt']
         
-        return test_loader, settings.max_token_seq_len, is_bpe
+        return test_loader, settings.max_token_seq_len, is_bpe, decoder
 
 
     @staticmethod
@@ -318,6 +332,45 @@ class NMTModel:
                 'The src/tgt word2idx table are different but you asked to share the word embeddings.'
 
         return train_loader, valid_loader
+
+    
+    @staticmethod
+    def translate_decode_bpe(hypotheses, bpe_enc):
+        """
+        Decodes a batch of sequences with the BPE encoder.
+        """
+        lines = []
+        # transform sequences
+        hypotheses = [x[0] for x in hypotheses]
+        sequences = bpe_enc.inverse_transform(hypotheses)
+        # clip sequences based on position of EOS token.
+        for x in sequences:
+            x = x.split()
+            index = 0
+            for j in range(len(x)):
+                if x[j] == constants.EOS_WORD:
+                    if j == 0:
+                        continue
+                    index = j
+                    break
+            line = " ".join(x[:index])
+            if len(line.strip()) < 1:
+                line = constants.UNK_WORD
+            lines.append(line)
+        return lines
+    
+    @staticmethod
+    def translate_decode_dict(hypotheses, idx2w):
+        EOS = constants.EOS
+        lines = []
+        # convert sequences back into text
+        for sequence in hypotheses:
+            for token_i in sequence:
+                tokens = [idx2w[i] for i in token_i if i != EOS]
+                line = " ".join(tokens)
+                lines.append(line)
+        return lines
+
 
     def exit_handler(self):
         """

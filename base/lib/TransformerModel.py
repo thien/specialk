@@ -13,6 +13,7 @@ from lib.nmtModel import NMTModel
 from lib.transformer.Models import Transformer, Encoder, Decoder
 from lib.transformer.Optim import ScheduledOptim
 from lib.transformer.Translator import Translator
+from core.bpe import Encoder as BPE
 
 """
 Wrapper class for Transformer.
@@ -168,26 +169,37 @@ class TransformerModel(NMTModel):
 
         return self
 
-    def translate(self, test_loader, max_token_seq_len):
+    def translate(self):
         """
         Batch translates sequences.
 
         Assumes test_data is a DataLoader.
         """
+
+        # load test data
+        test_loader, max_token_seq_len, is_bpe, decoder = self.load_testdata(self.opt.src, self.opt.vocab)
+
         self.model.word_prob_prj = nn.LogSoftmax(dim=1)
         self.model.eval()
+
         translator = Translator(self.opt, new=False)
         translator.model = self.model
         translator.max_token_seq_len = max_token_seq_len
 
         hypotheses = []
-    
-        for batch in tqdm(test_loader, desc='Translating', leave=False):
-            # get sequences through beam search.
-            all_hyp, _ = translator.translate_batch(*batch)
-            for sequence in all_hyp:
-                hypotheses.append(sequence)
-                    
+
+        with open(self.opt.output, 'w') as f:
+            for batch in tqdm(test_loader, desc='Translating', leave=False):
+                # get sequences through beam search.
+                all_hyp, _ = translator.translate_batch(*batch)
+                # write outputs as we get them so we can see progress.
+                if is_bpe:
+                    lines = self.translate_decode_bpe(all_hyp, decoder)
+                else:
+                    lines = self.translate_decode_dict(all_hyp, decoder)
+                for line in lines:
+                    f.write(line + "\n")
+                
         if self.opt.verbose:
             print('[Info] Finished.')
         return hypotheses

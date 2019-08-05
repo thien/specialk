@@ -64,6 +64,10 @@ class TransformerModel(NMTModel):
             n_head=self.opt.n_head,
             dropout=self.opt.dropout).to(self.device)
 
+        if torch.cuda.device_count() > 1:
+            print("Let's use", torch.cuda.device_count(), "GPUs!")
+            self.model = nn.DataParallel(self.model)
+
     def load(self, encoder_path, decoder_path=None):
         """
         Loads the model encoder and decoders from file.

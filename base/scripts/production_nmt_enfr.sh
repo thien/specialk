@@ -1,29 +1,31 @@
+cd ..
+
 # This is to be run on the azure machines.
 # Note that this will utilise the whole sequence
 # at token length 500, with BPE encodings.
 
 # Preprocessing the dataset.
 FILEPATH="../datasets/machine_translation/"
-TRAIN_EN=$FILEPATH"corpus_enfr.train.en"
-TRAIN_FR=$FILEPATH"corpus_enfr.train.fr"
-VALID_EN=$FILEPATH"corpus_enfr.val.en"
-VALID_FR=$FILEPATH"corpus_enfr.val.fr"
-TEST_EN=$FILEPATH"corpus_enfr.test.en"
-TEST_FR=$FILEPATH"corpus_enfr.test.fr"
+TRAIN_EN=$FILEPATH"corpus_enfr_filtered.train.en"
+TRAIN_FR=$FILEPATH"corpus_enfr_filtered.train.fr"
+VALID_EN=$FILEPATH"corpus_enfr_filtered.val.en"
+VALID_FR=$FILEPATH"corpus_enfr_filtered.val.fr"
+TEST_EN=$FILEPATH"corpus_enfr_filtered.test.en"
+TEST_FR=$FILEPATH"corpus_enfr_filtered.test.fr"
 
 FORMAT="bpe"
 MAXLEN="500"
 PTF=".pt"
 B="_base"
 m="models/"
-EXT="_lower_4k_v_bpe"
+EXT="_bpe_filtered"
 VOCAB_SIZE="4096"
-FR_ENFR="nmt_enfr_full"$EXT
-FR_FREN="nmt_fren_full"$EXT
+FR_ENFR="nmt_enfr_phat"$EXT
+FR_FREN="nmt_fren_phat"$EXT
 SAVENAME_FR_ENFR=$m$FR_ENFR
 SAVENAME_FR_FREN=$m$FR_FREN
 
-if [ -e ../datasets/machine_translation/corpus_enfr.test.en ]
+if [ -e $TRAIN_EN ]
 then
     if [ -e $SAVENAME_FR_FREN$PTF ]
     then
@@ -42,11 +44,11 @@ EP=15
 MODELDIM=512
 BATCHSIZE=64
 
-ENFR_DIRNAME="enfr_bpe"
+ENFR_DIRNAME="enfr_bpe_filtered"
 
 python3 train.py \
     -log $true \
-    -batch_size $BSIZE \
+    -batch_size $BATCHSIZE \
     -model $MODEL \
     -epoch $EP \
     -d_word_vec $MODELDIM \
@@ -64,7 +66,7 @@ FREN_DIRNAME="fren_bpe"
 
 python3 train.py \
     -log $true \
-    -batch_size $BSIZE \
+    -batch_size $BATCHSIZE \
     -model $MODEL \
     -epoch $EP \
     -d_word_vec $MODELDIM \
@@ -73,7 +75,7 @@ python3 train.py \
     -data $SAVENAME_FR_FREN$PTF \
     -save_model \
     -save_mode best \
-    -directory_name FREN_DIRNAME
+    -directory_name $FREN_DIRNAME
 
 python3 core/telegram.py -m "[Snorlax] Finished training fr-en models."
 
@@ -81,8 +83,8 @@ python3 core/telegram.py -m "[Snorlax] Finished training fr-en models."
 
 ENFR_BASEDIR="models/"$ENFR_DIRNAME"/"
 FREN_BASEDIR="models/"$ENFR_DIRNAME"/"
-ENCODER='encoder_.chkpt'
-DECODER='decoder_.chkpt'
+ENCODER='encoder.chkpt'
+DECODER='decoder.chkpt'
 OUTPUT="outputs.txt"
 EVALTXT="eval.txt"
 

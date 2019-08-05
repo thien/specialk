@@ -1,3 +1,4 @@
+*.swp
 telegram.json
 base/telegram.json
 *.ipynb

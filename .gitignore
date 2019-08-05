@@ -1,3 +1,7 @@
+*.annotation
+style_transfer/data/
+.vscode/*
+*.chkpt
 *.swp
 telegram.json
 base/telegram.json

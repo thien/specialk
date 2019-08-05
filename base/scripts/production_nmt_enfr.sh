@@ -40,6 +40,7 @@ fi
 
 # Train nmt models.
 
+MODEL="transformer"
 EP=15
 MODELDIM=512
 BATCHSIZE=64

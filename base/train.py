@@ -208,7 +208,8 @@ def train_model(opt):
     
     if torch.cuda.device_count() > 1:
         print("Let's use", torch.cuda.device_count(), "GPUs!")
-        model.model = nn.DataParallel(model.model)
+        model.model.encoder = nn.DataParallel(model.model.encoder)
+        model.model.decoder = nn.DataParallel(model.model.decoder)
 
     
     for epoch in tqdm(range(1, model.opt.epochs+1), desc='Epochs'):

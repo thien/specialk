@@ -1,5 +1,14 @@
-absl-py==0.7.0
+nltk>=3.1
+numpy>=1.11.0
+requests>=2.19
+six>=1.11
+scipy>=0.17.0
+scikit-learn>=0.17
+gensim>=3
+Theano>=0.8.1
+tqdm>=4.24absl-py==0.7.0
 acme==0.31.0
+apturl==0.5.2
 asn1crypto==0.24.0
 astor==0.7.1
 astroid==2.1.0
@@ -16,8 +25,10 @@ bleach==3.1.0
 boto==2.49.0
 boto3==1.9.101
 botocore==1.12.101
+botorch==0.1.1
 bottle==0.12.13
 bpemb==0.3.0
+Brlapi==0.6.6
 bz2file==0.98
 certbot==0.31.0
 certbot-nginx==0.31.0

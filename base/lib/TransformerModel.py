@@ -10,7 +10,7 @@ import math
 import os
 
 from lib.nmtModel import NMTModel
-from lib.transformer.Models import Transformer, Encoder, Decoder
+from lib.transformer.Models import Transformer, Encoder, Decoder, get_sinusoid_encoding_table
 from lib.transformer.Optim import ScheduledOptim
 from lib.transformer.Translator import Translator
 from core.bpe import Encoder as BPE
@@ -269,6 +269,16 @@ class TransformerModel(NMTModel):
     # ---------------------------
     # Below the line represents transformer specific code.
     # ---------------------------
+
+    def change_max_seq_len(self, n_position):
+        """
+        Changes the maximum sequence length of the transformer
+        input.
+        """
+        enc_d_word_vec = self.model.encoder.src_word_emb.weight.shape[1]
+        dec_d_word_vec = self.model.decoder.tgt_word_emb.weight.shape[1]
+        self.model.encoder.position_enc = nn.Embedding.from_pretrained(get_sinusoid_encoding_table(n_position, enc_d_word_vec, padding_idx=0), freeze=True).to(self.device)
+        self.model.decoder.position_enc = nn.Embedding.from_pretrained(get_sinusoid_encoding_table(n_position, dec_d_word_vec, padding_idx=0), freeze=True).to(self.device)
 
     def performance(self, pred, gold, smoothing=False):
         """

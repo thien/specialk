@@ -7,6 +7,12 @@ mkdir -p newspapers
 # deals with creating an english-french NMT corpus.
 # running this program will compute the whole thing for you.
 
+# OUTPUT_EN="machine_translation/corpus_enfr.en"
+# OUTPUT_FR="machine_translation/corpus_enfr.fr"
+
+
+OUTPUT_EN="machine_translation/corpus_enfr_filtered.en"
+OUTPUT_FR="machine_translation/corpus_enfr_filtered.fr"
 
 #
 #   GLOBAL VOICES DATASET
@@ -122,7 +128,7 @@ fi
 # MERGING DATASETS
 #
 
-if [ -e machine_translation/corpus_enfr.en ]
+if [ -e $OUTPUT_EN ]
 then
     echo "corpus already merged."
 else
@@ -141,9 +147,9 @@ else
         machine_translation/hansards/hansards.fr \
         machine_translation/commentary/news-commentary-v11.fr-en.fr \
         -left_out \
-        machine_translation/corpus_enfr.en \
+        $OUTPUT_EN \
         -right_out \
-        machine_translation/corpus_enfr.fr
+        $OUTPUT_FR
     # cat europarl/europarl.en global_voices/globalvoices.en hansards/hansards.en > corpus_enfr.en.raw
     # cat europarl/europarl.fr global_voices/globalvoices.fr hansards/hansards.fr > corpus_enfr.fr.raw
     # # removing blank lines
@@ -152,15 +158,24 @@ else
     # rm corpus_enfr.en.raw
     # rm corpus_enfr.fr.raw
     echo " done."
+    echo "Sanitising Dataset.."
+    python3 sanitise.py \
+    -source_a \
+    $OUTPUT_EN \
+    -source_b \
+    $OUTPUT_FR \
+    -a_label en \
+    -b_label fr 
+
     echo -n "number of sequences: "
-    wc -l < machine_translation/corpus_enfr.en 
+    wc -l < $OUTPUT_EN
     
 fi 
 
 #
 # TOKENISING
 #
-if [ -e machine_translation/corpus_enfr.en.atok ]
+if [ -e $OUTPUT_EN".atok" ]
 then 
     echo "corpus already tokenised."
 else
@@ -177,14 +192,14 @@ else
 fi
 
 
-if [ -e machine_translation/corpus_enfr.train.en ]
+if [ -e $OUTPUT_EN".train.en.atok" ]
 then
     echo "dataset already created."
 else
     echo "splitting dataset into training, validation and test data."
     python3 splitter.py \
-    -source_a machine_translation/corpus_enfr.en.atok \
-    -source_b machine_translation/corpus_enfr.fr.atok \
+    -source_a $OUTPUT_EN".atok" \
+    -source_b $OUTPUT_FR".atok" \
     -a_label en \
     -b_label fr \
     -verbose $true \

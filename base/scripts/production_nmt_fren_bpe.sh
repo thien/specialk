@@ -53,7 +53,7 @@ python3 train.py \
     -data $SAVENAME_FR_FREN$PTF \
     -save_model \
     -save_mode best \
-    -directory_name FREN_DIRNAME \
+    -directory_name $FREN_DIRNAME \
     -cuda \
     -cuda_device 1
 

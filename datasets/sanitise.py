@@ -32,13 +32,13 @@ def sanitise(en_seq):
     """
     return en_seq.replace('“', '"').replace('”','"').replace('’',"'").replace("·", "-").replace("– ", " ").replace("\xad", "").replace("‘", "'").replace("…", "...")
 
-def en_filter(en_seq, cutoff):
+def en_filter(seq, cutoff):
     """
     Filters out non-ascii characters and determines similarity. If it's not similar (often the case for
     foreign languages, it'll return False. True otherwise.)
     """
-    y = unicodedata.normalize('NFKD', x).encode('ascii', 'ignore').decode('ascii')
-    return sum([a == b for(a,b) in zip(x,y)])/len(x) >= cutoff
+    y = unicodedata.normalize('NFKD',seq).encode('ascii', 'ignore').decode('ascii')
+    return sum([a == b for(a,b) in zip(seq,y)])/len(seq) >= cutoff
 
 if __name__ == "__main__":
     # load args and dataset
@@ -57,10 +57,10 @@ if __name__ == "__main__":
     # keep sequences with pound signs.
     bad_i = {i for i in tqdm(bad_i) if "£" not in before[i][fi]}
 
-    with open(opt.source_a) as a, open(opt.source_b) as b:
+    with open(opt.source_a, "w") as a, open(opt.source_b, "w") as b:
         for i in tqdm(range(len(before)), desc="Writing Files"):
             if i in bad_i:
                 continue
             x, y = before[i]
-            a.write(x)
-            b.write(y)
+            a.write(x + "\n")
+            b.write(y + "\n")

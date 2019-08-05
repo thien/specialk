@@ -7,6 +7,7 @@ from tqdm import tqdm
 from functools import reduce
 from core.utils import get_len
 from copy import deepcopy as copy
+import unicodedata
 
 """
 Preprocesses mose style code to pytorch ready files.
@@ -98,7 +99,7 @@ def build_vocabulary_idx(sentences, min_word_count, vocab_size=None):
           'each with minimum occurrence = {}'.format(min_word_count))
     print("[Info] Ignored word count = {}".format(ignored_word_count))
     return word2idx
-
+    
 
 def seq2idx(sequences, w2i):
     """

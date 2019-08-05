@@ -8,7 +8,8 @@ import argparse
 from tqdm import tqdm
 from lib.RecurrentModel import RecurrentModel as recurrent
 from lib.TransformerModel import TransformerModel as transformer
-
+import torch
+import torch.nn as nn
 def load_args():
     parser = argparse.ArgumentParser(description="train.py")
     parser.add_argument("-f", help="Don't use this. it's not for anything. (For Notebooks)")
@@ -204,6 +205,12 @@ def train_model(opt):
     print("Training model.")
     if model.opt.save_model:
         model.init_logs()
+    
+    if torch.cuda.device_count() > 1:
+        print("Let's use", torch.cuda.device_count(), "GPUs!")
+        model.model = nn.DataParallel(model.model)
+
+    
     for epoch in tqdm(range(1, model.opt.epochs+1), desc='Epochs'):
         stats = model.train(epoch)
         if model.opt.save_model:

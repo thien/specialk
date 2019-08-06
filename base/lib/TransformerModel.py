@@ -63,14 +63,20 @@ class TransformerModel(NMTModel):
             n_layers=self.opt.layers,
             n_head=self.opt.n_head,
             dropout=self.opt.dropout).to(self.device)
-
+        
+        for p in self.model.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_uniform_(p)
 
     def load(self, encoder_path, decoder_path=None):
         """
         Loads the model encoder and decoders from file.
         """
         if encoder_path:
-            enc = torch.load(encoder_path)
+            if self.device.type == "cpu":
+                enc = torch.load(encoder_path, "cpu")
+            else:
+                enc = torch.load(encoder_path)
             # copy encoder weights
             opts_e = enc['settings']
             # replace parameters in opts.
@@ -102,7 +108,10 @@ class TransformerModel(NMTModel):
             if self.opt.verbose:
                 print("[Info] Loaded encoder model.")
         if decoder_path:
-            dec = torch.load(decoder_path)
+            if self.device.type == "cpu":
+                dec = torch.load(decoder_path, "cpu")
+            else:
+                dec = torch.load(decoder_path)
             # Note that the decoder file contains both
             # the decoder and the target_word_projection.
             opts_d = enc['settings']
@@ -238,9 +247,7 @@ class TransformerModel(NMTModel):
         if self.opt.save_model:
             ready_to_save = False
             if self.opt.save_mode == "all":
-                model_name = "_" + note + \
-                    '_accu_{accu:3.3f}'.format(
-                        accu=100*self.valid_accs[-1])
+                model_name = "_" + str(note)
                 ready_to_save = True
             else:
                 # assumes self.opt.save_mode = "best"
@@ -354,34 +361,45 @@ class TransformerModel(NMTModel):
                 self.optimiser.zero_grad()
             # compute forward propagation
             pred = self.model(src_seq, src_pos, tgt_seq, tgt_pos)
+            
             # compute performance
             loss, n_correct = self.performance(
-                pred, gold, smoothing=self.opt.label_smoothing)
-
-            # ewhy
+                                pred.view(-1, pred.size(2)), 
+                                gold, 
+                                smoothing=self.opt.label_smoothing)
 
             if not validation:
                 # backwards propagation
                 loss.backward()
                 # update parameters
                 self.optimiser.step_and_update_lr()
+            else:
+                if self.opt.log:
+                    # generate outputs
+                    self.save_eval_outputs(pred)
 
             # bartending outputs.
             total_loss += loss.item()
             n_word_total += gold.ne(self.constants.PAD).sum().item()
             n_word_correct += n_correct
 
-            # clear memory
-            # del src_seq
-            # del src_pos
-            # del tgt_seq
-            # del tgt_pos
-            # del gold
-            # del pred
-            # del batch
-            # torch.cuda.empty_cache()
-
         loss_per_word = total_loss/n_word_total
         accuracy = n_word_correct/n_word_total
 
         return loss_per_word, accuracy
+
+
+    def save_eval_outputs(self, pred, output_dir="eval_outputs"):
+        outputs = torch.argmax(pred, dim=2).tolist()
+        results = self.tgt_bpe.inverse_transform(outputs)
+        # setup folder output if it doesn't exist.
+        directory = os.path.join(self.opt.directory,output_dir)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        filename ="eval_attempt_" + str(model.opt.current_epoch) + ".txt"
+        filepath = os.path.join(directory, filename)
+        with open(filepath, "a") as output_file:
+            for seq in results:
+                seq = seq.split(self.constants.EOS_WORD)[0]
+                output_file.write(seq + "\n")

@@ -42,6 +42,7 @@ def load_args():
     parser.add_argument("-vocab_size", type=int, default=40000)
     parser.add_argument('-format', required=True, default='word', help="Determines whether to tokenise by word level, character level, or bytepair level.")
     parser.add_argument('-max_train_seq', default=None, type=int, help="""Determines the maximum number of training sequences.""")
+    parser.add_argument('-max_valid_seq', default=None, type=int, help="""Determines the maximum number of validation sequences.""")
     parser.add_argument('-max_len', '--max_word_seq_len', type=int, default=50)
     parser.add_argument('-min_word_count', type=int, default=5, help="Minimum number of occurences before a word can be considered in the vocabulary.")
     parser.add_argument('-case_sensitive', action='store_true', help="Determines whether to keep it case sensitive or not.")
@@ -171,8 +172,13 @@ if __name__ == "__main__":
     # load files
     for g in dataset:
         source, target = dataset[g]['src'], dataset[g]['tgt']
-        src = load_file(source, opt.format, opt.case_sensitive, opt.max_train_seq)
-        tgt = load_file(target, opt.format, opt.case_sensitive, opt.max_train_seq)
+        # setup limits
+        if g == "train":
+            num_seq_lim = opt.max_train_seq
+        else:
+            num_seq_lim = opt.max_valid_seq
+        src = load_file(source, opt.format, opt.case_sensitive, num_seq_lim)
+        tgt = load_file(target, opt.format, opt.case_sensitive, num_seq_lim)
         if len(src) != len(tgt):
             print('[Warning] The {} sequence counts are not equal.'.format(g))
         # remove empty instances

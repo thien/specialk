@@ -213,6 +213,7 @@ def train_model(opt):
 
     
     for epoch in tqdm(range(1, model.opt.epochs+1), desc='Epochs'):
+        model.opt.current_epoch = epoch
         stats = model.train(epoch)
         if model.opt.save_model:
             model.save(epoch=epoch, note="epoch_" + str(epoch))

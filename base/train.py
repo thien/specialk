@@ -55,6 +55,7 @@ def load_args():
     parser.add_argument("-verbose", action="store_true", help="""
                         If enabled, prints messages to terminal.
                         """)
+            
 
     # model options.
     parser.add_argument('-model', choices=['transformer', 'recurrent'], 
@@ -65,6 +66,11 @@ def load_args():
     parser.add_argument('-cuda', action='store_true',
                         help="""
                         Determines whether to use CUDA or not. (You should.)
+                        """)
+    
+    parser.add_argument('-multi_gpu', action='store_true',
+                        help="""
+                        Determines whether to use multiple GPUs.
                         """)
 
     parser.add_argument("-cuda_device", type=int, help="""
@@ -206,7 +212,7 @@ def train_model(opt):
     if model.opt.save_model:
         model.init_logs()
     
-    if torch.cuda.device_count() > 1:
+    if torch.cuda.device_count() > 1 and model.opt.multi_gpu:
         print("Let's use", torch.cuda.device_count(), "GPUs!")
         model.model.encoder = nn.DataParallel(model.model.encoder)
         model.model.decoder = nn.DataParallel(model.model.decoder)

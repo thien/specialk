@@ -397,7 +397,7 @@ class TransformerModel(NMTModel):
         if not os.path.exists(directory):
             os.makedirs(directory)
 
-        filename ="eval_attempt_" + str(model.opt.current_epoch) + ".txt"
+        filename ="eval_attempt_" + str(self.opt.current_epoch) + ".txt"
         filepath = os.path.join(directory, filename)
         with open(filepath, "a") as output_file:
             for seq in results:

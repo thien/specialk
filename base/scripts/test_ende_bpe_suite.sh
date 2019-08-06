@@ -1,7 +1,7 @@
 cd ..
 
 
-VOCAB="models/nmt_ende_bpe_neo"
+VOCAB="models/nmt_ende_neo_fix_bpe"
 FORMAT="bpe"
 MAXLEN="150"
 
@@ -22,18 +22,18 @@ then
     VALID_EN=$FILEPATH"val.en.atok"
     VALID_DE=$FILEPATH"val.de.atok"
 
-    # python3 preprocess.py -train_src $TRAIN_EN -train_tgt $TRAIN_DE -valid_src $VALID_EN -valid_tgt $VALID_DE -format $FORMAT -max_len $MAXLEN -save_name $VOCAB
+    python3 preprocess.py -train_src $TRAIN_EN -train_tgt $TRAIN_DE -valid_src $VALID_EN -valid_tgt $VALID_DE -format $FORMAT -max_len $MAXLEN -save_name $VOCAB
 else
     echo "You need to create the corpus."
 fi
 
 # TRAIN
 MODEL="transformer"
-DIRNAME="ende_test_bpe_neo"
+DIRNAME="ende_test_neo_fix_bpe"
 EP=10
 MODELDIM=512
-BATCHSIZE=64
-# python3 train.py -data $VOCAB$PT -log $true -save_model -model $MODEL -epoch $EP -d_word_vec $MODELDIM -d_model $MODELDIM -save_mode "best" -directory_name $DIRNAME -batch_size $BATCHSIZE -cuda 
+BATCHSIZE=80
+python3 train.py -data $VOCAB$PT -log $true -save_model -model $MODEL -epoch $EP -d_word_vec $MODELDIM -d_model $MODELDIM -save_mode "best" -directory_name $DIRNAME -batch_size $BATCHSIZE -cuda 
 
 # python3 train.py -data $VOCAB$PT -log $true -model $MODEL -epoch $EP -d_word_vec $MODELDIM -d_model $MODELDIM -cuda -batch_size $BATCHSIZE
 

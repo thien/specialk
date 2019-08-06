@@ -39,7 +39,8 @@ def load_args():
     parser.add_argument('-valid_src', required=True)
     parser.add_argument('-valid_tgt', required=True)
     parser.add_argument('-save_name', required=True)
-    parser.add_argument("-vocab_size", type=int, default=40000)
+    parser.add_argument("-vocab_size", type=int, default=35000)
+    parser.add_argument("-pct_bpe", default=0.1)
     parser.add_argument('-format', required=True, default='word', help="Determines whether to tokenise by word level, character level, or bytepair level.")
     parser.add_argument('-max_train_seq', default=None, type=int, help="""Determines the maximum number of training sequences.""")
     parser.add_argument('-max_valid_seq', default=None, type=int, help="""Determines the maximum number of validation sequences.""")
@@ -193,15 +194,15 @@ if __name__ == "__main__":
             print('[Info] Building shared vocabulary for source and target sequences.')
             # build and train encoder
             corpus = raw['train']['src'] + raw['train']['tgt']
-            bpe = bpe_encoder(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=Constants.UNK_WORD, PAD=Constants.PAD_WORD, word_tokenizer=parse)
+            bpe = bpe_encoder(vocab_size=opt.vocab_size, pct_bpe=opt.pct_bpe, ngram_min=1, UNK=Constants.UNK_WORD, PAD=Constants.PAD_WORD, word_tokenizer=parse)
         
             bpe.fit(corpus)
             src_bpe, tgt_bpe = bpe
         else:
             print("[Info] Building voculabulary for source.")
             # build and train src and tgt encoder
-            src_bpe = bpe_encoder(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=Constants.UNK_WORD, PAD=Constants.PAD_WORD, word_tokenizer=parse)
-            tgt_bpe = bpe_encoder(vocab_size=4096, pct_bpe=0.8, ngram_min=1, UNK=Constants.UNK_WORD, PAD=Constants.PAD_WORD, word_tokenizer=parse)
+            src_bpe = bpe_encoder(vocab_size=opt.vocab_size, pct_bpe=opt.pct_bpe, ngram_min=1, UNK=Constants.UNK_WORD, PAD=Constants.PAD_WORD, word_tokenizer=parse)
+            tgt_bpe = bpe_encoder(vocab_size=opt.vocab_size, pct_bpe=opt.pct_bpe, ngram_min=1, UNK=Constants.UNK_WORD, PAD=Constants.PAD_WORD, word_tokenizer=parse)
             src_bpe.fit(raw['train']['src'])
             tgt_bpe.fit(raw['train']['tgt'])
     else:

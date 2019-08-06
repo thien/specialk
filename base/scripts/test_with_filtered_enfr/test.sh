@@ -1,9 +1,9 @@
 cd ../..
 
 
-VOCAB="models/nmt_enfr_bpe_filtered_150k"
+VOCAB="models/nmt_enfr_neobpt_filtered_150k"
 FORMAT="bpe"
-MAXLEN="150"
+MAXLEN="100"
 
 FILEPATH="../datasets/machine_translation/corpus_enfr_filtered"
 
@@ -27,7 +27,7 @@ fi
 
 # TRAIN
 MODEL="transformer"
-DIRNAME="enfr_test_bpe_filtered_150k"
+DIRNAME="enfr_test_neobpe_filtered_150k"
 EP=10
 MODELDIM=512
 BATCHSIZE=32

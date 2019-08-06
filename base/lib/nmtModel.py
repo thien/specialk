@@ -224,6 +224,7 @@ class NMTModel:
                                     settings.format,
                                     settings.case_sensitive)
         is_bpe = settings.format.lower() == "bpe"
+        
         SOS, EOS = constants.SOS, constants.EOS
 
         decoder = None

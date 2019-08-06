@@ -41,9 +41,9 @@ fi
 # Train nmt models.
 
 MODEL="transformer"
-EP=15
+EP=5
 MODELDIM=512
-BATCHSIZE=64
+BATCHSIZE=96
 
 ENFR_DIRNAME="enfr_bpe_filtered"
 
@@ -54,12 +54,12 @@ python3 train.py \
     -epoch $EP \
     -d_word_vec $MODELDIM \
     -d_model $MODELDIM \
-    -cuda \
     -data $SAVENAME_FR_ENFR$PTF \
     -save_model \
-    -save_mode best \
-    -directory_name $ENFR_DIRNAME
-
+    -save_mode all \
+    -directory_name $ENFR_DIRNAME \
+    -cuda \
+    -multi_gpu
 
 python3 core/telegram.py -m "[Snorlax] Finished training en-fr models."
 
@@ -72,55 +72,56 @@ python3 train.py \
     -epoch $EP \
     -d_word_vec $MODELDIM \
     -d_model $MODELDIM \
-    -cuda \
     -data $SAVENAME_FR_FREN$PTF \
     -save_model \
-    -save_mode best \
-    -directory_name $FREN_DIRNAME
+    -save_mode all \
+    -directory_name $FREN_DIRNAME \
+    -cuda \
+    -multi_gpu
 
 python3 core/telegram.py -m "[Snorlax] Finished training fr-en models."
 
-# Back-Translate nmt models.
+# # Back-Translate nmt models.
 
-ENFR_BASEDIR="models/"$ENFR_DIRNAME"/"
-FREN_BASEDIR="models/"$ENFR_DIRNAME"/"
-ENCODER='encoder.chkpt'
-DECODER='decoder.chkpt'
-OUTPUT="outputs.txt"
-EVALTXT="eval.txt"
+# ENFR_BASEDIR="models/"$ENFR_DIRNAME"/"
+# FREN_BASEDIR="models/"$ENFR_DIRNAME"/"
+# ENCODER='encoder.chkpt'
+# DECODER='decoder.chkpt'
+# OUTPUT="outputs.txt"
+# EVALTXT="eval.txt"
 
-# en -> fr
-python3 translate.py \
-    -model $MODEL \
-    -checkpoint_encoder $ENFR_BASEDIR$ENCODER \
-    -checkpoint_decoder $ENFR_BASEDIR$DECODER \
-    -vocab $SAVENAME_FR_ENFR$PTF \
-    -src $TEST_EN \
-    -output $ENFR_BASEDIR$OUTPUT \
-    -cuda
+# # en -> fr
+# python3 translate.py \
+#     -model $MODEL \
+#     -checkpoint_encoder $ENFR_BASEDIR$ENCODER \
+#     -checkpoint_decoder $ENFR_BASEDIR$DECODER \
+#     -vocab $SAVENAME_FR_ENFR$PTF \
+#     -src $TEST_EN \
+#     -output $ENFR_BASEDIR$OUTPUT \
+#     -cuda
 
-python3 core/telegram.py -m "[Snorlax] Finished translating en-fr models."
+# python3 core/telegram.py -m "[Snorlax] Finished translating en-fr models."
 
-# created fr->en
-python3 translate.py \
-    -model $MODEL \
-    -checkpoint_encoder $FREN_BASEDIR$ENCODER \
-    -checkpoint_decoder $FREN_BASEDIR$DECODER \
-    -vocab $SAVENAME_FR_FREN$PTF \
-    -src $ENFR_BASEDIR$OUTPUT \
-    -output $FREN_BASEDIR$OUTPUT \
-    -cuda
+# # created fr->en
+# python3 translate.py \
+#     -model $MODEL \
+#     -checkpoint_encoder $FREN_BASEDIR$ENCODER \
+#     -checkpoint_decoder $FREN_BASEDIR$DECODER \
+#     -vocab $SAVENAME_FR_FREN$PTF \
+#     -src $ENFR_BASEDIR$OUTPUT \
+#     -output $FREN_BASEDIR$OUTPUT \
+#     -cuda
 
-python3 core/telegram.py -m "[Snorlax] Finished translating fr-en (backtranslation) models."
+# python3 core/telegram.py -m "[Snorlax] Finished translating fr-en (backtranslation) models."
 
-# baseline fr->en
-python3 translate.py \
-    -model $MODEL \
-    -checkpoint_encoder $FREN_BASEDIR$ENCODER \
-    -checkpoint_decoder $FREN_BASEDIR$DECODER \
-    -vocab $SAVENAME_FR_FREN$PTF \
-    -src $TEST_FR \
-    -output $FREN_BASEDIR$OUTPUT \
-    -cuda
+# # baseline fr->en
+# python3 translate.py \
+#     -model $MODEL \
+#     -checkpoint_encoder $FREN_BASEDIR$ENCODER \
+#     -checkpoint_decoder $FREN_BASEDIR$DECODER \
+#     -vocab $SAVENAME_FR_FREN$PTF \
+#     -src $TEST_FR \
+#     -output $FREN_BASEDIR$OUTPUT \
+#     -cuda
 
-python3 core/telegram.py -m "[Snorlax] Finished translating fr-en (source) models."
+# python3 core/telegram.py -m "[Snorlax] Finished translating fr-en (source) models."

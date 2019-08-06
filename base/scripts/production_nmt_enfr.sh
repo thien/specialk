@@ -43,7 +43,7 @@ fi
 MODEL="transformer"
 EP=5
 MODELDIM=512
-BATCHSIZE=96
+BATCHSIZE=64
 
 ENFR_DIRNAME="enfr_bpe_filtered"
 

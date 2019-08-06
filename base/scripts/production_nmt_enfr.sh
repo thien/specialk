@@ -45,7 +45,7 @@ EP=5
 MODELDIM=512
 BATCHSIZE=64
 
-ENFR_DIRNAME="enfr_bpe_filtered"
+ENFR_DIRNAME="enfr_bpe_filtered_final"
 
 python3 train.py \
     -log $true \
@@ -63,7 +63,7 @@ python3 train.py \
 
 python3 core/telegram.py -m "[Snorlax] Finished training en-fr models."
 
-FREN_DIRNAME="fren_bpe"
+FREN_DIRNAME="enfr_bpe_filtered_final"
 
 python3 train.py \
     -log $true \

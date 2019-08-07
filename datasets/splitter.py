@@ -32,7 +32,7 @@ opt = parser.parse_args()
 # apply seed
 random.seed(opt.seed)
 # setup ratio splits.
-ratios = [int(i) for i in opt.ratio.split(":")]
+ratios = [float(i) for i in opt.ratio.split(":")]
 ratio_total = sum(ratios)
 assert len(ratios) == 3
 # make sure that the files actually exist.

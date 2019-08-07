@@ -8,6 +8,7 @@ from tqdm import tqdm
 import time
 import math
 import os
+from collections import OrderedDict
 
 from lib.nmtModel import NMTModel
 from lib.transformer.Models import Transformer, Encoder, Decoder, get_sinusoid_encoding_table
@@ -77,6 +78,12 @@ class TransformerModel(NMTModel):
                 enc = torch.load(encoder_path, "cpu")
             else:
                 enc = torch.load(encoder_path)
+            # if the model was initialised in DataParallel
+            # we'll have to revert that.
+            if list(enc['model'].keys())[0][:7] == "module.":
+                enc['model'] = OrderedDict([(k[7:], v) for k, v in enc['model'].items()])
+
+
             # copy encoder weights
             opts_e = enc['settings']
             # replace parameters in opts.
@@ -112,6 +119,11 @@ class TransformerModel(NMTModel):
                 dec = torch.load(decoder_path, "cpu")
             else:
                 dec = torch.load(decoder_path)
+            if list(dec['model'].keys())[0][:7] == "module.":
+                dec['model'] = OrderedDict([(k[7:], v) for k, v in dec['model'].items()])
+
+
+                
             # Note that the decoder file contains both
             # the decoder and the target_word_projection.
             opts_d = enc['settings']

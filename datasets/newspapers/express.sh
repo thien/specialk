@@ -1,8 +1,8 @@
-# python3 group_publications.py
+python3 group_publications.py
 
-# PEN="popular.en"
-# QEN="quality.en"
-# TOKPATH="../tokenizer.perl"
+PEN="popular.en"
+QEN="quality.en"
+TOKPATH="../tokenizer.perl"
 
 if [ -e popular.en.atok ]
 then 
@@ -52,12 +52,11 @@ if [ -e classifier.train.en ]
 then
     echo "Classifier data already made."
 else
-    # echo $SEED > seed.txt
+    echo "Creating classifier dataset."
     cat quality.train.en > $CNN_TRAIN
     cat popular.train.en >> $CNN_TRAIN
     cat quality.val.en > $CNN_VALID
     cat popular.val.en >> $CNN_VALID
     cat $CNN_TRAIN|shuf --output=$CNN_TRAIN
     cat $CNN_VALID|shuf --output=$CNN_VALID
-    # rm seed.txt
 fi

@@ -13,4 +13,6 @@ for group in tqdm(groups):
             with open(filepath) as source:
                 s = len(publication_src)
                 for line in source:
-                    base.write(group + line[s:].lower())
+                    line = line[s:].lower().strip()
+                    if len(line) > 8:
+                        base.write(group + " " + line + "\n")

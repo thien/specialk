@@ -37,6 +37,8 @@ def en_filter(seq, cutoff):
     Filters out non-ascii characters and determines similarity. If it's not similar (often the case for
     foreign languages, it'll return False. True otherwise.)
     """
+    if len(seq) < 3:
+        return False
     y = unicodedata.normalize('NFKD',seq).encode('ascii', 'ignore').decode('ascii')
     return sum([a == b for(a,b) in zip(seq,y)])/len(seq) >= cutoff
 

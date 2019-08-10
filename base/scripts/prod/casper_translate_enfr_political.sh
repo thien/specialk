@@ -16,9 +16,20 @@ OUTPUT="outputs.txt"
 
 # en -> fr
 POLDATA_DIR="../datasets/political_data/"
+
+# preprocess
+for p in democratic republican
+    do for c in dev train 
+        do for src in $POLDATA_DIR$p"_only."$c.en
+            do sed "s/^[A-Za-z0-9_]*\ //" $src > $src.b
+        done
+    done;
+    cp $POLDATA_DIR$p"_only.test".en $POLDATA_DIR$p"_only.test".en.b
+done 
+
 # translate all political data info french.
 for p in democratic republican
-    do for src in $POLDATA_DIR$p"_only"*.en
+    do for src in $POLDATA_DIR$p"_only"*.en.b 
         do python3 translate.py \
             -model transformer \
             -checkpoint_encoder $ENFR_BASEDIR$ENCODER \
@@ -39,9 +50,9 @@ for p in democratic republican
     python3 rebase.py \
         -base $FREN_CORP \
         -train_src $POLDATA_DIR$p"_only.train.fr" \
-        -train_tgt $POLDATA_DIR$p"_only.train.en" \
+        -train_tgt $POLDATA_DIR$p"_only.train.en.b" \
         -valid_src $POLDATA_DIR$p"_only.dev.fr"
-        -valid_tgt $POLDATA_DIR$p"_only.dev.en"
+        -valid_tgt $POLDATA_DIR$p"_only.dev.en.b"
         -save_name "models/nmt_fren_goldmaster_bpe_"$p
 
 python3 core/telegram.py -m "finished rebasing political datasets."

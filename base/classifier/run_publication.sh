@@ -26,22 +26,25 @@ VOCABSIZE=40000
 #     -seq_length $MAX_SEQ_LEN \
 #     -lower
 
+MODELNAME="publication_model_test"
+
 # Train the classifier
 python3 cnn_train.py \
     -gpus 0 \
     -data $CORPUSNAME.train.pt \
     -save_model $MODELNAME \
-      -sequence_length $MAX_SEQ_LEN \
-    -batch_size 64
+    -sequence_length $MAX_SEQ_LEN \
+    -batch_size 64 \
+    -epochs 1
 
-# BESTMODEL="political_model.pt"
+BESTMODEL="publication_model_acc_91.76_loss_0.00_e10.pt"
 
 # # Test the classifier accuracy
-# python3 cnn_translate.py\
-#     -gpu 0 \
-#     -model $BESTMODEL \
-#     -src $TEST_DATA \
-#     -tgt $LAB0 \
-#     -label0 $LAB0 \
-#     -label1 $LAB1
+python3 cnn_translate.py\
+    -gpu 0 \
+    -model $BESTMODEL \
+    -src $TEST_DATA \
+    -tgt $LAB0 \
+    -label0 $LAB0 \
+    -label1 $LAB1
 

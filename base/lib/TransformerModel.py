@@ -74,15 +74,11 @@ class TransformerModel(NMTModel):
         Loads the model encoder and decoders from file.
         """
         if encoder_path:
-            if self.device.type == "cpu":
-                enc = torch.load(encoder_path, "cpu")
-            else:
-                enc = torch.load(encoder_path)
+            enc = torch.load(encoder_path, "cpu")
             # if the model was initialised in DataParallel
             # we'll have to revert that.
             if list(enc['model'].keys())[0][:7] == "module.":
                 enc['model'] = OrderedDict([(k[7:], v) for k, v in enc['model'].items()])
-
 
             # copy encoder weights
             opts_e = enc['settings']
@@ -100,7 +96,10 @@ class TransformerModel(NMTModel):
                 "telegram",
                 "save_model",
                 "train_from_state_dict",
-                "batch_size"
+                "batch_size",
+                "epochs",
+                "epoch",
+                "device"
             }
             for arg in dir(opts_e):
                 if arg[0] == "_":
@@ -115,14 +114,9 @@ class TransformerModel(NMTModel):
             if self.opt.verbose:
                 print("[Info] Loaded encoder model.")
         if decoder_path:
-            if self.device.type == "cpu":
-                dec = torch.load(decoder_path, "cpu")
-            else:
-                dec = torch.load(decoder_path)
+            dec = torch.load(decoder_path, "cpu")
             if list(dec['model'].keys())[0][:7] == "module.":
                 dec['model'] = OrderedDict([(k[7:], v) for k, v in dec['model'].items()])
-
-
                 
             # Note that the decoder file contains both
             # the decoder and the target_word_projection.

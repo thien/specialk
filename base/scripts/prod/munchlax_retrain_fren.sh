@@ -21,8 +21,8 @@ SAVENAME_FR_FREN=$m$FR_FREN
 
 
 python3 train.py \
-    -checkpoint_encoder "models/"$FREN_DIRNAME"/encoder_epoch_1.chkpt"
-    -checkpoint_decoder "models/"$FREN_DIRNAME"/decoder_epoch_1.chkpt"
+    -checkpoint_encoder "models/"$FREN_DIRNAME"/encoder_epoch_1.chkpt" \
+    -checkpoint_decoder "models/"$FREN_DIRNAME"/decoder_epoch_1.chkpt" \
     -log $true \
     -batch_size $BATCHSIZE \
     -model $MODEL \

@@ -10,7 +10,7 @@ from tqdm import tqdm
 import torch
 import core.constants as Constants
 from core.bpe import Encoder as bpe_encoder
-from preprocess import load_file, seq2idx
+from preprocess import load_file, seq2idx, reclip
 from copy import deepcopy as copy
 
 def load_args():
@@ -24,6 +24,7 @@ def load_args():
     parser.add_argument('-valid_tgt', required=True)
     parser.add_argument('-save_name', required=True)
     return parser.parse_args()
+
 
 if __name__ == "__main__":
     opt = load_args()
@@ -85,6 +86,19 @@ if __name__ == "__main__":
             for key in dataset[g]:
                 method = src_word2idx if key == "src" else tgt_word2idx
                 dataset[g][key] = seq2idx(dataset[g][key], method)
+
+    # trim sequence lengths for bpe
+    if is_bpe:
+        for g in tqdm(dataset, desc="Trimming Sequences"):
+            for key in dataset[g]:
+                sequences = dataset[g][key]
+                # it's much easier to just refer back to the original sentence and
+                # trim tokens from there.
+                bpe_method = src_bpe if key == "src" else tgt_bpe
+                for i in range(len(sequences)):
+                    ref_seq = raw[g][key][i]
+                    bpe_seq = sequences[i]
+                    dataset[g][key][i] = reclip(ref_seq, bpe_seq, bpe_method, settings.max_word_seq_len)
     
     # add <s>, </s>
     for g in tqdm(dataset, desc="Adding SOS, EOS tokens"):

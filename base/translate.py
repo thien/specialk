@@ -100,6 +100,6 @@ if __name__ == "__main__":
     print("Setup model wrapper.")
     model.load(opt.checkpoint_encoder, opt.checkpoint_decoder)
     print("Initiated model and weights.")
-
+    model.change_max_seq_len(200)
     # translate sequences
     hypotheses = model.translate()

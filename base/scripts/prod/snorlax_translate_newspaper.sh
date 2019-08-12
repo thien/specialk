@@ -21,7 +21,7 @@ OUTPUT="outputs.txt"
 
 # en -> fr
 PUB_DIR="../datasets/newspapers/"
-
+BEAMSIZE=3
 
 python3 translate.py \
     -model transformer \
@@ -31,5 +31,7 @@ python3 translate.py \
     -src $PUB_DIR$p".en.atok" \
     -output $PUB_DIR$p".fr" \
     -cuda_device $CUDA_DEVICE \
+    -beam_size $BEAMSIZE \
+    -batch_size 64 \
     -cuda
 python3 core/telegram.py -m "finished translating $src"

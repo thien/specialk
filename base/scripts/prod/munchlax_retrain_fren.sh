@@ -1,6 +1,6 @@
 cd ../..
 
-FREN_DIRNAME="enfr_bpe_filtered_final"
+FREN_DIRNAME="fren_bpe_gold_master"
 MODEL="transformer"
 EP=1
 MODELDIM=512

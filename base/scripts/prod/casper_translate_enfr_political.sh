@@ -29,32 +29,33 @@ done
 
 # translate all political data info french.
 for p in democratic republican
-    do for src in $POLDATA_DIR$p"_only"*.en.b 
-        do python3 translate.py \
-            -model transformer \
-            -checkpoint_encoder $ENFR_BASEDIR$ENCODER \
-            -checkpoint_decoder $ENFR_BASEDIR$DECODER \
-            -vocab $VOCAB \
-            -src $src \
-            -output $src".ts" \
-            -cuda; python3 core/telegram.py -m "finished translating $src"
-    done
+   do for src in $POLDATA_DIR$p"_only"*.en.b 
+       do python3 translate.py \
+           -model transformer \
+           -checkpoint_encoder $ENFR_BASEDIR$ENCODER \
+           -checkpoint_decoder $ENFR_BASEDIR$DECODER \
+           -vocab $VOCAB \
+           -src $src \
+           -output $src".ts" \
+           -cuda; python3 core/telegram.py -m "finished translating $src"
+   done
 done
 
 # convert all ".ts" files to ".fr"
-for file in $POLDATA_DIR*.ts; do mv "$file" "${file/en.ts/.fr}"; done
+rename 's/.en.ts/.fr/' $POLDATA_DIR*.ts
+#for file in $POLDATA_DIR*.ts; do mv $file ${file/en.ts/.fr}; done
 
 FREN_CORP=$MODELDIR"nmt_fren_goldmaster_bpe.pt"
 # rebase political dataset
-for p in democratic republican
-    python3 rebase.py \
+for p in democratic
+    do python3 rebase.py \
         -base $FREN_CORP \
         -train_src $POLDATA_DIR$p"_only.train.fr" \
         -train_tgt $POLDATA_DIR$p"_only.train.en.b" \
-        -valid_src $POLDATA_DIR$p"_only.dev.fr"
-        -valid_tgt $POLDATA_DIR$p"_only.dev.en.b"
-        -save_name "models/nmt_fren_goldmaster_bpe_"$p
-
+        -valid_src $POLDATA_DIR$p"_only.dev.fr" \
+        -valid_tgt $POLDATA_DIR$p"_only.dev.en.b" \
+        -save_name "models/nmt_fren_goldmaster_bpe_"$p 
+done
 python3 core/telegram.py -m "finished rebasing political datasets."
 
 

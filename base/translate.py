@@ -97,7 +97,8 @@ def load_args():
 import torch
 if __name__ == "__main__":
     opt = load_args()
-    torch.cuda.set_device(opt.cuda_device)
+    if opt.cuda_device:
+        torch.cuda.set_device(opt.cuda_device)
     model = transformer(opt) if opt.model == "transformer" else recurrent(opt)
 
     print("Setup model wrapper.")

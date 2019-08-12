@@ -19,6 +19,8 @@ ENCODER='encoder_epoch_1.chkpt'
 DECODER='decoder_epoch_1.chkpt'
 OUTPUT="outputs.txt"
 
+# sed "s/^[A-Za-z0-9_]*\ //" $src > $src.b
+
 # en -> fr
 PUB_DIR="../datasets/newspapers/"
 BEAMSIZE=2

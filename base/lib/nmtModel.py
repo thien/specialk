@@ -232,8 +232,10 @@ class NMTModel:
         decoder = None
 
         if "override_max_token_seq_len" in self.opt:
-            if self.opt.override_max_token_seq_len:
+            if self.opt.override_max_token_seq_len > 0:
                 settings.max_token_seq_len = self.opt.override_max_token_seq_len
+                if self.model == "transformer":
+                    self.change_max_seq_len(self.opt.override_max_token_seq_len)
 
         print("settings.max_token_seq_len", settings.max_token_seq_len)
         if is_bpe:

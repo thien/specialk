@@ -28,7 +28,7 @@ python3 translate.py \
     -checkpoint_encoder $ENFR_BASEDIR$ENCODER \
     -checkpoint_decoder $ENFR_BASEDIR$DECODER \
     -vocab $VOCAB \
-    -src $PUB_DIR$p".en.atok" \
+    -src $PUB_DIR$p".en.atok.b" \
     -output $PUB_DIR$p".fr" \
     -cuda_device $CUDA_DEVICE \
     -beam_size $BEAMSIZE \

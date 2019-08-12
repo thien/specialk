@@ -35,3 +35,6 @@ python3 train.py \
     -directory_name $FREN_DIRNAME \
     -cuda \
     -multi_gpu
+
+
+python3 core/telegram.py -m "[Munchlax] Finished second epoch of fr-en models."

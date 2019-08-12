@@ -251,21 +251,6 @@ if __name__ == "__main__":
                     ref_seq = raw[g][key][i]
                     bpe_seq = sequences[i]
                     dataset[g][key][i] = reclip(ref_seq, bpe_seq, bpe_method, opt.max_word_seq_len)
-
-                    # if len(sequence) <= opt.max_word_seq_len:
-                    #     continue
-                    
-                    # subtract = 1
-                    # bpe_method = src_bpe if key == "src" else tgt_bpe
-                    # while len(sequence) > opt.max_word_seq_len:
-                    #     reference = raw[g][key][i].split()
-                    #     reference = reference[:-subtract]
-                    #     reference = " ".join(reference)
-                    #     subtract += 1
-                    #     sequence = [x for x in bpe_method.transform(reference)][0]
-                    # # replace newly trimmed sequence.
-                    # dataset[g][key][i] = sequence
-
     # add <s>, </s>
     # (At this stage, all of the sequences are tokenised, so you'll need to input
     #  the ID values of SOS and EOS instead.)

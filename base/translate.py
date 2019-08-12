@@ -7,6 +7,7 @@ on the encoder and decoders used.)
 
 import argparse
 from tqdm import tqdm
+import torch
 from lib.TransformerModel import TransformerModel as transformer
 from lib.RecurrentModel import RecurrentModel as recurrent
 
@@ -81,6 +82,9 @@ def load_args():
                         and chatID to send messages to.
                         """)
 
+    parser.add_argument("-override_max_token_seq_len", type=int, help="""
+                        If allocated, changes the max sequence length.
+    """)
     opt = parser.parse_args()
 
     opt.save_model = False
@@ -93,13 +97,12 @@ def load_args():
 import torch
 if __name__ == "__main__":
     opt = load_args()
-    # load encoder and decoder
-
-    # then load them into the model.
+    torch.cuda.set_device(opt.cuda_device)
     model = transformer(opt) if opt.model == "transformer" else recurrent(opt)
+
     print("Setup model wrapper.")
     model.load(opt.checkpoint_encoder, opt.checkpoint_decoder)
     print("Initiated model and weights.")
-    model.change_max_seq_len(200)
+    
     # translate sequences
     hypotheses = model.translate()

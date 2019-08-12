@@ -27,6 +27,7 @@ class NMTModel:
             self.device = torch.device('cuda:'+str(opt.cuda_device))
         else:
             self.device = torch.device('cuda' if opt.cuda else 'cpu')
+        print("Using device:", self.device)
 
         self.constants = constants
         self.opt.directory = self.init_dir(stores=models_folder)
@@ -207,7 +208,8 @@ class NMTModel:
 
     def load_testdata(self, test_datapath, test_vocab):
         """
-        Loads a text file representing sequences.
+        Loads a text file representing sequences. This is called in
+        `translate.py`.
 
         params:
         test_datapath: some text file.
@@ -228,6 +230,10 @@ class NMTModel:
         SOS, EOS = constants.SOS, constants.EOS
 
         decoder = None
+
+        if "override_max_token_seq_len" in self.opt:
+            if self.opt.override_max_token_seq_len:
+                settings.max_token_seq_len = self.opt.override_max_token_seq_len
 
         print("settings.max_token_seq_len", settings.max_token_seq_len)
         if is_bpe:

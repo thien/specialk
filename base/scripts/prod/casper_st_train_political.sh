@@ -5,30 +5,59 @@
 
 cd ../..
 
-POLITICAL_CLASS="democratic"
 
-POLITICAL_DATA="models/nmt_fren_goldmaster_bpe_$POLITICAL_CLASS.pt"
-POLITICAL_MODEL_OUT="nmt_fren_goldmaster_$POLITICAL_CLASS"
-FREN_DIRNAME="models/enfr_bpe_gold_master"
-MODEL="transformer"
-EP=5
-MODELDIM=512
-BATCHSIZE=32
+POLDATA_DIR="../datasets/political_data/"
+FREN_CORP="models/nmt_fren_goldmaster_bpe.pt"
+# rebase political dataset
+for p in republican
+    do python3 rebase.py \
+        -base $FREN_CORP \
+        -train_src $POLDATA_DIR$p"_only.train.b.fr" \
+        -train_tgt $POLDATA_DIR$p"_only.train.en.b" \
+        -valid_src $POLDATA_DIR$p"_only.dev.b.fr" \
+        -valid_tgt $POLDATA_DIR$p"_only.dev.en.b" \
+        -save_name "models/nmt_fren_goldmaster_bpe_"$p 
+done
+python3 core/telegram.py -m "finished rebasing political datasets."
 
-python3 train.py \
-    -checkpoint_encoder $FREN_DIRNAME"/encoder_epoch_1.chkpt" \
-    -checkpoint_decoder $FREN_DIRNAME"/decoder_epoch_1.chkpt" \
-    -log $true \
-    -batch_size $BATCHSIZE \
-    -model $MODEL \
-    -epoch $EP \
-    -d_word_vec $MODELDIM \
-    -d_model $MODELDIM \
-    -data $POLITICAL_DATA \
-    -save_model \
-    -save_mode all \
-    -directory_name $POLITICAL_MODEL_OUT \
-    -cuda \
-    -multi_gpu
+train_st_model () {
+    POLITICAL_CLASS=$1
+    POLITICAL_DATA="models/nmt_fren_goldmaster_bpe_$POLITICAL_CLASS.pt"
+    POLITICAL_MODEL_OUT="fren_goldmaster_$POLITICAL_CLASS"
+    MODEL="transformer"
+    EP=10
+    MODELDIM=512
+    BATCHSIZE=32
 
-python3 core/telegram.py -m "[Munchlax] Finished style-transfer training for $POLITICAL_DATA"
+    cd models
+    if [ -e $POLITICAL_MODEL_OUT ]
+    then
+        rm -rf $POLITICAL_MODEL_OUT
+    fi
+    
+    cp -r "fren_bpe_gold_master" $POLITICAL_MODEL_OUT
+    cd ..
+
+    python3 train.py \
+        -freeze_encoder \
+        -checkpoint_encoder "models/"$POLITICAL_MODEL_OUT"/encoder_epoch_1.chkpt" \
+        -checkpoint_decoder "models/"$POLITICAL_MODEL_OUT"/decoder_epoch_1.chkpt" \
+        -log $true \
+        -batch_size $BATCHSIZE \
+        -model $MODEL \
+        -epoch $EP \
+        -d_word_vec $MODELDIM \
+        -d_model $MODELDIM \
+        -data $POLITICAL_DATA \
+        -save_model \
+        -save_mode all \
+        -directory_name $POLITICAL_MODEL_OUT \
+        -cuda \
+        -multi_gpu
+
+    python3 core/telegram.py -m "[Munchlax] Finished style-transfer training for $POLITICAL_DATA"
+}
+
+# train_st_model "democratic"
+train_st_model "republican"
+

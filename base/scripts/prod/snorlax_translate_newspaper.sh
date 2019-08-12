@@ -21,7 +21,7 @@ OUTPUT="outputs.txt"
 
 # en -> fr
 PUB_DIR="../datasets/newspapers/"
-BEAMSIZE=3
+BEAMSIZE=2
 
 python3 translate.py \
     -model transformer \
@@ -33,5 +33,6 @@ python3 translate.py \
     -cuda_device $CUDA_DEVICE \
     -beam_size $BEAMSIZE \
     -batch_size 64 \
+    -override_max_token_seq_len 150 \
     -cuda
 python3 core/telegram.py -m "finished translating $src"

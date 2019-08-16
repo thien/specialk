@@ -34,7 +34,6 @@ parser.add_argument('-gpu', type=int, default=-1,
                     help="Device to run on")
 
 
-
 def reportScore(name, scoreTotal, wordsTotal):
     print("%s AVG SCORE: %.4f, %s PPL: %.4f" % (
         name, scoreTotal / wordsTotal,

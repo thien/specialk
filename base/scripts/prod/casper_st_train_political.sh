@@ -9,13 +9,13 @@ cd ../..
 POLDATA_DIR="../datasets/political_data/"
 FREN_CORP="models/nmt_fren_goldmaster_bpe.pt"
 # rebase political dataset
-for p in republican
+for p in democratic republican
     do python3 rebase.py \
         -base $FREN_CORP \
-        -train_src $POLDATA_DIR$p"_only.train.b.fr" \
-        -train_tgt $POLDATA_DIR$p"_only.train.en.b" \
-        -valid_src $POLDATA_DIR$p"_only.dev.b.fr" \
-        -valid_tgt $POLDATA_DIR$p"_only.dev.en.b" \
+        -train_src $POLDATA_DIR$p"_only.train.en.ts" \
+        -train_tgt $POLDATA_DIR$p"_only.train.en" \
+        -valid_src $POLDATA_DIR$p"_only.dev.en.ts" \
+        -valid_tgt $POLDATA_DIR$p"_only.dev.en" \
         -save_name "models/nmt_fren_goldmaster_bpe_"$p 
 done
 python3 core/telegram.py -m "finished rebasing political datasets."
@@ -23,9 +23,9 @@ python3 core/telegram.py -m "finished rebasing political datasets."
 train_st_model () {
     POLITICAL_CLASS=$1
     POLITICAL_DATA="models/nmt_fren_goldmaster_bpe_$POLITICAL_CLASS.pt"
-    POLITICAL_MODEL_OUT="fren_goldmaster_$POLITICAL_CLASS"
+    POLITICAL_MODEL_OUT="fren_goldmaster_attempt_2_$POLITICAL_CLASS"
     MODEL="transformer"
-    EP=10
+    EP=1
     MODELDIM=512
     BATCHSIZE=32
 
@@ -40,8 +40,8 @@ train_st_model () {
 
     python3 train.py \
         -freeze_encoder \
-        -checkpoint_encoder "models/"$POLITICAL_MODEL_OUT"/encoder_epoch_1.chkpt" \
-        -checkpoint_decoder "models/"$POLITICAL_MODEL_OUT"/decoder_epoch_1.chkpt" \
+        -checkpoint_encoder "models/"$POLITICAL_MODEL_OUT"/encoder_epoch_2.chkpt" \
+        -checkpoint_decoder "models/"$POLITICAL_MODEL_OUT"/decoder_epoch_2.chkpt" \
         -log $true \
         -batch_size $BATCHSIZE \
         -model $MODEL \
@@ -55,9 +55,9 @@ train_st_model () {
         -cuda \
         -multi_gpu
 
-    python3 core/telegram.py -m "[Munchlax] Finished style-transfer training for $POLITICAL_DATA"
+    python3 core/telegram.py -m "[Casper] Finished style-transfer training for $POLITICAL_DATA"
 }
 
-# train_st_model "democratic"
+train_st_model "democratic"
 train_st_model "republican"
 

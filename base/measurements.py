@@ -36,12 +36,6 @@ warnings.filterwarnings("ignore")
 
 # load rouge
 rouge_comp = Rouge()
-# load spacy
-# nlp = spacy.load('en_core_web_sm')
-# sentencizer = nlp.create_pipe("sentencizer")
-# nlp.add_pipe(sentencizer)
-# tokenizer = nlp.create_pipe("tokenizer")
-# load meteor
 meteor = Meteor()
 
 

@@ -36,25 +36,51 @@ DEMTRAINFR="../data/political_data/democratic_only.train.fr"
 # python3 translate.py -gpu 0 -model $ENGFR -src ../data/political_data/republican_only.test.en -output ../data/political_data/republican_only.test.fr -replace_unk $true
 # #------------------------
 
-# # Preprocess democratic french source and democratic english target data for the generator
-# python3 preprocess.py -train_src ../data/political_data/democratic_only.train.fr -train_tgt ../data/political_data/democratic_only.train.en -valid_src ../data/political_data/democratic_only.dev.fr -valid_tgt ../data/political_data/democratic_only.dev.en -save_data data/democratic_generator -src_vocab ../models/translation/french_english/french_english_vocab.src.dict -tgt_vocab ../models/classifier/political_classifier/political_classifier_vocab.src.dict -seq_len 50
+# Preprocess democratic french source and democratic 
+# english target data for the generator
 
-# # note: this saves democratic_generator.train.pt to data/ so you'll need to move it.
+# python3 preprocess.py \
+#     -train_src ../data/political_data/democratic_only.train.fr \
+#     -train_tgt ../data/political_data/democratic_only.train.en \
+#     -valid_src ../data/political_data/democratic_only.dev.fr \
+#     -valid_tgt ../data/political_data/democratic_only.dev.en \
+#     -save_data democratic_generator \
+#     -src_vocab ../models/translation/french_english/french_english_vocab.src.dict \
+#     -tgt_vocab ../models/classifier/political_classifier/political_classifier_vocab.src.dict \
+#     -seq_len 50
 
-# # # Train the democratic style generator
-# python3 train_decoder.py -gpus 0 -data data/democratic_generator.train.pt -save_model trained_models/democratic_generator -classifier_model ../models/classifier/political_classifier/political_classifier.pt -encoder_model ../models/translation/french_english/french_english.pt -tgt_label 0
+# Train the democratic style generator
 
-# # # Translate the republican test set using the best democratic generator
-python3 translate.py -gpu 0 -encoder_model $FRENG -decoder_model ../models/style_generators/democratic_generator.pt -src ../data/political_data/republican_only.test.fr -output trained_models/republican_democratic_test.txt -replace_unk $true
+# python3 train_decoder.py -gpus 0 \
+#     -data data/democratic_generator.train.pt \
+#     -save_model trained_models/democratic_generator \
+#     -classifier_model ../models/classifier/political_classifier/political_classifier.pt \
+#     -encoder_model ../models/translation/french_english/french_english.pt \
+#     -tgt_label 0
 
-# python3 translate.py -gpu 0 -encoder_model $FRENG -decoder_model ../models/style_generators/democratic_generator.pt -src ../data/political_data/republican_only.dev.fr -output trained_models/republican_democratic_dev.txt -replace_unk $true
+# Translate the republican test set using the best democratic generator
+# for p in democratic
+# do 
+#     for c in test dev train
+#     do 
+#         python3 translate.py -gpu 0 \
+#         -encoder_model $FRENG \
+#         -decoder_model "../models/style_generators/"$p"_generator.pt" \
+#         -replace_unk $true \
+#         -src "../data/political_data/republican_only."$c".fr" \
+#         -output "out2/republican_"$p"_"$c".txt" 
+#     done
+# done
 
-# python3 translate.py -gpu 0 -encoder_model $FRENG -decoder_model ../models/style_generators/democratic_generator.pt -src ../data/political_data/republican_only.train.fr -output trained_models/republican_democratic_train.txt -replace_unk $true
-
-# python3 translate.py -gpu 0 -encoder_model $FRENG -decoder_model ../models/style_generators/republican_generator.pt -src ../data/political_data/democratic_only.train.fr -output trained_models/democratic_republican_train.txt -replace_unk $true
-
-# python3 translate.py -gpu 0 -encoder_model $FRENG -decoder_model ../models/style_generators/republican_generator.pt -src ../data/political_data/democratic_only.dev.fr -output trained_models/democratic_republican_dev.txt -replace_unk $true
-
-# python3 translate.py -gpu 0 -encoder_model $FRENG -decoder_model ../models/style_generators/republican_generator.pt -src ../data/political_data/democratic_only.test.fr -output trained_models/democratic_republican_test.txt -replace_unk $true
-
-# python3 translate.py -gpu 0 -model $FRENG -src ../data/political_data/republican_only.test.fr -output trained_models/republican_democratic.txt -replace_unk $true -verbose $true
+for p in republican
+do 
+    for c in test dev train 
+    do 
+        python3 translate.py -gpu 0 \
+        -encoder_model $FRENG \
+        -decoder_model "../models/style_generators/"$p"_generator.pt" \
+        -replace_unk $true \
+        -src "../data/political_data/democratic_only."$c".fr" \
+        -output "out2/democratic_"$p"_"$c".txt" 
+    done
+done

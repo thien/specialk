@@ -34,6 +34,7 @@ python3 translate.py \
     -output $PUB_DIR$p".fr" \
     -beam_size $BEAMSIZE \
     -batch_size 32 \
+    -override_max_token_seq_len 150 \
     -cuda_device $CUDA_DEVICE \
     -cuda
 python3 core/telegram.py -m "finished translating $src"

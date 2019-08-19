@@ -190,6 +190,7 @@ class NMTModel:
         Loads PyTorch pickled training and validation dataset.
         """
         data = torch.load(self.opt.data)
+        self.dataset_settings = data['settings']
         # the token sequence length is determined by `preprocess.py`
         self.opt.max_token_seq_len = data['settings'].max_token_seq_len
         # here we need to check whether the dataset is BPE or not.

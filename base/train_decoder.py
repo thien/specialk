@@ -7,6 +7,7 @@ import torch.nn as nn
 import sys
 from torch.autograd import Variable
 import numpy as np
+import os
 
 sys.path.append('classifier')
 import classifier.onmt as onmt
@@ -15,8 +16,9 @@ import classifier.onmt.CNNModels as CNNModels
 description = """
 train_decoder.py
 
-Trains the decoder for style-transfer specific purposes.
+Trains the transformer decoder for style-transfer specific purposes.
 """
+
 
 def load_args():
     parser = argparse.ArgumentParser(description="train_decoder.py")
@@ -66,10 +68,6 @@ def load_args():
             
 
     # model options.
-    parser.add_argument('-model', choices=['transformer', 'recurrent'], 
-                        required=True, help="""
-                        Either a recurrent (seq2seq model) or a transformer.
-                        """)
 
     parser.add_argument('-cuda', action='store_true',
                         help="""
@@ -146,31 +144,6 @@ def load_args():
                         Enables label smoothing.
                         """)
     
-    # RNN specific options
-    parser.add_argument('-max_generator_batches', type=int, default=32, help="""
-                        Maximum batches of words in a sequence to run
-                        the generator on in parallel. Higher is faster, but uses
-                        more memory.""")
-    parser.add_argument('-input_feed', type=int, default=0, help="""
-                        Feed the context vector at each time step as
-                        additional input (via concatenation with the word
-                        embeddings) to the decoder.""")
-    parser.add_argument('-max_grad_norm', type=float, default=5, help="""
-                        If the norm of the gradient vector exceeds this,
-                        renormalize it to have the norm equal to max_grad_norm.
-                        """)
-    parser.add_argument('-curriculum', action="store_true",
-                        help="""For this many epochs, order the minibatches based
-                        on source sequence length. Sometimes setting this to 1 will
-                        increase convergence speed.""")
-    parser.add_argument('-brnn', action='store_true',
-                        help='Use a bidirectional encoder')
-    parser.add_argument('-brnn_merge', default='concat',
-                        help="""Merge action for the bidirectional hidden states:
-                        [concat|sum]""")
-    parser.add_argument('-rnn_size', type=int, default=500,
-                        help='Size of LSTM hidden states')
-
     #learning rate
     parser.add_argument('-learning_rate', type=float, default=0.001,
                         help="""Starting learning rate. If adagrad/adadelta/adam is
@@ -189,6 +162,9 @@ def load_args():
                         help="Gradient optimisation method.")
 
     # classifier labels
+    parser.add_argument("-classifier_model", required=True, type=str, help="""
+                        path for classifier model.
+                        """)
     parser.add_argument("-label0", required=True, type=str, help="""
                         Label 0 for CNN classifier.
                         """)
@@ -212,6 +188,7 @@ def load_classifier(opt):
     cnn_opt.tgt = opt.label_target
     cnn_opt.cuda = 0
     cnn_opt.batch_size = opt.batch_size
+    cnn_opt.tgt_label = 1 if opt.label_target == opt.label1 else 0
 
     classifier_data = torch.load(opt.classifier_model, map_location=lambda x, loc: x)
     class_opt = classifier_data['opt']
@@ -219,13 +196,14 @@ def load_classifier(opt):
     class_model.max_sent_length = cnn_opt.max_sent_length 
     class_model.cuda()
     class_model.eval()
+    class_model.refs = cnn_opt
 
     return class_model
+
 
 def BCELoss():
     return nn.BCELoss().cuda()
 
-criterion2 = BCELoss()
 
 def tf_forward(self, src_seq, src_pos, tgt_seq, tgt_pos):
     """
@@ -233,68 +211,68 @@ def tf_forward(self, src_seq, src_pos, tgt_seq, tgt_pos):
     """
     tgt_seq, tgt_pos = tgt_seq[:, :-1], tgt_pos[:, :-1]
     # compute encoder output
-    enc_output, enc_slf_attn_list = self.encoder(src_seq, src_pos, True)
+    enc_output, _ = self.encoder(src_seq, src_pos, True)
     # feed into decoder
     dec_out = self.decoder(tgt_seq, tgt_pos, src_seq, enc_output.detach(), True)
-    dec_output, dec_slf_attn_list, dec_enc_attn_list = dec_out
+    dec_output, _, _ = dec_out
     return dec_output
 
 
-def n_tokens_correct(pred, gold):
+def n_tokens_correct(pred, gold, pad_token):
     """
     Calculates number of correct tokens.
     """
     pred = pred.max(1)[1]
     gold = gold.contiguous().view(-1)
-    non_pad_mask = gold.ne(self.constants.PAD)
+    non_pad_mask = gold.ne(pad_token)
     n_correct = pred.eq(gold)
     n_correct = n_correct.masked_select(non_pad_mask).sum().item()
     return n_correct
 
 
-def classifier_loss(self, pred, class_model, class_input, tgt_label):
+def classifier_loss(self, pred, class_model, class_input):
     """
     Computes classifier loss.
     """
 
-    is_cuda = len(opt.gpus) >= 1
+    # need to fix is_cuda
+    is_cuda = torch.cuda.device_count() > 0
     softmax = nn.Softmax(dim=1)
     softmax = softmax.cuda() if is_cuda else softmax
+    tensor = torch.cuda.FloatTensor if is_cuda else torch.FloatTensor
+    seq_length = class_model.opt.sequence_length
+    target_label = class_model.refs.tgt_label
 
     # translate generator outputs to class inputs
-    pred = Variable(pred.data, requires_grad=True, volatile=False)
-    linear = class_input(pred)
-
-    # setup class_tgt, cnn_padding
-    tensor = torch.cuda.FloatTensor if is_cuda else torch.FloatTensor
-    seq_length = class_model.max_sent_length
+    exp = Variable(pred.data, requires_grad=True, volatile=False)
+    linear = class_input(exp)
     d0,d1,d2 = linear.size()
 
-    cnn_padding = tensor(abs(seq_length - d0), d1, d2).zero_()
-    # Create a batch_size long tensor filled with the label to be generated
-    class_tgt = tensor(d1).fill_(tgt_label)
+    # reshape it for softmax, and shape it back.
+    out = softmax(linear.view(-1, d2)).view(d0, d1, d2)
 
-    # reshape it for softmax
-    linear_mod = linear.view(-1, d2)
-    soft_out = softmax(linear_mod)
+    # our dataset is current (batch, seqlen, vocab)
+    # but CNN takes in (seqlen, batch, vocab)
+    out = out.transpose(0,1)
+    d0,d1,d2 = out.size()
 
-    # shape it back s.t we can concatenate it with our zero box
-    soft_out = soft_out.view(linear.size(0), linear.size(1), linear.size(2))
-
-    # concatenate padding
-    if linear.size(0) < seq_length:
-        soft_cat = torch.cat((soft_out, cnn_padding.detach()), 0)
+    # setup padding because the CNN only accepts inputs of certain dimension
+    if d0 < seq_length:
+        # pad sequences
+        cnn_padding = tensor(abs(seq_length - d0), d1, d2).zero_()
+        cat = torch.cat((out, cnn_padding), 0)
     else:
-        soft_cat = soft_out[:seq_length]
+        # trim sequences
+        cat = out[:seq_length]
 
     # get class prediction with cnn
-    class_outputs = class_model(soft_cat).squeeze()
+    class_outputs = class_model(cat).squeeze()
 
-    # return loss
-    return criterion2(class_outputs, Variable(class_tgt))
+    # return loss between predicted class outputs and a vector of class_targets
+    return criterion2(class_outputs, tensor(d1).fill_(target_label))
 
 
-def performance(self, generator, pred_before, gold, smoothing=False):
+def performance(self, generator, pred_before, gold, class_input, class_model, smoothing=False):
     """
     Calculates token level accuracy.
     Smoothing can be applied if needed.
@@ -302,26 +280,32 @@ def performance(self, generator, pred_before, gold, smoothing=False):
     pred = generator(pred_before) * self.model.x_logit_scale
 
     # compute adversarial loss
-    l_classifier = classifier_loss(self, pred_before)
+    l_classifier = classifier_loss(self, pred_before, class_model, class_input)
 
     # compute reconstruction loss
     pred = pred.view(-1, pred.size(2))
     l_reconstruction = self.calculate_loss(pred, gold, smoothing)
 
     # count number of correct tokens (for stats) 
-    n_correct = n_tokens_correct(pred, gold)
-    # compute overall loss
-    overall_loss = l_reconstruction * l_classifier
+    n_correct = n_tokens_correct(pred, gold, pad_token=self.constants.PAD)
 
-    return overall_loss, n_correct
+    return l_reconstruction, l_classifier, n_correct
 
 
-def compute_epoch(self, dataset, validation=False):
-    do_smoothing = self.opt.label_smoothing
-    ep_losses = []
+def compute_epoch(self, generator, class_input, class_model, dataset, validation=False):
+    if validation:
+        self.model.decoder.eval()
+        generator.eval()
+    else:
+        self.model.decoder.train()
+        generator.train()
+
+    smooth = self.opt.label_smoothing
+    losses, recon, classes, accs = [], [], [], []
+    recon = []
 
     i = 0
-    for batch in tqdm(dataset):
+    for batch in tqdm(dataset, desc="Training"):
         i += 1
         self.model.zero_grad()
         src_seq, src_pos, tgt_seq, tgt_pos = map(
@@ -330,20 +314,68 @@ def compute_epoch(self, dataset, validation=False):
         gold = tgt_seq[:, 1:]
         pred = tf_forward(self.model, src_seq, src_pos, tgt_seq, tgt_pos)
         # compute performance
-        loss, n_correct = performance(self,pred, gold, smoothing=do_smoothing)
+        l_recon, l_class, n_correct = performance(self, generator, pred, gold,
+                                                    class_input, class_model, smooth)
+        net_loss = l_recon * l_class
+
+        if validation:
+            # gradient descent
+            net_loss.backward()
+            # update parameters
+            self.optimiser.step_and_update_lr()
+
+            # generate outputs
+            self.save_eval_outputs(pred, output_dir="eval_outputs_style_transfer")
+
+        # store results
+        losses.append(net_loss.item())
+        recon.append(l_recon.item())
+        classes.append(l_class.item())
+        accuracy = losses[-1]/gold.ne(self.constants.PAD).sum().item()
+        accs.append(accuracy)
+
+        if i % 100 == 0 and not validation:
+            del src_seq, src_pos, tgt_seq, tgt_pos, batch
+            del gold, pred, net_loss, n_correct, l_recon, l_class
+            torch.cuda.empty_cache()
+
+    return losses, recon, classes, accs
+
+
+def means(l):
+    return [round(np.mean(x),3) for x in l]
+
+
+def save(decoder, generator, epoch, settings, vocab, filepath):
+    checkpoint_decoder = {
+        'type': "transformer",
+        'model': decoder.state_dict(),
+        'generator': generator.state_dict(),
+        'epoch': epoch,
+        'settings': settings,
+        'vocab' : vocab
+    }
+
+    if checkpoint_decoder['settings'].telegram:
+        del checkpoint_decoder['settings'].telegram
+
+    torch.save(checkpoint_decoder, filepath)
 
 if __name__ == "__main__":
     opt = load_args()
     opt = opt.parse_args()
+    opt.model = "transformer"
+    
     assert opt.epochs > 0
 
     model = transformer(opt)
 
     # load dataset
     model.load_dataset()
-
+    vocab = model.tgt_bpe.vocabs_to_dict(False)
     # load model encoder and decoder
     model.load(opt.checkpoint_encoder, opt.checkpoint_decoder)
+
     model.setup_optimiser()
 
     # we're only trying to train the decoder and generator.
@@ -351,6 +383,7 @@ if __name__ == "__main__":
 
     # load model classifier
     classifier = load_classifier(opt)
+    criterion2 = BCELoss()
 
     # initiate a new generator for style specific purposes
     model_dim = model.model.decoder.layer_stack[0].slf_attn.w_qs.out_features
@@ -358,6 +391,7 @@ if __name__ == "__main__":
     generator = nn.Sequential(
         nn.Linear(model.model.generator.in_features, model.model.generator.out_features),
         nn.LogSoftmax(dim=1)).cuda()
+    model.model.generator = generator
 
     # learn NN that feeds the decoder output into the classifier
     class_input = nn.Sequential(
@@ -365,6 +399,30 @@ if __name__ == "__main__":
             classifier.word_lut.weight.shape[0])).cuda()
 
     criterion_2 = BCELoss()
+
+    torch.cuda.empty_cache()
+
+    for ep in tqdm(range(1,opt.epochs+1), desc="Epoch"):
+        # train
+        self.opt.current_epoch = ep
+        train_results = compute_epoch(model, generator, class_input, classifier, model.training_data)
+        losses, recon, classes, accs = means(train_results)
+        print("Training Loss:", losses, "(",recon, classes,")", accs, "%")
+
+        filename = "decoder_" + opt.label_target + "_epoch_" +str(ep) + ".chkpt"
+        filepath = os.path.join(model.opt.directory, filename)
+        save(model.model.decoder, generator, ep, opt, vocab, filepath)
+        
+        # validate
+        with torch.no_grad():
+            valid_results = compute_epoch(model, generator, class_input, classifier, model.validation_data)
+            losses, recon, classes, accs = means(valid_results)
+            print("Validation Loss:", losses, "(",recon, classes,")", accs, "%")
+
+
+        torch.cuda.empty_cache()
+
+    # need to save the model.
 
 
 # load the dataset

@@ -10,6 +10,10 @@ import math
 import time
 import sys
 
+
+sys.path.append('../')
+from core.dataset import TranslationDataset, collate_fn, paired_collate_fn
+
 parser = argparse.ArgumentParser(description='train.py')
 
 ## Data options
@@ -144,25 +148,37 @@ def memoryEfficientLoss(outputs, targets, generator, crit, eval=False):
     return loss, grad_output, num_correct
 
 
-def eval(model, criterion, data, vocab_size):
+def eval(model, criterion, data, vocab_size, opt):
     total_loss = 0
     total_words = 0
     total_num_correct = 0
 
     model.eval()
-    for i in range(len(data)):
-        batch = data[i][:-1] # exclude original indices
+    
+    for batch in data:
+        src_seq, _, tgt_seq, _ = map(
+                lambda x: x.to("cuda"), batch)
+        # batch = data[i][:-1] # exclude original indices
 
-        src = batch[0]
-        inp = src[0] % vocab_size # Size is seq_len x batch_size, type: torch.cuda.LongTensor, Variable
-        inp_ = torch.unsqueeze(inp, 2) # Size is seq_len x batch_size x 1, type: torch.cuda.LongTensor, Variable
-        if len(opt.gpus) >= 1:
-            one_hot = Variable(torch.cuda.FloatTensor(src[0].size(0), src[0].size(1), vocab_size).zero_())
-        else:
-            one_hot = Variable(torch.FloatTensor(src[0].size(0), src[0].size(1), vocab_size).zero_())
-        one_hot_scatt = one_hot.scatter_(2, inp_, 1)
+        # src = batch[0]
+        # inp = src[0] % vocab_size # Size is seq_len x batch_size, type: torch.cuda.LongTensor, Variable
+        # inp_ = torch.unsqueeze(inp, 2) # Size is seq_len x batch_size x 1, type: torch.cuda.LongTensor, Variable
+
+        src = src_seq.transpose(0,1)
+        # tgt_seq= tgt_seq.squeeze(1)
+        # print(src.shape, tgt_seq.shape)
+        inp = src# Size is seq_len x batch_size, type: torch.cuda.LongTensor, Variable
+        # print(inp.shape)
+        inp_ = torch.unsqueeze(inp, 2)
+        
+        tensor = torch.cuda.FloatTensor if len(opt.gpus) >= 1 else torch.FloatTensor
+
+        # print(src[0].shape)
+        one_hot = Variable(tensor(src.size(0), src.size(1), vocab_size).zero_())
+        one_hot_scatt = one_hot.scatter_(2, inp_, 1) # Size: seq_len x batch_size x vocab_size, type: torch.cuda.FloatTensor, Variable
+
         outputs = model(one_hot_scatt)
-        targets = batch[1] 
+        targets = tgt_seq.transpose(0,1)
         loss, _, num_correct = memoryEfficientLoss(
                 outputs, targets, model, criterion, eval=True)
         total_loss += loss
@@ -173,7 +189,7 @@ def eval(model, criterion, data, vocab_size):
     return total_loss / total_words, total_num_correct / total_words
 
 
-def trainModel(model, trainData, validData, dataset, optim):
+def trainModel(model, trainData, validData, dataset, optim, opt):
     #print(model)
     sys.stdout.flush()
     model.train()
@@ -186,7 +202,7 @@ def trainModel(model, trainData, validData, dataset, optim):
     # vocab_size = dataset['dicts']['src'].size()
     
     start_time = time.time()
-    def trainEpoch(epoch):
+    def trainEpoch(epoch, opt):
 
         if opt.extra_shuffle and epoch > opt.curriculum:
             trainData.shuffle()
@@ -197,34 +213,38 @@ def trainModel(model, trainData, validData, dataset, optim):
         total_loss, total_words, total_num_correct = 0, 0, 0
         report_loss, report_tgt_words, report_src_words, report_num_correct = 0, 0, 0, 0
         start = time.time()
-        for i in range(len(trainData)):
+        i = 0
+        for batch in trainData:
+            src_seq, _, tgt_seq, _ = map(
+                lambda x: x.to("cuda"), batch)
 
-            batchIdx = batchOrder[i] if epoch > opt.curriculum else i
-            # print(trainData[batchIdx])
-            batch = trainData[batchIdx][:-1] # exclude original indices
 
+            # batch = trainData[batchIdx][:-1] # exclude original indices
+           
             # making one hot encoding
-            src = batch[0]
-
-            print("src:",src[0].shape,  batch[1][0].shape)
-            inp = src[0] % vocab_size # Size is seq_len x batch_size, type: torch.cuda.LongTensor, Variable
+            src = src_seq.transpose(0,1)
+            # tgt_seq= tgt_seq.squeeze(1)
+            # print(src.shape, tgt_seq.shape)
+            inp = src# Size is seq_len x batch_size, type: torch.cuda.LongTensor, Variable
+            # print(inp.shape)
             inp_ = torch.unsqueeze(inp, 2) # Size is seq_len x batch_size x 1, type: torch.cuda.LongTensor, Variable
-            if len(opt.gpus) >= 1:
-                one_hot = Variable(torch.cuda.FloatTensor(src[0].size(0), src[0].size(1), vocab_size).zero_())
-            else:
-                one_hot = Variable(torch.FloatTensor(src[0].size(0), src[0].size(1), vocab_size).zero_())
+            # print(inp_.shape)
+
+            tensor = torch.cuda.FloatTensor if len(opt.gpus) >= 1 else torch.FloatTensor
+
+            # print(src[0].shape)
+            one_hot = Variable(tensor(src.size(0), src.size(1), vocab_size).zero_())
             one_hot_scatt = one_hot.scatter_(2, inp_, 1) # Size: seq_len x batch_size x vocab_size, type: torch.cuda.FloatTensor, Variable
 
             model.zero_grad()
             outputs = model(one_hot_scatt)
-            print("outputs:", outputs.shape)
-            targets = batch[1]
-            print("targets:", targets.shape)
+            # print("outputs:", outputs.shape)
+            targets = tgt_seq.transpose(0,1)
+            # print("targets",targets.shape)
             loss, gradOutput, num_correct = memoryEfficientLoss(
                     outputs, targets, model, criterion)
             outputs.backward(gradOutput)
 
-            huh
             # update the parameters
             optim.step()
             num_words = targets.size(1)
@@ -236,29 +256,33 @@ def trainModel(model, trainData, validData, dataset, optim):
             total_num_correct += num_correct.item()
             total_words += num_words
 
+        
             if i % opt.log_interval == -1 % opt.log_interval:
+                runtime = time.time()-start_time
+
                 print("Epoch %2d, %5d/%5d; acc: %6.2f;  %3.0f src tok/s; %3.0f tgt tok/s; %6.0f s elapsed" %
                       (epoch, i+1, len(trainData),
                       report_num_correct / report_tgt_words * 100,
                       report_src_words/(time.time()-start),
                       report_tgt_words/(time.time()-start),
-                      time.time()-start_time))
+                      runtime))
 
                 sys.stdout.flush()
                 report_loss = report_tgt_words = report_src_words = report_num_correct = 0
                 start = time.time()
+            i += 1
         return total_loss / total_words, total_num_correct / total_words
 
     for epoch in range(opt.start_epoch, opt.epochs + 1):
         print('')
 
         #  (1) train for one epoch on the training set
-        train_loss, train_acc = trainEpoch(epoch)
+        train_loss, train_acc = trainEpoch(epoch, opt)
         print('Train accuracy: %g' % (train_acc*100))
         print('Train Loss: ', train_loss)
         
         #  (2) evaluate on the validation set
-        valid_loss, valid_acc = eval(model, criterion, validData, vocab_size)
+        valid_loss, valid_acc = eval(model, criterion, validData, vocab_size, opt)
         print('Validation accuracy: %g' % (valid_acc*100))
         print('Validation Loss: ', valid_loss)
 
@@ -278,6 +302,41 @@ def trainModel(model, trainData, validData, dataset, optim):
         torch.save(checkpoint,
                    '%s_acc_%.2f_loss_%.2f_e%d.pt' % (opt.save_model, 100*valid_acc, valid_loss, epoch))
 
+
+def init_dataloaders(data, opt):
+    src_word2idx = data['dicts']['src']
+    # tgt_word2idx = data['dict']['tgt']
+
+    if '__sow' in src_word2idx['byte_pairs']:
+        # we have BPE
+        src_byte_pairs = {x+"_": y for x,y in src_word2idx['byte_pairs'].items()}
+        # tgt_byte_pairs = {x+"_": y for x,y in tgt_word2idx['byte_pairs'].items()}
+        src_word2idx = {**src_byte_pairs, **src_word2idx['words']}
+        # tgt_word2idx = {**tgt_byte_pairs, **tgt_word2idx['words']}
+
+    train_loader = torch.utils.data.DataLoader(
+        TranslationDataset(
+            src_word2idx=src_word2idx,
+            tgt_word2idx=src_word2idx,
+            src_insts=data['train']['src'],
+            tgt_insts=data['train']['tgt']),
+        num_workers=2,
+        batch_size=opt.batch_size,
+        collate_fn=paired_collate_fn,
+        shuffle=True)
+
+    valid_loader = torch.utils.data.DataLoader(
+        TranslationDataset(
+            src_word2idx=src_word2idx,
+            tgt_word2idx=src_word2idx,
+            src_insts=data['valid']['src'],
+            tgt_insts=data['valid']['tgt']),
+        num_workers=2,
+        batch_size=opt.batch_size,
+        collate_fn=paired_collate_fn)
+    
+    return train_loader, valid_loader
+
 def main():
 
     print("Loading data from '%s'" % opt.data)
@@ -290,19 +349,15 @@ def main():
         checkpoint = torch.load(dict_checkpoint)
         dataset['dicts'] = checkpoint['dicts']
 
-    trainData = onmt.Dataset(dataset['train']['src'],
-                             dataset['train']['tgt'], opt.batch_size, opt.gpus)
-    validData = onmt.Dataset(dataset['valid']['src'],
-                             dataset['valid']['tgt'], opt.batch_size, opt.gpus,
-                             volatile=True)
+    trainData, validData = init_dataloaders(dataset, opt)
 
     vocabulary_size = 0
-    if "settings" in dataset['dicts']:
+  
+    if "settings" in dataset:
         vocabulary_size = dataset['dicts']['src']['kwargs']['vocab_size']
     else:
         vocabulary_size = dataset['dicts']['src'].size()
 
-    # dicts = dataset['dicts']
     print(' * vocabulary size. source = %d;' % vocabulary_size)
     print(' * number of training sentences. %d' %
           len(dataset['train']['src']))
@@ -357,7 +412,7 @@ def main():
     nParams = sum([p.nelement() for p in model.parameters()])
     print('* number of parameters: %d' % nParams)
 
-    trainModel(model, trainData, validData, dataset, optim)
+    trainModel(model, trainData, validData, dataset, optim, opt)
 
 if __name__ == "__main__":
     main()

@@ -23,6 +23,7 @@ def load_args():
     parser.add_argument('-valid_src', required=True)
     parser.add_argument('-valid_tgt', required=True)
     parser.add_argument('-save_name', required=True)
+    parser.add_argument("-max_seq_len", type=int, default=-1)
     return parser.parse_args()
 
 
@@ -31,6 +32,10 @@ if __name__ == "__main__":
     
     base = torch.load(opt.base)
     settings = base['settings']
+
+    max_word_len= settings.max_word_seq_len
+    if opt.max_seq_len > 0:
+        max_word_len = opt.max_seq_len - 2
 
     print(settings)
 
@@ -69,8 +74,8 @@ if __name__ == "__main__":
         # tokenise
         for g in raw:
             source, target = raw[g]['src'], raw[g]['tgt']
-            source = [seq.split()[:settings.max_word_seq_len] for seq in source]
-            target = [seq.split()[:settings.max_word_seq_len] for seq in target]
+            source = [seq.split()[:max_word_len] for seq in source]
+            target = [seq.split()[:max_word_len] for seq in target]
             dataset[g]['src'], dataset[g]['tgt'] = source, target
         del raw
 
@@ -98,7 +103,7 @@ if __name__ == "__main__":
                 for i in range(len(sequences)):
                     ref_seq = raw[g][key][i]
                     bpe_seq = sequences[i]
-                    dataset[g][key][i] = reclip(ref_seq, bpe_seq, bpe_method, settings.max_word_seq_len)
+                    dataset[g][key][i] = reclip(ref_seq, bpe_seq, bpe_method, max_word_len)
     
     # add <s>, </s>
     for g in tqdm(dataset, desc="Adding SOS, EOS tokens"):

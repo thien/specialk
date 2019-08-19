@@ -10,12 +10,13 @@ from torch.nn.utils.rnn import pack_padded_sequence as pack
 class ConvNet(nn.Module):
 	def __init__(self, opt, dicts):
 		super(ConvNet, self).__init__()
-	
+
+		self.opt = opt
 		self.num_filters = opt.num_filters
 		pooling_window_size = opt.sequence_length - opt.filter_size + 1
 
 		self.strides = (1, 1)
-		self.vocab_size = dicts.size()
+		self.vocab_size = dicts if type(dicts) == int else dicts.size()
 		self.word_vec_size = opt.word_vec_size
 
 		self.word_lut = nn.Embedding(self.vocab_size,

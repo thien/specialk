@@ -318,14 +318,14 @@ def compute_epoch(self, generator, class_input, class_model, dataset, validation
                                                     class_input, class_model, smooth)
         net_loss = l_recon * l_class
 
-        if validation:
+        if not validation:
             # gradient descent
             net_loss.backward()
             # update parameters
             self.optimiser.step_and_update_lr()
-
+        else:
             # generate outputs
-            self.save_eval_outputs(pred, output_dir="eval_outputs_style_transfer")
+            self.save_eval_outputs(generator(pred) * self.model.x_logit_scale, output_dir="eval_outputs_style_transfer")
 
         # store results
         losses.append(net_loss.item())
@@ -404,7 +404,7 @@ if __name__ == "__main__":
 
     for ep in tqdm(range(1,opt.epochs+1), desc="Epoch"):
         # train
-        self.opt.current_epoch = ep
+        model.opt.current_epoch = ep
         train_results = compute_epoch(model, generator, class_input, classifier, model.training_data)
         losses, recon, classes, accs = means(train_results)
         print("Training Loss:", losses, "(",recon, classes,")", accs, "%")
@@ -415,7 +415,7 @@ if __name__ == "__main__":
         
         # validate
         with torch.no_grad():
-            valid_results = compute_epoch(model, generator, class_input, classifier, model.validation_data)
+            valid_results = compute_epoch(model, generator, class_input, classifier, model.validation_data, True)
             losses, recon, classes, accs = means(valid_results)
             print("Validation Loss:", losses, "(",recon, classes,")", accs, "%")
 

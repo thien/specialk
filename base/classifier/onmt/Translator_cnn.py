@@ -13,10 +13,18 @@ class Translator(object):
         self.label1 = opt.label1
 
         checkpoint = torch.load(opt.model)
-        model_opt = checkpoint['opt']
+        self.model_opt = checkpoint['opt']
         self.src_dict = checkpoint['dicts']['src']
 
-        model = onmt.CNNModels.ConvNet(model_opt, self.src_dict)
+
+        vocabulary_size = 0
+    
+        if "settings" in self.src_dict:
+            vocabulary_size = self.src_dict['kwargs']['vocab_size']
+        else:
+            vocabulary_size = self.src_dict.size()
+
+        model = onmt.CNNModels.ConvNet(model_opt, vocabulary_size)
         model.load_state_dict(checkpoint['model'])
 
         if opt.cuda:

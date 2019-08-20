@@ -153,7 +153,7 @@ def main():
         # add space to seq
         src_sizes = [sizes[idx] for idx in perm]
   
-        blanks =  [[0 for _ in range(opt.max_token_seq_len-src_sizes[i])] for i in range(len(src))]
+        blanks =  [[Constants.PAD for _ in range(opt.max_token_seq_len-src_sizes[i])] for i in range(len(src))]
         src = [src[i] + blanks[i] for i in range(len(src))]
         
         dataset[g]['src'] = src

@@ -272,12 +272,12 @@ def classifier_loss(self, pred, class_model, class_input):
     return criterion2(class_outputs, tensor(d1).fill_(target_label))
 
 
-def performance(self, generator, pred_before, gold, class_input, class_model, smoothing=False):
+def performance(self, pred_before, gold, class_input, class_model, smoothing=False):
     """
     Calculates token level accuracy.
     Smoothing can be applied if needed.
     """
-    pred = generator(pred_before) * self.model.x_logit_scale
+    pred = self.model.generator(pred_before) * self.model.x_logit_scale
 
     # compute adversarial loss
     l_classifier = classifier_loss(self, pred_before, class_model, class_input)
@@ -292,13 +292,13 @@ def performance(self, generator, pred_before, gold, class_input, class_model, sm
     return l_reconstruction, l_classifier, n_correct
 
 
-def compute_epoch(self, generator, class_input, class_model, dataset, validation=False):
+def compute_epoch(self, class_input, class_model, dataset, validation=False):
     if validation:
         self.model.decoder.eval()
-        generator.eval()
+        self.model.generator.eval()
     else:
         self.model.decoder.train()
-        generator.train()
+        self.model.generator.train()
 
     smooth = self.opt.label_smoothing
     losses, recon, classes, accs = [], [], [], []
@@ -314,7 +314,7 @@ def compute_epoch(self, generator, class_input, class_model, dataset, validation
         gold = tgt_seq[:, 1:]
         pred = tf_forward(self.model, src_seq, src_pos, tgt_seq, tgt_pos)
         # compute performance
-        l_recon, l_class, n_correct = performance(self, generator, pred, gold,
+        l_recon, l_class, n_correct = performance(self, pred, gold,
                                                     class_input, class_model, smooth)
         net_loss = l_recon * l_class
 
@@ -325,7 +325,7 @@ def compute_epoch(self, generator, class_input, class_model, dataset, validation
             self.optimiser.step_and_update_lr()
         else:
             # generate outputs
-            self.save_eval_outputs(generator(pred) * self.model.x_logit_scale, output_dir="eval_outputs_style_transfer")
+            self.save_eval_outputs(self.model.generator(pred) * self.model.x_logit_scale, output_dir="eval_outputs_style_transfer")
 
         # store results
         losses.append(net_loss.item())
@@ -365,7 +365,7 @@ if __name__ == "__main__":
     opt = load_args()
     opt = opt.parse_args()
     opt.model = "transformer"
-    
+    # generator
     assert opt.epochs > 0
 
     model = transformer(opt)
@@ -388,10 +388,10 @@ if __name__ == "__main__":
     # initiate a new generator for style specific purposes
     model_dim = model.model.decoder.layer_stack[0].slf_attn.w_qs.out_features
 
-    generator = nn.Sequential(
-        nn.Linear(model.model.generator.in_features, model.model.generator.out_features),
-        nn.LogSoftmax(dim=1)).cuda()
-    model.model.generator = generator
+    # generator = nn.Sequential(
+    #     nn.Linear(model.model.generator.in_features, model.model.generator.out_features),
+    #     nn.LogSoftmax(dim=1)).cuda()
+    # model.model.generator = generator
 
     # learn NN that feeds the decoder output into the classifier
     class_input = nn.Sequential(
@@ -405,17 +405,17 @@ if __name__ == "__main__":
     for ep in tqdm(range(1,opt.epochs+1), desc="Epoch"):
         # train
         model.opt.current_epoch = ep
-        train_results = compute_epoch(model, generator, class_input, classifier, model.training_data)
+        train_results = compute_epoch(model, class_input, classifier, model.training_data)
         losses, recon, classes, accs = means(train_results)
         print("Training Loss:", losses, "(",recon, classes,")", accs, "%")
 
         filename = "decoder_" + opt.label_target + "_epoch_" +str(ep) + ".chkpt"
         filepath = os.path.join(model.opt.directory, filename)
-        save(model.model.decoder, generator, ep, opt, vocab, filepath)
+        save(model.model.decoder, model.model.generator, ep, opt, vocab, filepath)
         
         # validate
         with torch.no_grad():
-            valid_results = compute_epoch(model, generator, class_input, classifier, model.validation_data, True)
+            valid_results = compute_epoch(model, class_input, classifier, model.validation_data, True)
             losses, recon, classes, accs = means(valid_results)
             print("Validation Loss:", losses, "(",recon, classes,")", accs, "%")
 

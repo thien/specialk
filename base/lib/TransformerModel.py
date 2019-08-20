@@ -114,7 +114,9 @@ class TransformerModel(NMTModel):
             if self.opt.verbose:
                 print("[Info] Loaded encoder model.")
         if decoder_path:
+
             dec = torch.load(decoder_path, "cpu")
+
             if list(dec['model'].keys())[0][:7] == "module.":
                 dec['model'] = OrderedDict([(k[7:], v) for k, v in dec['model'].items()])
                 
@@ -122,7 +124,18 @@ class TransformerModel(NMTModel):
             # the decoder and the target_word_projection.
             opts_d = enc['settings']
             self.model.decoder.load_state_dict(dec['model'])
-            self.model.generator.load_state_dict(dec['generator'])
+
+
+            try:
+                self.model.generator.load_state_dict(dec['generator'])
+            except:
+                generator = nn.Sequential(
+                    nn.Linear(self.model.generator.in_features, self.model.generator.out_features),
+                    nn.LogSoftmax(dim=1)).cuda()
+                generator.load_state_dict(dec['generator'])
+                del self.model.generator
+                self.model.generator = generator
+          
             if self.opt.verbose:
                 print("[Info] Loaded decoder model.")
 

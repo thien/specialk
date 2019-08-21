@@ -15,16 +15,16 @@ class Translator(object):
         checkpoint = torch.load(opt.model)
         self.model_opt = checkpoint['opt']
         self.src_dict = checkpoint['dicts']['src']
-
-
-        vocabulary_size = 0
+        
+        self.vocabulary_size = 0
     
-        if "settings" in self.src_dict:
-            vocabulary_size = self.src_dict['kwargs']['vocab_size']
-        else:
-            vocabulary_size = self.src_dict.size()
+        try:
+#             if "kwargs" in self.src_dict:
+            self.vocabulary_size = self.src_dict['kwargs']['vocab_size']
+        except:
+            self.vocabulary_size = self.src_dict.size()
 
-        model = onmt.CNNModels.ConvNet(model_opt, vocabulary_size)
+        model = onmt.CNNModels.ConvNet(self.model_opt, self.vocabulary_size)
         model.load_state_dict(checkpoint['model'])
 
         if opt.cuda:
@@ -55,12 +55,12 @@ class Translator(object):
         batchSize = srcBatch[0].size(1)
         Batch = (srcBatch, tgtBatch)
 
-        inp = srcBatch[0] % self.src_dict.size()
+        inp = srcBatch[0] % self.vocabulary_size
         inp_ = torch.unsqueeze(inp, 2)
         if self.gpu:
-           one_hot = Variable(torch.cuda.FloatTensor(srcBatch[0].size(0), srcBatch[0].size(1), self.src_dict.size()).zero_())
+           one_hot = Variable(torch.cuda.FloatTensor(srcBatch[0].size(0), srcBatch[0].size(1), self.vocabulary_size).zero_())
         else:
-           one_hot = Variable(torch.FloatTensor(srcBatch[0].size(0), srcBatch[0].size(1), self.src_dict.size()).zero_())
+           one_hot = Variable(torch.FloatTensor(srcBatch[0].size(0), srcBatch[0].size(1), self.vocabulary_size).zero_())
         one_hot_scatt = one_hot.scatter_(2, inp_, 1)
 
         outputs= self.model(one_hot_scatt)
@@ -77,8 +77,29 @@ class Translator(object):
         #  (1) convert words to indexes
         dataset = self.buildData(srcBatch, goldBatch)
         src, tgt, indices = dataset[0]
-
+        
+#         print(src[].shape)
+#         # src is a tuple
+#         print(src.shape, tgt.shape)
         #  (2) translate
         num_correct, batchSize, outs, pred = self.translateBatch(src, tgt)
+
+        return num_correct, batchSize, outs, pred
+
+    def translate_bpe(self, srcBatch, goldBatch, flag=False):
+        if self.gpu:
+            srcBatch = torch.LongTensor(srcBatch).cuda()
+            goldBatch = torch.LongTensor(goldBatch).cuda()
+        else:
+            srcBatch = torch.LongTensor(srcBatch)
+            goldBatch = torch.LongTensor(goldBatch)
+        #  (2) translate
+#         print("SRC:", srcBatch.shape, goldBatch.shape)
+        
+        srcBatch = srcBatch.transpose(0,1)
+        srcLens  = [srcBatch.size(0) for i in range(srcBatch.size(1))]
+        srcInput = (srcBatch, srcLens)
+        
+        num_correct, batchSize, outs, pred = self.translateBatch(srcInput, goldBatch)
 
         return num_correct, batchSize, outs, pred

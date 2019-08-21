@@ -266,7 +266,7 @@ def express(opt):
     # calculate naturalness
     naturalness = metrics.naturalness(tgt, opt.type)
 
-    print(naturalness)
+    print("Naturalness",naturalness)
 
     # print(preservation)
 

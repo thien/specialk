@@ -18,25 +18,25 @@ seq_len=100
 
 
 # Train the classifier
-python3 cnn_train_bpe.py \
-    -gpus 0 \
-    -epochs 20 \
-    -data $political_dataset".train.pt" \
-    -save_model $cnn_model_name \
-    -sequence_length $seq_len \
-    -batch_size 128 \
-    -filter_size 10 \
-    -optim adam \
-    -learning_rate 0.001 
+# python3 cnn_train_bpe.py \
+#     -gpus 0 \
+#     -epochs 1 \
+#     -data $political_dataset".train.pt" \
+#     -save_model $cnn_model_name \
+#     -sequence_length $seq_len \
+#     -batch_size 128 \
+#     -filter_size 10 \
+#     -optim adam \
+#     -learning_rate 0.001 
 
-# BESTMODEL="political_model.pt"
+BESTMODEL="models/political_model_bpe_acc_98.47_loss_0.00_e1.pt"
 
 # # Test the classifier accuracy
-# python3 cnn_translate.py \
-#     -gpu 0 \
-#     -model $BESTMODEL \
-#     -src ../../datasets/political_data/democratic_only.test.en \
-#     -tgt 'democratic' \
-#     -label0 democratic \
-#     -label1 republican
+python3 cnn_translate_bpe.py \
+    -gpu 0 \
+    -model $BESTMODEL \
+    -src ../../datasets/political_data/democratic_only.test.en \
+    -tgt 'democratic' \
+    -label0 democratic \
+    -label1 republican
 

@@ -16,22 +16,22 @@ cnn_model_name="political_model_new"
     # -seq_length 80 \
 
 # Train the classifier
-python3 cnn_train.py \
-    -gpus 0 \
-    -epochs 20 \
-    -data $political_dataset".train.pt" \
-    -save_model $cnn_model_name \
-    -batch_size 128
+# python3 cnn_train.py \
+#     -gpus 0 \
+#     -epochs 20 \
+#     -data $political_dataset".train.pt" \
+#     -save_model $cnn_model_name \
+#     -batch_size 128
      # -sequence_length 100 \
 
-# BESTMODEL="political_model.pt"
+BESTMODEL="political_model.pt"
 
-# # Test the classifier accuracy
-# python3 cnn_translate.py \
-#     -gpu 0 \
-#     -model $BESTMODEL \
-#     -src ../../datasets/political_data/democratic_only.test.en \
-#     -tgt 'democratic' \
-#     -label0 democratic \
-#     -label1 republican
+# Test the classifier accuracy
+python3 cnn_translate.py \
+    -gpu 0 \
+    -model $BESTMODEL \
+    -src ../../datasets/political_data/democratic_only.test.en \
+    -tgt 'democratic' \
+    -label0 democratic \
+    -label1 republican
 

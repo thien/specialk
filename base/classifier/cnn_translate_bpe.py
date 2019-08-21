@@ -12,6 +12,7 @@ sys.path.append('../')
 from preprocess import seq2idx, reclip, load_file
 from preprocess import parse as bpe_parse
 import core.constants as Constants
+from core.utils import get_len
 from core.bpe import Encoder as bpe_encoder
 from tqdm import tqdm
 from copy import deepcopy as copy
@@ -63,6 +64,8 @@ def main():
     translator = onmt.Translator_cnn(opt)
 
     srcBatch, tgtBatch = [], []
+    
+    tgt_id = 0 if opt.tgt == opt.label0 else 1
 
     count = 0
     total_correct, total_words, total_loss = 0, 0, 0
@@ -70,19 +73,21 @@ def main():
 
     # load bpe encoder.
     bpe_enc = bpe_encoder.from_dict(translator.src_dict)
+    bpe_enc.mute()
     
     max_seq_length = translator.model_opt.sequence_length
 
-    for line in addone(codecs.open(opt.src, "r", "utf-8")):
+    for line in tqdm(addone(codecs.open(opt.src, "r", "utf-8")), total=get_len(opt.src)+1):
         count += 1
         if line is not None:
             sents.append(line)
-
             # tokenise.
-            tokens = [f for f in bpe_enc.transform(line)]
+            tokens = [f for f in bpe_enc.transform([line])][0]
+#             before = len(tokens)
             tokens = reclip(line, tokens, bpe_enc, max_seq_length-2)
+#             after = len(tokens)
             tokens = [SOS] + tokens + [EOS]
-            
+#             print("b, a:", before, after)
             # add padding.
             blanks = [Constants.PAD for _ in range(max_seq_length-len(tokens))]
             tokens = tokens + blanks
@@ -90,7 +95,7 @@ def main():
             srcBatch.append(tokens)
 
 
-            tgtBatch += [opt.tgt]
+            tgtBatch += [tgt_id]
 
             if len(srcBatch) < opt.batch_size:
                 continue
@@ -99,8 +104,7 @@ def main():
             if len(srcBatch) == 0:
                 break
 
-
-        num_correct, batchSize, outs, preds = translator.translate(srcBatch, tgtBatch)
+        num_correct, batchSize, outs, preds = translator.translate_bpe(srcBatch, tgtBatch)
  
         total_correct += num_correct.item()
         total_words += batchSize
@@ -109,9 +113,6 @@ def main():
     
 
         srcBatch, tgtBatch = [], []
-        if count%1000 == 0:
-            print('Completed: ', str(count))
-            sys.stdout.flush()
     if opt.output:
         with open(opt.output, "w") as outF:
             for i in range(len(sents)):

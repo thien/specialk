@@ -1,3 +1,4 @@
+*.zip
 *.annotation
 style_transfer/data/
 .vscode/*

@@ -254,24 +254,22 @@ def load_files(src, tgt):
 def express(opt):
     # load files
     src, tgt = load_files(opt.src, opt.tgt)
-
     # init measurements
     metrics = Measurements(opt)
     metrics.checksum = metrics.hash(src, tgt)
-    # calculate intensity
-    # intensity = metrics.intensity(src, tgt)
-    # # calculate preservation of meaning
-    # preservation = metrics.preservation(src, tgt)
 
+    # calculate preservation of meaning
+    preservation = metrics.preservation(src, tgt)
+    print("Preservation:", preservation)
     # calculate naturalness
-    naturalness = metrics.naturalness(tgt, opt.type)
-
-    print("Naturalness",naturalness)
-
-    # print(preservation)
-
+    # naturalness = metrics.naturalness(tgt, opt.type)
+    # print("Naturalness",naturalness)
+    
+    # if newspaper, then we can proceed to do newspaper
+    # specific measurements.
+    if opt.type == "publication":
+        pass
 
 if __name__ == "__main__":
     args = load_args()
     express(args)
-    print("done")

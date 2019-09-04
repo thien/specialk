@@ -325,7 +325,7 @@ def compute_epoch(self, class_input, class_model, dataset, validation=False):
             self.optimiser.step_and_update_lr()
         else:
             # generate outputs
-            self.save_eval_outputs(self.model.generator(pred) * self.model.x_logit_scale, output_dir="eval_outputs_style_transfer")
+            self.save_eval_outputs(self.model.generator(pred) * self.model.x_logit_scale, output_dir="eval_outputs_st_"+self.label_target)
 
         # store results
         losses.append(net_loss.item())
@@ -369,8 +369,9 @@ if __name__ == "__main__":
     assert opt.epochs > 0
 
     model = transformer(opt)
-
+    model.label_target = opt.label_target
     # load dataset
+    print("LOADING DATASET:", opt.data)
     model.load_dataset()
     vocab = model.tgt_bpe.vocabs_to_dict(False)
     # load model encoder and decoder
@@ -388,11 +389,6 @@ if __name__ == "__main__":
     # initiate a new generator for style specific purposes
     model_dim = model.model.decoder.layer_stack[0].slf_attn.w_qs.out_features
 
-    # generator = nn.Sequential(
-    #     nn.Linear(model.model.generator.in_features, model.model.generator.out_features),
-    #     nn.LogSoftmax(dim=1)).cuda()
-    # model.model.generator = generator
-
     # learn NN that feeds the decoder output into the classifier
     class_input = nn.Sequential(
         nn.Linear(model_dim,
@@ -401,6 +397,8 @@ if __name__ == "__main__":
     criterion_2 = BCELoss()
 
     torch.cuda.empty_cache()
+    
+    print("model.opt.directory:", model.opt.directory)
 
     for ep in tqdm(range(1,opt.epochs+1), desc="Epoch"):
         # train

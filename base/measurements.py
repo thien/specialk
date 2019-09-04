@@ -22,6 +22,7 @@ from nltk.translate.bleu_score import sentence_bleu
 from nltk import pos_tag
 from nltk import RegexpParser
 from nltk import word_tokenize
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
 # for emd
 from pyemd import emd
@@ -55,6 +56,7 @@ class Metrics:
     def __init__(self, args):
         self.stopwords = set(stopwords.words('english'))
         self.cmudict = cmudict.dict()
+        self.polarity = SentimentIntensityAnalyzer().polarity_scores
 
     def load(self, args):
         self.load_glove(args.glove_path)
@@ -263,7 +265,6 @@ class Metrics:
                 if index+2 < index_limit:
                     if tokens[index+1][1][0] == "V":
                         if tokens[index+2][1][0] == "J":
-    #                       if tokens[index+3][1][0] == "W":
                             group = tuple([str(tokens[index+i][0]) for i in range(3)])
                             matches.append((index, group))
                         index = index + 2
@@ -488,87 +489,68 @@ if __name__ == "__main__":
     dataset = [(i, dataset[i]) for i in range(len(dataset))]
     # load the metrics model
     metrics = Metrics(args)
-    if args.glove_path:
-        metrics.load_glove(args.glove_path)
 
-    def operate(sequence, args=args):
-        """
-        computes metric operations against the sequences.
-        """
-        result = {}
-        for key in dir(args):
-            if key[0] == "_":
-                continue
-            if key in dir(Metrics) and getattr(args, key):
-                result[key] = getattr(metrics, key)(sequence)
-        return result
 
     def op_wrapper(seq):
-        # maintain the order of the sequences since we're
-        # doing batch operations.
-        i, cont = seq
-        return (i, operate(cont))
+        # # maintain the order of the sequences since we're
+        # # doing batch operations.
+        # i, cont = seq
+        # return (i, operate(cont))
+        idx, pair = seq
+        src, out = pair
+        readability = metrics.readability(out)
+        polarity = metrics.polarity(out)
+        s = pos_tag(word_tokenize(out))
+        # print("POS:",s)
+        lex_match_1 =  metrics.lex_match_1(s)
+        lex_match_2 =  metrics.lex_match_2(s)
+        return (idx, {
+            'polarity'    : polarity,
+            'readability' : readability,
+            'lex_match_1' : lex_match_1,
+            'lex_match_2' : lex_match_2
+        })
 
     results = batch_compute(op_wrapper, dataset)
     # sort by order and remove ordering tag
     results = sorted(results, key=lambda x: x[0])
     results = [x[1] for x in results]
 
-    # need to compute means
-
-    def sniff_keys(ent):
-        """
-        recursively finds keys of some dictionary.
-        returns tuple of keys.
-        """
-        keys = ent.keys()
-        stores = []
-        for key in keys:
-            if type(ent[key]) != dict:
-                entry = key
-                stores.append(entry)
-            else:
-                subset = sniff_keys(ent[key])
-                for subkey in subset:
-                    if type(subkey) == tuple:
-                        stores.append(tuple([key] + list(subkey)))
-                    else:
-                        stores.append(tuple([key, subkey]))
-        stores = list(set(stores))
-        return stores
-
-    def means(results):
-        # get the keys
-        eg = results[0]
-        keys = sniff_keys(eg)
-        keys = sorted(keys)
-        avgs = {key: [] for key in keys}
-  
-        for key in keys:
-            if type(key) != tuple:
-                value = eg[key]
-            else:
-                value = eg
-                for level in key:
-                    value = value[level]
-            avgs[key].append(value)
-
-        for key in avgs:
-            avgs[key] = sum(avgs[key]) / len(avgs[key])
-
-        new_avg = {}
-        for key in avgs:
-            new_avg[str(key)] = avgs[key]
+    def calcmeans(lol):
+        loldim = len(lol)
+        keys = {"lex_match_1" : 0, "lex_match_2" : 0}
+        readability_keys = {}
+        polarity_keys = {}
         
-        return new_avg
+        if "readability" in lol[0]:
+            readability_keys = {k:0 for k in lol[0]['readability']}
+        if "polarity" in lol[0]:
+            polarity_keys = {k:0 for k in lol[0]['polarity']}
+        
+        skew_pol_count = 0
+        
+        for i in lol:
+            for k in keys:
+                if k[0:3] == "lex":
+                    keys[k] += len(i[k])
+            if len(readability_keys) > 0:
+                for k in readability_keys:
+                    readability_keys[k] += i['readability'][k]
+            if len(polarity_keys) > 0:
+                for k in polarity_keys:
+                    if i['polarity'][k] in {0.0, 1.0}:
+                        continue
+                    polarity_keys[k] += i['polarity'][k]
+                    skew_pol_count += 1
+        
+        keys = {k:keys[k]/loldim for k in keys}
+        readability_keys = {k:readability_keys[k]/loldim for k in readability_keys}
+        polarity_keys = {k:polarity_keys[k]/loldim for k in polarity_keys}
+        
+        return {**keys, **readability_keys, **polarity_keys}
+        
+    mean_stats = calcmeans(results)
+    for k in mean_stats:
+        print(k, mean_stats[k])
 
-    mean = means(results)
-    
-    store = {
-        'mean': mean,
-        'base': results
-    }
-
-    # output results to json.
-    with open(args.output, 'w') as outfile:
-        json.dump(store, outfile)
+    torch.save(results, args.output)

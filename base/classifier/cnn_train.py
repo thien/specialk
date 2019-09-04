@@ -9,7 +9,7 @@ from torch.autograd import Variable
 import math
 import time
 import sys
-
+from tqdm import tqdm
 parser = argparse.ArgumentParser(description='train.py')
 
 ## Data options
@@ -197,7 +197,7 @@ def trainModel(model, trainData, validData, dataset, optim):
         total_loss, total_words, total_num_correct = 0, 0, 0
         report_loss, report_tgt_words, report_src_words, report_num_correct = 0, 0, 0, 0
         start = time.time()
-        for i in range(len(trainData)):
+        for i in tqdm(range(len(trainData))):
 
             batchIdx = batchOrder[i] if epoch > opt.curriculum else i
             # print(trainData[batchIdx])
@@ -206,7 +206,7 @@ def trainModel(model, trainData, validData, dataset, optim):
             # making one hot encoding
             src = batch[0]
 
-            print("src:",src[0].shape,  batch[1][0].shape)
+            # print("src:",src[0].shape,  batch[1][0].shape)
             inp = src[0] % vocab_size # Size is seq_len x batch_size, type: torch.cuda.LongTensor, Variable
             inp_ = torch.unsqueeze(inp, 2) # Size is seq_len x batch_size x 1, type: torch.cuda.LongTensor, Variable
             if len(opt.gpus) >= 1:
@@ -217,14 +217,13 @@ def trainModel(model, trainData, validData, dataset, optim):
 
             model.zero_grad()
             outputs = model(one_hot_scatt)
-            print("outputs:", outputs.shape)
+            # print("outputs:", outputs.shape)
             targets = batch[1]
-            print("targets:", targets.shape)
+            # print("targets:", targets.shape)
             loss, gradOutput, num_correct = memoryEfficientLoss(
                     outputs, targets, model, criterion)
             outputs.backward(gradOutput)
 
-            huh
             # update the parameters
             optim.step()
             num_words = targets.size(1)

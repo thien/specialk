@@ -6,16 +6,17 @@ import argparse
 import math
 import codecs
 import sys
-
+import os
+from tqdm import tqdm
+from copy import deepcopy as copy
 
 sys.path.append('../')
-from preprocess import seq2idx, reclip, load_file
-from preprocess import parse as bpe_parse
+
 import core.constants as Constants
 from core.utils import get_len
 from core.bpe import Encoder as bpe_encoder
-from tqdm import tqdm
-from copy import deepcopy as copy
+from preprocess import seq2idx, reclip, load_file
+from preprocess import parse as bpe_parse
 import unicodedata
 
 SOS, EOS = Constants.SOS, Constants.EOS

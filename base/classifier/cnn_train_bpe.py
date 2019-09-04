@@ -9,7 +9,7 @@ from torch.autograd import Variable
 import math
 import time
 import sys
-
+from tqdm import tqdm
 
 sys.path.append('../')
 from core.dataset import TranslationDataset, collate_fn, paired_collate_fn
@@ -122,7 +122,7 @@ def NMTCriterion(vocabSize):
 def memoryEfficientLoss(outputs, targets, generator, crit, eval=False):
     # compute generations one piece at a time
     num_correct, loss = 0, 0
-    outputs = Variable(outputs.data, requires_grad=(not eval), volatile=eval)
+    outputs = Variable(outputs.data, requires_grad=(not eval))
 
     # outputs and targets are size batch_size
     batch_size = outputs.size(0)
@@ -155,7 +155,7 @@ def eval(model, criterion, data, vocab_size, opt):
 
     model.eval()
     
-    for batch in data:
+    for batch in tqdm(data, desc="Eval"):
         src_seq, _, tgt_seq, _ = map(
                 lambda x: x.to("cuda"), batch)
         # batch = data[i][:-1] # exclude original indices
@@ -214,7 +214,7 @@ def trainModel(model, trainData, validData, dataset, optim, opt):
         report_loss, report_tgt_words, report_src_words, report_num_correct = 0, 0, 0, 0
         start = time.time()
         i = 0
-        for batch in trainData:
+        for batch in tqdm(trainData, desc="Train"):
             src_seq, _, tgt_seq, _ = map(
                 lambda x: x.to("cuda"), batch)
 
@@ -273,7 +273,7 @@ def trainModel(model, trainData, validData, dataset, optim, opt):
             i += 1
         return total_loss / total_words, total_num_correct / total_words
 
-    for epoch in range(opt.start_epoch, opt.epochs + 1):
+    for epoch in tqdm(range(opt.start_epoch, opt.epochs + 1), desc="Epoch"):
         print('')
 
         #  (1) train for one epoch on the training set

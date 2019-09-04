@@ -36,7 +36,7 @@ def setup_args(category, src):
     opt.model = NATURALNESS_DEFAULTS[category]
     opt.label0 = FAKE_LABEL
     opt.label1 = REAL_LABEL
-    opt.tgt = 1
+    opt.tgt = REAL_LABEL # we want the model to think the dataset is real. (but its fake!)
     opt.src = src
     opt.batch_size = 128
     opt.max_sent_length = 50

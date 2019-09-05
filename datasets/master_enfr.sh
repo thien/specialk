@@ -171,7 +171,6 @@ else
 
     echo -n "number of sequences: "
     wc -l < $OUTPUT_EN
-    
 fi 
 
 #

@@ -8,6 +8,21 @@ To make life easier I've added a `requirements.txt` that'll allow you to install
 
 ## Datasets
 
-To make life easier, I've set up a one-command auto running program that'll deal with downloading all the necessary datasets needed. You'll need `wget` however.
+To make life easier, I've set up a one-command auto running program that'll deal with downloading all the necessary machine-translation datasets needed to make your model. You'll need `wget` however.
 
-That being said, you'll have to compose your own newspaper dataset, since I'm near certain that releasing such a dataset is not allowed by the newspapers for a variety of reasons, ranging from ethical to legal.
+    cd datasets
+    ./master_enfr.sh
+    ./political_data.sh
+
+That being said, you'll have to compose your own newspaper dataset, since I'm near certain that releasing such a dataset is not allowed by the newspapers for a variety of reasons, ranging from ethical to legal. 
+
+## Running
+
+Once the datasets are downloaded, `cd base/scripts` and run the following:
+
+    cd prod
+    ./train_nmt_models.sh
+    ./train_pol_st_models.sh
+    ./build_pub_corpus.sh
+    ./train_pub_st_models.sh
+    ./train_pub_naturalness_models.sh

@@ -14,7 +14,19 @@ To make life easier, I've set up a one-command auto running program that'll deal
     ./master_enfr.sh
     ./political_data.sh
 
-That being said, you'll have to compose your own newspaper dataset, since I'm near certain that releasing such a dataset is not allowed by the newspapers for a variety of reasons, ranging from ethical to legal. 
+That being said, you'll have to compose your own newspaper dataset, since I'm near certain that releasing such a dataset is not allowed by the newspapers for a variety of reasons, ranging from ethical to legal. In the root directory there is a zip called newspapers. run the jupyter notebook called `downloader_manual.ipynb` to get the article dataset (you'll need to submit your login for The Times in `times.json` first).
+
+If `times.json` isn't created use the following format:
+
+    {
+        "action" : "login",
+        "username": "TIMES_USERNAME",
+        "password": "PASSWORD",
+        "s" : 1,
+        "rememberMe" : "on"
+    }
+
+After running the notebook run `convert_express.sh` and it'll move it to the base directory.
 
 ## Running
 
@@ -26,3 +38,5 @@ Once the datasets are downloaded, `cd base/scripts` and run the following:
     ./build_pub_corpus.sh
     ./train_pub_st_models.sh
     ./train_pub_naturalness_models.sh
+
+It'll probably take quite a while to train the models. 

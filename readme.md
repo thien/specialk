@@ -1,10 +1,16 @@
+# Style-Transfer with Transformers
+
+![Style Transfer from Popular Press to Quality](doc/images/preview.png)
+
+This repository contains the implementation of my summer thesis.
+
 ## Requirements
 
 You'll need `python3`, `pytorch`, `spacy`, `numpy`, `pyemd`, `bayesian-optimisation`, `rouge`, and `pyTelegramBotAPI`. You can install them via `pip3` (but you'll want to make use of CUDA so you might want to look into that too).
 
 To make life easier I've added a `requirements.txt` that'll allow you to install everything necessary (after installing `python3.6+`):
 
-        pip install -e .
+    pip install -e .
 
 ## Datasets
 
@@ -39,4 +45,4 @@ Once the datasets are downloaded, `cd base/scripts` and run the following:
     ./train_pub_st_models.sh
     ./train_pub_naturalness_models.sh
 
-It'll probably take quite a while to train the models. 
+It'll probably take quite a while to train the models.

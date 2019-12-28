@@ -17,7 +17,7 @@ To make life easier I've added a `requirements.txt` that'll allow you to install
 To make life easier, I've set up a one-command auto running program that'll deal with downloading all the necessary machine-translation datasets needed to make your model. You'll need `wget` however.
 
     cd datasets
-    ./master_enfr.sh
+    ./init_enfr_dataset.sh
     ./political_data.sh
 
 That being said, you'll have to compose your own newspaper dataset, since I'm near certain that releasing such a dataset is not allowed by the newspapers for a variety of reasons, ranging from ethical to legal. In the root directory there is a zip called newspapers. run the jupyter notebook called `downloader_manual.ipynb` to get the article dataset (you'll need to submit your login for The Times in `times.json` first).

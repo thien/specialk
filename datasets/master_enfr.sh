@@ -125,6 +125,19 @@ else
 fi
 
 #
+# GIGATEXT
+#
+if [ -e machine_translation/10-9/gigafren.en ]
+then
+    echo "already created gigatexts."
+else
+    cd machine_translation/10-9
+    ./get.sh
+    cd ../..
+    echo "done."
+fi
+
+#
 # MERGING DATASETS
 #
 

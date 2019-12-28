@@ -2,6 +2,11 @@ from nltk.corpus import words
 import unicodedata
 from tqdm import tqdm
 import argparse
+import sys
+
+sys.path.append('../base/core')
+
+from utils import get_len
 
 def load_args():
     desc = """
@@ -49,7 +54,7 @@ if __name__ == "__main__":
     m = tqdm if opt.verbose else iter
 
     with open(opt.source_a) as a, open(opt.source_b) as b:
-        before = [(sanitise(x.strip()), sanitise(y.strip())) for (x,y) in tqdm(zip(a,b), desc="Loading Files")]
+        before = [(sanitise(x.strip()), sanitise(y.strip())) for (x,y) in tqdm(zip(a,b), desc="Loading Files", total=get_len(opt.source_a))]
 
     # determine the index where the english sequence is
     fi = 0 if opt.a_label.lower() == "en" else 1

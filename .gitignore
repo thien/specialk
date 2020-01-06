@@ -1,3 +1,4 @@
+datasets/test_perl
 *.zip
 *.annotation
 style_transfer/data/

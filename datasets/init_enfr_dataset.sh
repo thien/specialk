@@ -208,7 +208,7 @@ else
     echo -n "tokenising corpus.. "
     for l in en fr
         do for f in machine_translation/*.$l
-            do perl tokenizer.perl -a -no-escape -l $l -q  < $f > $f.atok
+            do perl tokenizer.perl -threads 4 -a -no-escape -l $l -q  < $f > $f.atok
         done
     done
     echo "done. "

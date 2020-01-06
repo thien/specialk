@@ -17,11 +17,11 @@ else
     # normalise punct.
     cdir=$(pwd)
     cd ../../
-    perl normalise_punctuation.perl -a -no_escape en -q < $cdir/giga-fren.release2.fixed.en > $cdir/tmp.en  
+    perl normalise_punctuation.perl -l en < $cdir/giga-fren.release2.fixed.en > $cdir/tmp.en  
     rm $cdir/giga-fren.release2.fixed.en
     mv $cdir/tmp.en $cdir/giga-fren.release2.fixed.en
     # normalise punct.
-    perl normalise_punctuation.perl -a -no_escape fr -q < $cdir/giga-fren.release2.fixed.fr > $cdir/tmp.fr
+    perl normalise_punctuation.perl -l fr < $cdir/giga-fren.release2.fixed.fr > $cdir/tmp.fr
     rm $cdir/giga-fren.release2.fixed.fr
     mv $cdir/tmp.fr $cdir/giga-fren.release2.fixed.fr
     # go back to dir

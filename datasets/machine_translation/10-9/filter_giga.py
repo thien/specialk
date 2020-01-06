@@ -39,8 +39,8 @@ def verify(eng):
         return False
     return True
 
-with open(output_en, "w") as tgt_e, open(output_fr, "w") as tgt_f:
-    with open(src_en) as src_e, open(src_fr) as src_f:
+with open(output_en, "w", encoding="utf-8") as tgt_e, open(output_fr, "w", encoding="utf-8") as tgt_f:
+    with open(src_en, encoding="utf-8") as src_e, open(src_fr, encoding="utf-8") as src_f:
         count = 0
         for (e,f) in tqdm(zip(src_e, src_f), total=total):
             if verify(e):

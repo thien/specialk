@@ -3,6 +3,9 @@ import unicodedata
 from tqdm import tqdm
 import argparse
 import sys
+import re
+
+cjk = re.compile("[\u4E00-\u9FFF\u3000-\u303F]")
 
 sys.path.append('../base/core')
 
@@ -35,7 +38,7 @@ def sanitise(en_seq):
     """
     Replaces characters.
     """
-    return en_seq.replace('“', '"').replace('”','"').replace('’',"'").replace("·", "-").replace("– ", " ").replace("\xad", "").replace("‘", "'").replace("…", "...")
+    return cjk.sub("", en_seq.replace('“', '"').replace('”','"').replace('’',"'").replace("·", "-").replace("– ", " ").replace("\xad", "").replace("‘", "'").replace("…", "..."))
 
 def en_filter(seq, cutoff):
     """

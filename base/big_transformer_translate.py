@@ -255,8 +255,8 @@ def parse_args_and_arch(parser, input_args=None, parse_known=False):
 # In[ ]:
 
 
-pathsrc="/home/t/Downloads/wmt14.en-fr.joined-dict.transformer"
-inp="/home/t/project_model/datasets/newspapers/popular.atok.part2.en"
+pathsrc="models/wmt14.en-fr.joined-dict.transformer"
+inp="../datasets/newspapers/popular.atok.part2.en"
 bsize = 50
 input_args=['--path', pathsrc+"/model.pt", 
             '--max-len-a', "150",

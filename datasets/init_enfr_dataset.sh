@@ -173,6 +173,15 @@ else
     # rm corpus_enfr.en.raw
     # rm corpus_enfr.fr.raw
     echo " done."
+
+    echo "Normalising Punctuation.."
+    perl normalise_punctuation.perl -a -no_escape en < $OUTPUT_EN > tmp.en
+    rm $OUTPUT_EN
+    mv tmp.en $OUTPUT_EN
+    perl normalise_punctuation.perl -a -no_escape fr < $OUTPUT_FR > tmp.fr
+    rm $OUTPUT_FR
+    mv tmp.fr $OUTPUT_FR
+
     echo "Sanitising Dataset.."
     python3 sanitise.py \
     -source_a \

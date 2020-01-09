@@ -269,7 +269,7 @@ class NMTModel:
                     src_word2idx=src_word2idx,
                     tgt_word2idx=tgt_word2idx,
                     src_insts=test_src_insts),
-                num_workers=2,
+                num_workers=0,
                 batch_size=self.opt.batch_size,
                 collate_fn=collate_fn)
 
@@ -287,7 +287,7 @@ class NMTModel:
                     src_word2idx=data['dict']['src'],
                     tgt_word2idx=data['dict']['tgt'],
                     src_insts=test_src_insts),
-                num_workers=2,
+                num_workers=0,
                 batch_size=self.opt.batch_size,
                 collate_fn=collate_fn)
             
@@ -321,7 +321,7 @@ class NMTModel:
                 tgt_word2idx=tgt_word2idx,
                 src_insts=data['train']['src'],
                 tgt_insts=data['train']['tgt']),
-            num_workers=2,
+            num_workers=0,
             batch_size=opt.batch_size,
             collate_fn=paired_collate_fn,
             shuffle=True)
@@ -332,7 +332,7 @@ class NMTModel:
                 tgt_word2idx=tgt_word2idx,
                 src_insts=data['valid']['src'],
                 tgt_insts=data['valid']['tgt']),
-            num_workers=2,
+            num_workers=0,
             batch_size=opt.batch_size,
             collate_fn=paired_collate_fn)
         

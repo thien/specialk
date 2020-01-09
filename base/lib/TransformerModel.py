@@ -218,7 +218,7 @@ class TransformerModel(NMTModel):
         hypotheses = []
 
         with open(self.opt.output, 'w') as f:
-            for batch in tqdm(test_loader, desc='Translating', leave=False):
+            for batch in tqdm(test_loader, desc='Translating', leave=False, dynamic_ncols=True):
                 # get sequences through beam search.
                 all_hyp, _ = translator.translate_batch(*batch)
                 # write outputs as we get them so we can see progress.
@@ -367,9 +367,11 @@ class TransformerModel(NMTModel):
                 self.model.generator.train()
 
         total_loss, n_word_total, n_word_correct = 0, 0, 0
+        
 
         label = "Training" if not validation else "Validation"
-        for batch in tqdm(dataset, desc=' - '+label, leave=False):
+        for batch in tqdm(dataset, desc=' - '+label, leave=False, dynamic_ncols=True):
+    
             # prepare data
             src_seq, src_pos, tgt_seq, tgt_pos = map(
                 lambda x: x.to(self.device), batch)
@@ -398,8 +400,8 @@ class TransformerModel(NMTModel):
                     self.save_eval_outputs(pred)
 
             # bartending outputs.
-            total_loss += loss.item()
-            n_word_total += gold.ne(self.constants.PAD).sum().item()
+            total_loss += loss.detach().item()
+            n_word_total += gold.ne(self.constants.PAD).sum().detach().item()
             n_word_correct += n_correct
 
         loss_per_word = total_loss/n_word_total

@@ -81,13 +81,13 @@ if __name__ == "__main__":
 
     # convert sequences
     if is_bpe:
-        for g in tqdm(dataset, desc="Converting tokens into IDs"):
+        for g in tqdm(dataset, desc="Converting tokens into IDs", dynamic_ncols=True):
             for key in dataset[g]:
                 bpe_method = src_bpe if key == "src" else tgt_bpe
                 bpe_method.mute()
                 dataset[g][key] = [f for f in bpe_method.transform(tqdm(raw[g][key]))]
     else:
-        for g in tqdm(dataset, desc="Converting tokens into IDs"):
+        for g in tqdm(dataset, desc="Converting tokens into IDs", dynamic_ncols=True):
             for key in dataset[g]:
                 method = src_word2idx if key == "src" else tgt_word2idx
                 dataset[g][key] = seq2idx(dataset[g][key], method)

@@ -65,7 +65,7 @@ def build_vocabulary_idx(sentences, min_word_count, vocab_size=None):
     """
     # compute vocabulary and token counts.
     vocabulary = {}
-    for sentence in tqdm(sentences,desc="Vocabulary Search"):
+    for sentence in tqdm(sentences,desc="Vocabulary Search", dynamic_ncols=True):
         for word in sentence:
             if word not in vocabulary:
                 vocabulary[word] = 0

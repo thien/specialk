@@ -305,7 +305,7 @@ def compute_epoch(self, class_input, class_model, dataset, validation=False):
     recon = []
 
     i = 0
-    for batch in tqdm(dataset, desc="Training"):
+    for batch in tqdm(dataset, desc="Training", dynamic_ncols=True):
         i += 1
         self.model.zero_grad()
         src_seq, src_pos, tgt_seq, tgt_pos = map(
@@ -400,7 +400,7 @@ if __name__ == "__main__":
     
     print("model.opt.directory:", model.opt.directory)
 
-    for ep in tqdm(range(1,opt.epochs+1), desc="Epoch"):
+    for ep in tqdm(range(1,opt.epochs+1), desc="Epoch", dynamic_ncols=True):
         # train
         model.opt.current_epoch = ep
         train_results = compute_epoch(model, class_input, classifier, model.training_data)

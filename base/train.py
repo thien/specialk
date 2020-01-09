@@ -218,7 +218,7 @@ def train_model(opt):
         model.model.decoder = nn.DataParallel(model.model.decoder)
 
     
-    for epoch in tqdm(range(1, model.opt.epochs+1), desc='Epochs'):
+    for epoch in tqdm(range(1, model.opt.epochs+1), desc='Epochs', dynamic_ncols=True):
         model.opt.current_epoch = epoch
         stats = model.train(epoch)
         if model.opt.save_model:

@@ -43,7 +43,7 @@ fi
 MODEL="transformer"
 EP=3
 MODELDIM=512
-BATCHSIZE=64
+BATCHSIZE=45
 
 # ENFR_DIRNAME="enfr_bpe_gold_master"
 
@@ -77,7 +77,8 @@ python3 train.py \
     -save_mode all \
     -directory_name $FREN_DIRNAME \
     -cuda \
-    -multi_gpu
+    -checkpoint_encoder "models/"$FREN_DIRNAME"/encoder_epoch_1.chkpt" \
+    -checkpoint_decoder "models/"$FREN_DIRNAME"/decoder_epoch_1.chkpt"
 
 python3 core/telegram.py -m "[Snorlax] Finished training gold master fr-en models."
 

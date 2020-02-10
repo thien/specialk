@@ -45,7 +45,7 @@ fi
 MODEL="transformer"
 EP=3
 MODELDIM=512
-BATCHSIZE=50
+BATCHSIZE=45
 
 ENFR_DIRNAME="fren_bpe_gold_master_mk2"
 FREN_DIRNAME="fren_bpe_gold_master_mk2"

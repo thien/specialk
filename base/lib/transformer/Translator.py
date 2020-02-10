@@ -1,7 +1,4 @@
-'''
-This module will handle the text generation with beam search. 
-This is called once the model is trained.
-'''
+''' This module will handle the text generation with beam search. '''
 
 import torch
 import torch.nn as nn
@@ -102,7 +99,7 @@ class Translator(object):
             def predict_word(dec_seq, dec_pos, src_seq, enc_output, n_active_inst, n_bm):
                 dec_output, *_ = self.model.decoder(dec_seq, dec_pos, src_seq, enc_output)
                 dec_output = dec_output[:, -1, :]  # Pick the last step: (bh * bm) * d_h
-                word_prob = F.log_softmax(self.model.generator(dec_output), dim=1)
+                word_prob = F.log_softmax(self.model.tgt_word_prj(dec_output), dim=1)
                 word_prob = word_prob.view(n_active_inst, n_bm, -1)
 
                 return word_prob
@@ -141,7 +138,6 @@ class Translator(object):
         with torch.no_grad():
             #-- Encode
             src_seq, src_pos = src_seq.to(self.device), src_pos.to(self.device)
-            
             src_enc, *_ = self.model.encoder(src_seq, src_pos)
 
             #-- Repeat data for beam search
@@ -158,7 +154,7 @@ class Translator(object):
             inst_idx_to_position_map = get_inst_idx_to_tensor_position_map(active_inst_idx_list)
 
             #-- Decode
-            for len_dec_seq in range(1, self.max_token_seq_len + 1):
+            for len_dec_seq in range(1, self.model_opt.max_token_seq_len + 1):
 
                 active_inst_idx_list = beam_decode_step(
                     inst_dec_beams, len_dec_seq, src_seq, src_enc, inst_idx_to_position_map, n_bm)

@@ -63,7 +63,7 @@ BATCHSIZE=45
 
 # python3 core/telegram.py -m "[Snorlax] Finished training gold master en-fr models."
 
-FREN_DIRNAME="fren_bpe_gold_master_mk2"
+FREN_DIRNAME="fren_bpe_gold_master_mk2_updated"
 
 python3 train.py \
     -log $true \
@@ -76,9 +76,9 @@ python3 train.py \
     -save_model \
     -save_mode all \
     -directory_name $FREN_DIRNAME \
-    -cuda \
-    -checkpoint_encoder "models/"$FREN_DIRNAME"/encoder_epoch_1.chkpt" \
-    -checkpoint_decoder "models/"$FREN_DIRNAME"/decoder_epoch_1.chkpt"
+    -cuda 
+    # -checkpoint_encoder "models/"$FREN_DIRNAME"/encoder_epoch_1.chkpt" \
+    # -checkpoint_decoder "models/"$FREN_DIRNAME"/decoder_epoch_1.chkpt"
 
 python3 core/telegram.py -m "[Snorlax] Finished training gold master fr-en models."
 

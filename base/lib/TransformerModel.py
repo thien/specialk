@@ -53,9 +53,11 @@ class TransformerModel(NMTModel):
         self.model = Transformer(
             self.opt.src_vocab_size,
             self.opt.tgt_vocab_size,
-            self.opt.max_token_seq_len,
-            tgt_emb_prj_weight_sharing=self.opt.proj_share_weight,
-            emb_src_tgt_weight_sharing=self.opt.embs_share_weight,
+            self.constants.PAD,
+            self.constants.PAD,
+            n_position=self.opt.max_token_seq_len,
+            trg_emb_prj_weight_sharing=self.opt.proj_share_weight,
+            emb_src_trg_weight_sharing=self.opt.embs_share_weight,
             d_k=self.opt.d_k,
             d_v=self.opt.d_v,
             d_model=self.opt.d_model,
@@ -114,7 +116,6 @@ class TransformerModel(NMTModel):
             if self.opt.verbose:
                 print("[Info] Loaded encoder model.")
         if decoder_path:
-
             dec = torch.load(decoder_path, "cpu")
 
             if list(dec['model'].keys())[0][:7] == "module.":
@@ -320,6 +321,52 @@ class TransformerModel(NMTModel):
         n_correct = n_correct.masked_select(non_pad_mask).sum().item()
         return loss, n_correct
 
+    @staticmethod
+    def cal_performance(pred, gold, trg_pad_idx, smoothing=False):
+        ''' Apply label smoothing if needed '''
+
+        loss = cal_loss(pred, gold, trg_pad_idx, smoothing=smoothing)
+
+        pred = pred.max(1)[1]
+        gold = gold.contiguous().view(-1)
+        non_pad_mask = gold.ne(trg_pad_idx)
+        n_correct = pred.eq(gold).masked_select(non_pad_mask).sum().item()
+        n_word = non_pad_mask.sum().item()
+
+        return loss, n_correct, n_word
+
+    @staticmethod
+    def cal_loss(pred, gold, trg_pad_idx, smoothing=False):
+        ''' Calculate cross entropy loss, apply label smoothing if needed. '''
+
+        gold = gold.contiguous().view(-1)
+
+        if smoothing:
+            eps = 0.1
+            n_class = pred.size(1)
+
+            one_hot = torch.zeros_like(pred).scatter(1, gold.view(-1, 1), 1)
+            one_hot = one_hot * (1 - eps) + (1 - one_hot) * eps / (n_class - 1)
+            log_prb = F.log_softmax(pred, dim=1)
+
+            non_pad_mask = gold.ne(trg_pad_idx)
+            loss = -(one_hot * log_prb).sum(dim=1)
+            loss = loss.masked_select(non_pad_mask).sum()  # average later
+        else:
+            loss = F.cross_entropy(pred, gold, ignore_index=trg_pad_idx, reduction='sum')
+        return loss
+
+    @staticmethod    
+    def patch_src(src, pad_idx):
+        src = src.transpose(0, 1)
+        return src
+
+    @staticmethod
+    def patch_trg(trg, pad_idx):
+        trg = trg.transpose(0, 1)
+        trg, gold = trg[:, :-1], trg[:, 1:].contiguous().view(-1)
+        return trg, gold
+
     def calculate_loss(self, pred, gold, smoothing=False):
         """
         Computes cross entropy loss,
@@ -373,21 +420,36 @@ class TransformerModel(NMTModel):
         for batch in tqdm(dataset, desc=' - '+label, leave=False, dynamic_ncols=True):
     
             # prepare data
-            src_seq, src_pos, tgt_seq, tgt_pos = map(
-                lambda x: x.to(self.device), batch)
+            src_seq, _, tgt_seq, _ = batch
 
+            src_seq = self.patch_src(src_seq, self.constants.PAD).to(self.device)
+            tgt_seq, gold = self.patch_trg(tgt_seq, self.constants.PAD)
+            tgt_seq = tgt_seq.to(self.device)
+            gold = gold.to(self.device)
+
+
+            # src_seq, src_pos, tgt_seq, tgt_pos = map(
+            #     lambda x: x.to(self.device), batch)
     
-            gold = tgt_seq[:, 1:]
+            # gold = tgt_seq[:, 1:]
             if not validation:
                 self.optimiser.zero_grad()
+                
             # compute forward propagation
-            pred = self.model(src_seq, src_pos, tgt_seq, tgt_pos)
+            print(src_seq.shape, tgt_seq.shape)
+            pred = self.model(src_seq, tgt_seq)
             
             # compute performance
-            loss, n_correct = self.performance(
-                                pred.view(-1, pred.size(2)), 
-                                gold, 
-                                smoothing=self.opt.label_smoothing)
+            loss, n_correct, n_word = self.cal_performance(
+                            pred,
+                            gold,
+                            self.constants.PAD,
+                            smoothing=self.opt.label_smoothing) 
+
+            # loss, n_correct = self.performance(
+            #                     pred.view(-1, pred.size(2)), 
+            #                     gold, 
+            #                     smoothing=self.opt.label_smoothing)
 
             if not validation:
                 # backwards propagation

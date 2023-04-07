@@ -1,4 +1,3 @@
-
 from . import Constants
 from . import Modules
 from . import Layers
@@ -8,10 +7,4 @@ from . import Translator
 from . import Beam
 from . import Optim
 
-__all__ = [
-    Constants,
-    Modules, Layers,
-    SubLayers, Models, Optim,
-    Translator, Beam]
-
-
+__all__ = [Constants, Modules, Layers, SubLayers, Models, Optim, Translator, Beam]

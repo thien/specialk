@@ -1,4 +1,3 @@
-
 # PAD = 0
 # UNK = 1
 # BOS = 2
@@ -11,6 +10,7 @@
 
 # import os
 from core.constants import *
+
 # if os.getcwd().split("/")[-1] == "transformer":
 #     from core.constants import *
 # else:

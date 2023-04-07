@@ -22,7 +22,11 @@ from .Dict import Dict
 
 __all__ = [
     Dataset,
-    Constants, Models, CNNModels, Optim,
-    Translator, Translator_style, Beam]
-
-
+    Constants,
+    Models,
+    CNNModels,
+    Optim,
+    Translator,
+    Translator_style,
+    Beam,
+]

@@ -20,10 +20,8 @@ from core.utils import get_len
 # In[2]:
 
 
-
-
-Batch = namedtuple('Batch', 'ids src_tokens src_lengths')
-Translation = namedtuple('Translation', 'src_str hypos pos_scores alignments')
+Batch = namedtuple("Batch", "ids src_tokens src_lengths")
+Translation = namedtuple("Translation", "src_str hypos pos_scores alignments")
 
 
 def buffered_read(input, buffer_size):
@@ -55,8 +53,9 @@ def make_batches(lines, args, task, max_positions, encode_fn):
     ).next_epoch_itr(shuffle=False)
     for batch in itr:
         yield Batch(
-            ids=batch['id'],
-            src_tokens=batch['net_input']['src_tokens'], src_lengths=batch['net_input']['src_lengths'],
+            ids=batch["id"],
+            src_tokens=batch["net_input"]["src_tokens"],
+            src_lengths=batch["net_input"]["src_lengths"],
         )
 
 
@@ -71,8 +70,12 @@ def main(args):
     if args.max_tokens is None and args.max_sentences is None:
         args.max_sentences = 1
 
-    assert not args.sampling or args.nbest == args.beam,         '--sampling requires --nbest to be equal to --beam'
-    assert not args.max_sentences or args.max_sentences <= args.buffer_size,         '--max-sentences/--batch-size cannot be larger than --buffer-size'
+    assert (
+        not args.sampling or args.nbest == args.beam
+    ), "--sampling requires --nbest to be equal to --beam"
+    assert (
+        not args.max_sentences or args.max_sentences <= args.buffer_size
+    ), "--max-sentences/--batch-size cannot be larger than --buffer-size"
 
     print(args)
 
@@ -82,9 +85,9 @@ def main(args):
     task = tasks.setup_task(args)
 
     # Load ensemble
-    print('| loading model(s) from {}'.format(args.path))
+    print("| loading model(s) from {}".format(args.path))
     models, _model_args = checkpoint_utils.load_model_ensemble(
-        args.path.split(':'),
+        args.path.split(":"),
         arg_overrides=eval(args.model_overrides),
         task=task,
     )
@@ -130,17 +133,19 @@ def main(args):
     align_dict = utils.load_align_dict(args.replace_unk)
 
     max_positions = utils.resolve_max_positions(
-        task.max_positions(),
-        *[model.max_positions() for model in models]
+        task.max_positions(), *[model.max_positions() for model in models]
     )
 
-#     if args.buffer_size > 1:
-#         print('| Sentence buffer size:', args.buffer_size)
-#     print('| Type the input sentence and press return:')
+    #     if args.buffer_size > 1:
+    #         print('| Sentence buffer size:', args.buffer_size)
+    #     print('| Type the input sentence and press return:')
     start_id = 0
     i = 0
     with open("sacrebleu_fr.txt", "w") as writer:
-        for inputs in tqdm(buffered_read(args.input, args.buffer_size), total=int(get_len(args.input)/args.buffer_size)):
+        for inputs in tqdm(
+            buffered_read(args.input, args.buffer_size),
+            total=int(get_len(args.input) / args.buffer_size),
+        ):
             results = []
             for batch in make_batches(inputs, args, task, max_positions, encode_fn):
                 src_tokens = batch.src_tokens
@@ -150,9 +155,9 @@ def main(args):
                     src_lengths = src_lengths.cuda()
 
                 sample = {
-                    'net_input': {
-                        'src_tokens': src_tokens,
-                        'src_lengths': src_lengths,
+                    "net_input": {
+                        "src_tokens": src_tokens,
+                        "src_lengths": src_lengths,
                     },
                 }
                 translations = task.inference_step(generator, models, sample)
@@ -165,14 +170,16 @@ def main(args):
             for id, src_tokens, hypos in sorted(results, key=lambda x: x[0]):
                 if src_dict is not None:
                     src_str = src_dict.string(src_tokens, args.remove_bpe)
-    #                 print('S-{}\t{}'.format(id, src_str))
+                #                 print('S-{}\t{}'.format(id, src_str))
 
                 # Process top predictions
-                for hypo in hypos[:min(len(hypos), args.nbest)]:
+                for hypo in hypos[: min(len(hypos), args.nbest)]:
                     hypo_tokens, hypo_str, alignment = utils.post_process_prediction(
-                        hypo_tokens=hypo['tokens'].int().cpu(),
+                        hypo_tokens=hypo["tokens"].int().cpu(),
                         src_str=src_str,
-                        alignment=hypo['alignment'].int().cpu() if hypo['alignment'] is not None else None,
+                        alignment=hypo["alignment"].int().cpu()
+                        if hypo["alignment"] is not None
+                        else None,
                         align_dict=align_dict,
                         tgt_dict=tgt_dict,
                         remove_bpe=args.remove_bpe,
@@ -192,9 +199,9 @@ def main(args):
 
 def parse_args_and_arch(parser, input_args=None, parse_known=False):
     parser.add_argument("-f")
-#     parser.add_argument("data")
+    #     parser.add_argument("data")
     from fairseq.models import ARCH_MODEL_REGISTRY, ARCH_CONFIG_REGISTRY
-    
+
     # The parser doesn't know about model/criterion/optimizer-specific args, so
     # we parse twice. First we parse the model/criterion/optimizer, then we
     # parse a second time after adding the *-specific arguments.
@@ -202,9 +209,9 @@ def parse_args_and_arch(parser, input_args=None, parse_known=False):
     args, _ = parser.parse_known_args(input_args)
 
     # Add model-specific args to parser.
-    if hasattr(args, 'arch'):
+    if hasattr(args, "arch"):
         model_specific_group = parser.add_argument_group(
-            'Model-specific configuration',
+            "Model-specific configuration",
             # Only include attributes which are explicitly given as command-line
             # arguments or which have default values.
             argument_default=argparse.SUPPRESS,
@@ -213,18 +220,21 @@ def parse_args_and_arch(parser, input_args=None, parse_known=False):
 
     # Add *-specific args to parser.
     from fairseq.registry import REGISTRIES
+
     for registry_name, REGISTRY in REGISTRIES.items():
         choice = getattr(args, registry_name, None)
         if choice is not None:
-            cls = REGISTRY['registry'][choice]
-            if hasattr(cls, 'add_args'):
+            cls = REGISTRY["registry"][choice]
+            if hasattr(cls, "add_args"):
                 cls.add_args(parser)
-    if hasattr(args, 'task'):
+    if hasattr(args, "task"):
         from fairseq.tasks import TASK_REGISTRY
+
         TASK_REGISTRY[args.task].add_args(parser)
-    if getattr(args, 'use_bmuf', False):
+    if getattr(args, "use_bmuf", False):
         # hack to support extra args for block distributed data parallelism
         from fairseq.optim.bmuf import FairseqBMUF
+
         FairseqBMUF.add_args(parser)
 
     # Parse a second time.
@@ -235,15 +245,15 @@ def parse_args_and_arch(parser, input_args=None, parse_known=False):
         extra = None
 
     # Post-process args.
-    if hasattr(args, 'max_sentences_valid') and args.max_sentences_valid is None:
+    if hasattr(args, "max_sentences_valid") and args.max_sentences_valid is None:
         args.max_sentences_valid = args.max_sentences
-    if hasattr(args, 'max_tokens_valid') and args.max_tokens_valid is None:
+    if hasattr(args, "max_tokens_valid") and args.max_tokens_valid is None:
         args.max_tokens_valid = args.max_tokens
-    if getattr(args, 'memory_efficient_fp16', False):
+    if getattr(args, "memory_efficient_fp16", False):
         args.fp16 = True
 
     # Apply architecture configuration.
-    if hasattr(args, 'arch'):
+    if hasattr(args, "arch"):
         ARCH_CONFIG_REGISTRY[args.arch](args)
 
     if parse_known:
@@ -255,17 +265,40 @@ def parse_args_and_arch(parser, input_args=None, parse_known=False):
 # In[ ]:
 
 
-pathsrc="models/wmt14.en-fr.joined-dict.transformer"
-inp="../datasets/newspapers/popular.atok.part2.en"
+pathsrc = "models/wmt14.en-fr.joined-dict.transformer"
+inp = "../datasets/newspapers/popular.atok.part2.en"
 bsize = 50
-input_args=['--path', pathsrc+"/model.pt", 
-            '--max-len-a', "150",
-            '--max-len-b', "150",
-#             "data", pathsrc, 
-            "--beam", "5", "--source-lang", "en", "--target-lang","fr", 
-            "--tokenizer", "moses", "--bpe", "subword_nmt", "--bpe-codes", pathsrc+"/bpecodes",
-            "--batch-size", str(bsize), "--buffer-size",  str(bsize), "--remove-bpe", "--input", inp,
-           "--quiet", pathsrc]
+input_args = [
+    "--path",
+    pathsrc + "/model.pt",
+    "--max-len-a",
+    "150",
+    "--max-len-b",
+    "150",
+    #             "data", pathsrc,
+    "--beam",
+    "5",
+    "--source-lang",
+    "en",
+    "--target-lang",
+    "fr",
+    "--tokenizer",
+    "moses",
+    "--bpe",
+    "subword_nmt",
+    "--bpe-codes",
+    pathsrc + "/bpecodes",
+    "--batch-size",
+    str(bsize),
+    "--buffer-size",
+    str(bsize),
+    "--remove-bpe",
+    "--input",
+    inp,
+    "--quiet",
+    pathsrc,
+]
+
 
 def cli_main():
     parser = options.get_generation_parser(interactive=True)
@@ -273,12 +306,8 @@ def cli_main():
     main(args)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli_main()
 
 
 # In[ ]:
-
-
-
-

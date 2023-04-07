@@ -10,18 +10,17 @@ from . import Constants
 
 
 class Dataset(object):
-
     def __init__(self, srcData, tgtData, batchSize, cuda, volatile=False):
         self.src = srcData
         if tgtData:
             self.tgt = tgtData
-            assert(len(self.src) == len(self.tgt))
+            assert len(self.src) == len(self.tgt)
         else:
             self.tgt = None
         self.cuda = cuda
 
         self.batchSize = batchSize
-        self.numBatches = math.ceil(len(self.src)/batchSize)
+        self.numBatches = math.ceil(len(self.src) / batchSize)
         self.volatile = volatile
 
     def _batchify(self, data, align_right=False, include_lengths=False):
@@ -41,18 +40,25 @@ class Dataset(object):
     def __getitem__(self, index):
         assert index < self.numBatches, "%d > %d" % (index, self.numBatches)
         srcBatch, lengths = self._batchify(
-            self.src[index*self.batchSize:(index+1)*self.batchSize],
-            align_right=False, include_lengths=True)
+            self.src[index * self.batchSize : (index + 1) * self.batchSize],
+            align_right=False,
+            include_lengths=True,
+        )
 
         if self.tgt:
             tgtBatch = self._batchify(
-                self.tgt[index*self.batchSize:(index+1)*self.batchSize])
+                self.tgt[index * self.batchSize : (index + 1) * self.batchSize]
+            )
         else:
             tgtBatch = None
 
         # within batch sorting by decreasing length for variable length rnns
         indices = range(len(srcBatch))
-        batch = zip(indices, srcBatch) if tgtBatch is None else zip(indices, srcBatch, tgtBatch)
+        batch = (
+            zip(indices, srcBatch)
+            if tgtBatch is None
+            else zip(indices, srcBatch, tgtBatch)
+        )
         batch, lengths = zip(*sorted(zip(batch, lengths), key=lambda x: -x[1]))
         if tgtBatch is None:
             indices, srcBatch = zip(*batch)
@@ -72,7 +78,6 @@ class Dataset(object):
 
     def __len__(self):
         return self.numBatches
-
 
     def shuffle(self):
         data = list(zip(self.src, self.tgt))

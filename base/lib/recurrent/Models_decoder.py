@@ -1,15 +1,17 @@
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-from . import modules
-from torch.nn.utils.rnn import pad_packed_sequence as unpack
 from torch.nn.utils.rnn import pack_padded_sequence as pack
+from torch.nn.utils.rnn import pad_packed_sequence as unpack
+
+from . import modules
 
 """
 I'm not sure where this is used.
 
 Potentially teacher forced outputs?
 """
+
 
 class StackedLSTM(nn.Module):
     def __init__(self, num_layers, input_size, rnn_size, dropout):
@@ -40,7 +42,6 @@ class StackedLSTM(nn.Module):
 
 
 class Decoder(nn.Module):
-
     def __init__(self, opt, dicts):
         self.layers = opt.layers
         self.input_feed = opt.input_feed
@@ -49,9 +50,9 @@ class Decoder(nn.Module):
             input_size += opt.rnn_size
 
         super(Decoder, self).__init__()
-        self.word_lut = nn.Embedding(dicts.size(),
-                                  opt.word_vec_size,
-                                  padding_idx=onmt.Constants.PAD)
+        self.word_lut = nn.Embedding(
+            dicts.size(), opt.word_vec_size, padding_idx=onmt.Constants.PAD
+        )
         self.rnn = StackedLSTM(opt.layers, input_size, opt.rnn_size, opt.dropout)
         self.attn = modules.GlobalAttention(opt.rnn_size)
         self.dropout = nn.Dropout(opt.dropout)
@@ -66,7 +67,7 @@ class Decoder(nn.Module):
 
     def forward(self, input, hidden, context, init_output):
         emb = self.word_lut(input)
-        #print(context.size())
+        # print(context.size())
         # n.b. you can increase performance if you compute W_ih * x for all
         # iterations in parallel, but that's only possible if
         # self.input_feed=False
@@ -87,7 +88,6 @@ class Decoder(nn.Module):
 
 
 class DecoderModel(nn.Module):
-
     def __init__(self, decoder):
         super(DecoderModel, self).__init__()
         self.decoder = decoder
@@ -101,20 +101,25 @@ class DecoderModel(nn.Module):
         #  the encoder hidden is  (layers*directions) x batch x dim
         #  we need to convert it to layers x batch x (directions*dim)
         if self.decoder.num_directions == 2:
-            return h.view(h.size(0) // 2, 2, h.size(1), h.size(2)) \
-                    .transpose(1, 2).contiguous() \
-                    .view(h.size(0) // 2, h.size(1), h.size(2) * 2)
+            return (
+                h.view(h.size(0) // 2, 2, h.size(1), h.size(2))
+                .transpose(1, 2)
+                .contiguous()
+                .view(h.size(0) // 2, h.size(1), h.size(2) * 2)
+            )
         else:
             return h
 
     def forward(self, input, enc_hidden, context):
-        #src = input[0]
+        # src = input[0]
         tgt = input[1][:-1]  # exclude last target from inputs
-        #enc_hidden, context = self.encoder(src)
+        # enc_hidden, context = self.encoder(src)
         init_output = self.make_init_decoder_output(context)
 
-        enc_hidden = (self._fix_enc_hidden(enc_hidden[0]),
-                      self._fix_enc_hidden(enc_hidden[1]))
+        enc_hidden = (
+            self._fix_enc_hidden(enc_hidden[0]),
+            self._fix_enc_hidden(enc_hidden[1]),
+        )
 
         out, dec_hidden, _attn = self.decoder(tgt, enc_hidden, context, init_output)
 

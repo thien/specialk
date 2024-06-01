@@ -1,5 +1,7 @@
-import torch
 import codecs
+
+import torch
+
 
 class Dict(object):
     def __init__(self, data=None, lower=False):
@@ -26,7 +28,7 @@ class Dict(object):
             fields = line.split()
             if len(fields) > 2:
                 idx = int(fields[-1])
-                label = ' '.join(fields[:-1])
+                label = " ".join(fields[:-1])
             else:
                 label = fields[0]
                 idx = int(fields[1])
@@ -34,10 +36,10 @@ class Dict(object):
 
     # Write entries to a file.
     def writeFile(self, filename):
-        with codecs.open(filename, 'w', "utf-8") as file:
+        with codecs.open(filename, "w", "utf-8") as file:
             for i in range(self.size()):
                 label = self.idxToLabel[i]
-                file.write('%s %d\n' % (label, i))
+                file.write("%s %d\n" % (label, i))
 
         file.close()
 
@@ -93,8 +95,7 @@ class Dict(object):
             return self
 
         # Only keep the `size` most frequent entries.
-        freq = torch.Tensor(
-                [self.frequencies[i] for i in range(len(self.frequencies))])
+        freq = torch.Tensor([self.frequencies[i] for i in range(len(self.frequencies))])
         _, idx = torch.sort(freq, 0, True)
 
         newDict = Dict()

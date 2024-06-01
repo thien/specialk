@@ -6,34 +6,39 @@ for use when training nmt models.
 """
 
 import argparse
-from tqdm import tqdm
-import torch
-import core.constants as Constants
-from core.bpe import Encoder as bpe_encoder
-from preprocess import load_file, seq2idx, reclip
 from copy import deepcopy as copy
+
+import core.constants as Constants
+import torch
+from core.bpe import Encoder as bpe_encoder
+from preprocess import load_file, reclip, seq2idx
+from tqdm import tqdm
+
 
 def load_args():
     parser = argparse.ArgumentParser(description="train.py")
     # data options
-    parser.add_argument('-base', required=True,
-                        help='path to the *.pt file that was computed through preprocess.py')
-    parser.add_argument('-train_src', required=True)
-    parser.add_argument('-train_tgt', required=True)
-    parser.add_argument('-valid_src', required=True)
-    parser.add_argument('-valid_tgt', required=True)
-    parser.add_argument('-save_name', required=True)
+    parser.add_argument(
+        "-base",
+        required=True,
+        help="path to the *.pt file that was computed through preprocess.py",
+    )
+    parser.add_argument("-train_src", required=True)
+    parser.add_argument("-train_tgt", required=True)
+    parser.add_argument("-valid_src", required=True)
+    parser.add_argument("-valid_tgt", required=True)
+    parser.add_argument("-save_name", required=True)
     parser.add_argument("-max_seq_len", type=int, default=-1)
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     opt = load_args()
-    
-    base = torch.load(opt.base)
-    settings = base['settings']
 
-    max_word_len= settings.max_word_seq_len
+    base = torch.load(opt.base)
+    settings = base["settings"]
+
+    max_word_len = settings.max_word_seq_len
     if opt.max_seq_len > 0:
         max_word_len = opt.max_seq_len - 2
 
@@ -42,41 +47,39 @@ if __name__ == "__main__":
     is_bpe = settings.format.lower() == "bpe"
 
     dataset = {
-        'train' : {
-            'src' : opt.train_src,
-            'tgt' : opt.train_tgt
-        },
-        'valid' : {
-            'src' : opt.valid_src,
-            'tgt' : opt.valid_tgt
-        }
+        "train": {"src": opt.train_src, "tgt": opt.train_tgt},
+        "valid": {"src": opt.valid_src, "tgt": opt.valid_tgt},
     }
 
     raw = copy(dataset)
 
     for g in dataset:
-        source, target = raw[g]['src'], raw[g]['tgt']
-        src = load_file(source, settings.format, settings.case_sensitive, settings.max_train_seq)
-        tgt = load_file(target, settings.format, settings.case_sensitive, settings.max_train_seq)
+        source, target = raw[g]["src"], raw[g]["tgt"]
+        src = load_file(
+            source, settings.format, settings.case_sensitive, settings.max_train_seq
+        )
+        tgt = load_file(
+            target, settings.format, settings.case_sensitive, settings.max_train_seq
+        )
         if len(src) != len(tgt):
-            print('[Warning] The {} sequence counts are not equal.'.format(g))
+            print("[Warning] The {} sequence counts are not equal.".format(g))
         # remove empty instances
-        src,tgt = list(zip(*[(s, t) for s, t in zip(src, tgt) if s and t]))
-        raw[g]['src'], raw[g]['tgt'] = src, tgt
+        src, tgt = list(zip(*[(s, t) for s, t in zip(src, tgt) if s and t]))
+        raw[g]["src"], raw[g]["tgt"] = src, tgt
 
     # load sequence converters.
     if is_bpe:
-        src_bpe = bpe_encoder.from_dict(base['dict']['src'])
-        tgt_bpe = bpe_encoder.from_dict(base['dict']['tgt'])
+        src_bpe = bpe_encoder.from_dict(base["dict"]["src"])
+        tgt_bpe = bpe_encoder.from_dict(base["dict"]["tgt"])
     else:
-        src_word2idx = base['dict']['src']
-        tgt_word2idx = base['dict']['tgt']
+        src_word2idx = base["dict"]["src"]
+        tgt_word2idx = base["dict"]["tgt"]
         # tokenise
         for g in raw:
-            source, target = raw[g]['src'], raw[g]['tgt']
+            source, target = raw[g]["src"], raw[g]["tgt"]
             source = [seq.split()[:max_word_len] for seq in source]
             target = [seq.split()[:max_word_len] for seq in target]
-            dataset[g]['src'], dataset[g]['tgt'] = source, target
+            dataset[g]["src"], dataset[g]["tgt"] = source, target
         del raw
 
     # convert sequences
@@ -103,8 +106,10 @@ if __name__ == "__main__":
                 for i in range(len(sequences)):
                     ref_seq = raw[g][key][i]
                     bpe_seq = sequences[i]
-                    dataset[g][key][i] = reclip(ref_seq, bpe_seq, bpe_method, max_word_len)
-    
+                    dataset[g][key][i] = reclip(
+                        ref_seq, bpe_seq, bpe_method, max_word_len
+                    )
+
     # add <s>, </s>
     for g in tqdm(dataset, desc="Adding SOS, EOS tokens"):
         SOS, EOS = Constants.SOS, Constants.EOS
@@ -113,23 +118,17 @@ if __name__ == "__main__":
 
     # setup data to save.
     data = {
-        'settings' : settings,
-        'dict' : {
-            'src' : src_word2idx if not is_bpe else src_bpe.vocabs_to_dict(False),
-            'tgt' : tgt_word2idx if not is_bpe else tgt_bpe.vocabs_to_dict(False)
+        "settings": settings,
+        "dict": {
+            "src": src_word2idx if not is_bpe else src_bpe.vocabs_to_dict(False),
+            "tgt": tgt_word2idx if not is_bpe else tgt_bpe.vocabs_to_dict(False),
         },
-        'train' : {
-            'src' : dataset['train']['src'],
-            'tgt' : dataset['train']['tgt']
-        },
-        'valid' : {
-            'src' : dataset['valid']['src'],
-            'tgt' : dataset['valid']['tgt']
-        }
+        "train": {"src": dataset["train"]["src"], "tgt": dataset["train"]["tgt"]},
+        "valid": {"src": dataset["valid"]["src"], "tgt": dataset["valid"]["tgt"]},
     }
 
     # dump information.
     filename = opt.save_name + ".pt"
-    print('[Info] Dumping the processed data to pickle file', filename)
+    print("[Info] Dumping the processed data to pickle file", filename)
     torch.save(data, filename)
-    print('[Info] Done.')
+    print("[Info] Done.")

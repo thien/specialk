@@ -7,15 +7,16 @@ src_fr = "giga-fren.release2.fixed.fr"
 seq_limit = 10000000
 
 # don't edit from here.
-total = 22520376 # precalculated
+total = 22520376  # precalculated
 
 lims = {
-        "." : 5,
-        "(" : 5,
-        ")" : 5,
-        "," : 6,
-        "@" : 5,
-    }
+    ".": 5,
+    "(": 5,
+    ")": 5,
+    ",": 6,
+    "@": 5,
+}
+
 
 def verify(eng):
     if "|" in eng:
@@ -24,7 +25,7 @@ def verify(eng):
         return False
     if "^" in eng:
         return False
-    if sum(c.isdigit() for c in eng)/len(eng) > 0.3:
+    if sum(c.isdigit() for c in eng) / len(eng) > 0.3:
         return False
     base = {}
     for char in eng:
@@ -39,14 +40,18 @@ def verify(eng):
         return False
     return True
 
-with open(output_en, "w", encoding="utf-8") as tgt_e, open(output_fr, "w", encoding="utf-8") as tgt_f:
-    with open(src_en, encoding="utf-8") as src_e, open(src_fr, encoding="utf-8") as src_f:
+
+with open(output_en, "w", encoding="utf-8") as tgt_e, open(
+    output_fr, "w", encoding="utf-8"
+) as tgt_f:
+    with open(src_en, encoding="utf-8") as src_e, open(
+        src_fr, encoding="utf-8"
+    ) as src_f:
         count = 0
-        for (e,f) in tqdm(zip(src_e, src_f), total=total):
+        for e, f in tqdm(zip(src_e, src_f), total=total):
             if verify(e):
                 tgt_e.write(e)
                 tgt_f.write(f)
             count += 1
             if count > seq_limit:
                 break
-            

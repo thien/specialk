@@ -1,38 +1,32 @@
-import spacy
-import torch
-import os
-import json
-from tqdm import tqdm
 import argparse
+import json
 import multiprocessing
+import os
 import subprocess
-
-import pandas as pd
-import numpy as np
-
-
-from core.utils import get_len, batch_compute
-from core.sentenciser import *
-
-from rouge import Rouge
-from metrics.meteor.meteor import Meteor
-
-from nltk.corpus import cmudict,stopwords
-from nltk.translate.bleu_score import sentence_bleu
-from nltk import pos_tag
-from nltk import RegexpParser
-from nltk import word_tokenize
-from nltk.sentiment.vader import SentimentIntensityAnalyzer
-
-# for emd
-from pyemd import emd
-from gensim.corpora.dictionary import Dictionary
 
 # TODO: need to move spacy to outside s.t. it can be used for multiprocessing.
 # TODO: need to move glove to outside for similar reasons to as spacy.
 # TODO: same for syllables dict.
-
 import warnings
+
+import numpy as np
+import pandas as pd
+import spacy
+import torch
+from core.sentenciser import *
+from core.utils import batch_compute, get_len
+from gensim.corpora.dictionary import Dictionary
+from metrics.meteor.meteor import Meteor
+from nltk import RegexpParser, pos_tag, word_tokenize
+from nltk.corpus import cmudict, stopwords
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+from nltk.translate.bleu_score import sentence_bleu
+
+# for emd
+from pyemd import emd
+from rouge import Rouge
+from tqdm import tqdm
+
 warnings.filterwarnings("ignore")
 
 # load rouge
@@ -40,7 +34,8 @@ rouge_comp = Rouge()
 meteor = Meteor()
 
 
-DEFAULT_GLOVE_PATH="/home/t/Data/Datasets/glove/glove.6B.200d.txt"
+DEFAULT_GLOVE_PATH = "/home/t/Data/Datasets/glove/glove.6B.200d.txt"
+
 
 class Metrics:
     """
@@ -54,7 +49,7 @@ class Metrics:
     """
 
     def __init__(self, args):
-        self.stopwords = set(stopwords.words('english'))
+        self.stopwords = set(stopwords.words("english"))
         self.cmudict = cmudict.dict()
         self.polarity = SentimentIntensityAnalyzer().polarity_scores
 
@@ -71,7 +66,6 @@ class Metrics:
         df = pd.read_csv(glove_path, sep=" ", quoting=3, header=None, index_col=0)
         self.glove = {key: val.values for key, val in df.T.items()}
         return self
-
 
     # preprocess
 
@@ -91,7 +85,7 @@ class Metrics:
             if tokenise:
                 seq = sents.split(" ")
                 return seq
-    
+
     @staticmethod
     def tokenize(x):
         return word_tokenize(x)
@@ -112,23 +106,25 @@ class Metrics:
                     paragraph_tokens.append(token)
             tokens = tokens + paragraph_tokens
             num_tokens_in_paragraph.append(len(paragraph_tokens))
-        
+
         num_tokens = len(tokens)
         num_paragraphs = len(paragraphs)
         num_sentences = len(sentence_lengths)
-        
-        avg_token_length = sum([len(t) for t in tokens])/num_tokens if num_tokens > 0 else 0
-        avg_sentence_length = sum(sentence_lengths)/num_sentences
-        avg_paragraph_length = sum(num_tokens_in_paragraph)/len(paragraphs)
-        
+
+        avg_token_length = (
+            sum([len(t) for t in tokens]) / num_tokens if num_tokens > 0 else 0
+        )
+        avg_sentence_length = sum(sentence_lengths) / num_sentences
+        avg_paragraph_length = sum(num_tokens_in_paragraph) / len(paragraphs)
+
         return {
-            "num_tokens" : num_tokens,
-            "num_paragraphs" : num_paragraphs,
-            "num_sentences" : num_sentences,
-            "avg_token_length" : avg_token_length,
-            "avg_sentence_length" : avg_sentence_length,
-            "avg_paragraph_length" : avg_paragraph_length,
-            "sentence_lengths" : sentence_lengths,
+            "num_tokens": num_tokens,
+            "num_paragraphs": num_paragraphs,
+            "num_sentences": num_sentences,
+            "avg_token_length": avg_token_length,
+            "avg_sentence_length": avg_sentence_length,
+            "avg_paragraph_length": avg_paragraph_length,
+            "sentence_lengths": sentence_lengths,
         }
 
     # NMT style measurements
@@ -155,10 +151,9 @@ class Metrics:
             documents[i] = document
         document1, document2 = documents
 
-
         if not document1 or not document2:
             # at least one of the documents had no words that were in the vocabulary.
-            return float('inf')
+            return float("inf")
 
         dictionary = Dictionary(documents=[document1, document2])
         vocab_len = len(dictionary)
@@ -168,7 +163,7 @@ class Metrics:
             return 0.0
 
         # Sets for faster look-up.
-        docset1, docset2 = set(document1),set(document2)
+        docset1, docset2 = set(document1), set(document2)
 
         # Compute distance matrix.
         distance_matrix = np.zeros((vocab_len, vocab_len), dtype=np.double)
@@ -179,12 +174,14 @@ class Metrics:
                 if t2 not in docset2 or distance_matrix[i, j] != 0.0:
                     continue
                 # Compute Euclidean distance between word vectors.
-                distance_matrix[i, j] = distance_matrix[j, i] = np.sqrt(np.sum((self.glove[t1] - self.glove[t2])**2))
+                distance_matrix[i, j] = distance_matrix[j, i] = np.sqrt(
+                    np.sum((self.glove[t1] - self.glove[t2]) ** 2)
+                )
 
         if np.sum(distance_matrix) == 0.0:
             # `emd` gets stuck if the distance matrix contains only zeros.
             # logger.info('The distance matrix is all zeros. Aborting (returning inf).')
-            return float('inf')
+            return float("inf")
 
         def nbow(document):
             d = np.zeros(vocab_len, dtype=np.double)
@@ -195,12 +192,10 @@ class Metrics:
             return d
 
         # Compute nBOW representation of documents.
-        d1,d2 = nbow(document1),nbow(document2)
+        d1, d2 = nbow(document1), nbow(document2)
 
         # Compute WMD.
-        return {
-            "value":emd(d1, d2, distance_matrix)
-        }
+        return {"value": emd(d1, d2, distance_matrix)}
 
     def bleu(self, sequences):
         """
@@ -213,12 +208,7 @@ class Metrics:
         bleu3 = sentence_bleu([reference], hypothesis, weights=(0, 0, 1, 0))
         bleu4 = sentence_bleu([reference], hypothesis, weights=(0, 0, 0, 1))
 
-        return {
-            'bleu_1': bleu1,
-            'bleu_2': bleu2,
-            'bleu_3': bleu3,
-            'bleu_4': bleu4
-        }
+        return {"bleu_1": bleu1, "bleu_2": bleu2, "bleu_3": bleu3, "bleu_4": bleu4}
 
     def rouge(self, sequences):
         """
@@ -234,7 +224,6 @@ class Metrics:
         print(score)
         return None
 
-
     # style transfer intensity
     # content preservation
     # naturalness
@@ -244,10 +233,10 @@ class Metrics:
     def lex_match_1(self, tokens):
         """
         finds ``it v-link ADJ finite/non-finite clause''
-        
+
         eg:
             "It's unclear what Teresa May is planning."
-        
+
         params:
             tokens: pos tagged sequence (e.g. `pos_tag(word_tokenize(string_of_article))` )
         returns:
@@ -260,27 +249,26 @@ class Metrics:
         matches = []
         while index < index_limit:
             token, tag = tokens[index]
-            
+
             if token.lower() == "it":
-                if index+2 < index_limit:
-                    if tokens[index+1][1][0] == "V":
-                        if tokens[index+2][1][0] == "J":
-                            group = tuple([str(tokens[index+i][0]) for i in range(3)])
+                if index + 2 < index_limit:
+                    if tokens[index + 1][1][0] == "V":
+                        if tokens[index + 2][1][0] == "J":
+                            group = tuple([str(tokens[index + i][0]) for i in range(3)])
                             matches.append((index, group))
                         index = index + 2
                 else:
                     break
             index += 1
         return matches
-        
 
     def lex_match_2(self, tokens):
         """
         finds ``v-link ADJ prep''
-        
+
         eg:
             "..he was responsible for all for.."
-        
+
         params:
             tokens: pos tagged sequence (e.g. `pos_tag(word_tokenize(string_of_article))` )
         returns:
@@ -292,20 +280,23 @@ class Metrics:
         matches = []
         while index < index_limit:
             token, tag = tokens[index]
-            
+
             if tag[0] == "V":
                 group = [token]
-                next_index = index+1
+                next_index = index + 1
                 # detect any adverbs before adj and adp.
                 # e.g. "be *very, very,* embarrassing.."
                 while (next_index < index_limit) and (tokens[next_index][1][0] == "R"):
                     group.append(tokens[next_index])
                     next_index += 1
-                
-                if next_index+1 < index_limit:
-                    if tokens[next_index][1][0] == "J" and tokens[next_index+1][1] == "IN":
+
+                if next_index + 1 < index_limit:
+                    if (
+                        tokens[next_index][1][0] == "J"
+                        and tokens[next_index + 1][1] == "IN"
+                    ):
                         group.append(tokens[next_index][0])
-                        group.append(tokens[next_index+1][0])
+                        group.append(tokens[next_index + 1][0])
                         matches.append((index, tuple(group)))
                         index = next_index + 2
             index += 1
@@ -320,27 +311,29 @@ class Metrics:
         returns int.
         """
         word = word.lower()
-    
+
         if word in self.cmudict:
-            return max([len(list(y for y in x if y[-1].isdigit())) for x in self.cmudict[word]])
-        
+            return max(
+                [len(list(y for y in x if y[-1].isdigit())) for x in self.cmudict[word]]
+            )
+
         # imperfect but good enough calculation.
         # based on implementation from:
         # https://stackoverflow.com/questions/405161/detecting-syllables-in-a-word/4103234#4103234
-        vowels = {"a","e","i","o","u","y"}
+        vowels = {"a", "e", "i", "o", "u", "y"}
         numVowels = 0
         lastWasVowel = False
         for wc in word:
             foundVowel = False
             if wc in vowels:
                 if not lastWasVowel:
-                    numVowels += 1   # don't count diphthongs
+                    numVowels += 1  # don't count diphthongs
                 foundVowel = lastWasVowel = True
             if not foundVowel:
-                # If full cycle and no vowel found, 
+                # If full cycle and no vowel found,
                 # set lastWasVowel to false
                 lastWasVowel = False
-        if len(word) > 2 and word[-2:] == "es": 
+        if len(word) > 2 and word[-2:] == "es":
             # Remove es - it's "usually" silent (?)
             numVowels -= 1
         elif len(word) > 1 and word[-1:] == "e":
@@ -353,7 +346,7 @@ class Metrics:
         Takes as input a string.
         Returns readability score of 0-100.
         """
-        
+
         sentences = find_sentences(article)
         n_sents = 0
         n_words = 0
@@ -368,55 +361,88 @@ class Metrics:
                     n_sylls += num_syllables
                 n_chars += len(word)
 
-        reading_ease = 206.835 - 1.015 * (n_words/n_sents) - 84.6 * (n_sylls/n_words)
-        grade_level = 0.39*(n_words/n_sents) + 11.8*(n_sylls/n_words)-15.59
-        coleman_liau = 5.89 * (n_chars/n_words) - 0.3 * (n_sents/n_words) - 15.8
+        reading_ease = (
+            206.835 - 1.015 * (n_words / n_sents) - 84.6 * (n_sylls / n_words)
+        )
+        grade_level = 0.39 * (n_words / n_sents) + 11.8 * (n_sylls / n_words) - 15.59
+        coleman_liau = 5.89 * (n_chars / n_words) - 0.3 * (n_sents / n_words) - 15.8
         # automated readability index
-        ari = 4.71 * (n_chars/n_words) + 0.5*(n_words/n_sents) - 21.43
+        ari = 4.71 * (n_chars / n_words) + 0.5 * (n_words / n_sents) - 21.43
 
         return {
-            "reading_ease" : reading_ease,
-            "grade_level"  : grade_level,
-            "coleman_liau" : coleman_liau,
-            "ari" : ari
+            "reading_ease": reading_ease,
+            "grade_level": grade_level,
+            "coleman_liau": coleman_liau,
+            "ari": ari,
         }
 
 
 def load_args():
     parser = argparse.ArgumentParser(description="metrics.py")
     # load documents
-    parser.add_argument("-reference", required=True, type=str, 
-                        help="""
+    parser.add_argument(
+        "-reference",
+        required=True,
+        type=str,
+        help="""
                         filepath to reference text file containing
                         MOSES style sequences.
-                        """)
-    parser.add_argument("-ref_lang", required=True, type=str,
-                        help="""
+                        """,
+    )
+    parser.add_argument(
+        "-ref_lang",
+        required=True,
+        type=str,
+        help="""
                         Reference document language.
-                        """)
-    parser.add_argument("-hypothesis", default=None, type=str, help="""
+                        """,
+    )
+    parser.add_argument(
+        "-hypothesis",
+        default=None,
+        type=str,
+        help="""
                         filepath to text file containing hypothesis
                         MOSES style sequences.
-                        """)
-    parser.add_argument("-hyp_lang", default=None, type=str,
-                        help="""
+                        """,
+    )
+    parser.add_argument(
+        "-hyp_lang",
+        default=None,
+        type=str,
+        help="""
                         Hypothesis document language.
-                        """)
+                        """,
+    )
 
-    parser.add_argument("-output", required=True, type=str, help="""
+    parser.add_argument(
+        "-output",
+        required=True,
+        type=str,
+        help="""
                         Location of output json filepath.
-                        """)
+                        """,
+    )
     # additional stuff
 
-    parser.add_argument("-glove_path", type=str, default=DEFAULT_GLOVE_PATH, help="""
+    parser.add_argument(
+        "-glove_path",
+        type=str,
+        default=DEFAULT_GLOVE_PATH,
+        help="""
                         Filepath to glove embedding weights.
-                        """)
-    parser.add_argument("-lowercase", action="store_true", help="""
+                        """,
+    )
+    parser.add_argument(
+        "-lowercase",
+        action="store_true",
+        help="""
                         If enabled, performs lowercase operation.
-                        """)
+                        """,
+    )
 
     # load measurement flags
-    # these are automatically called from 
+    # these are automatically called from
     # the metrics function.
     mets = []
     for funct in dir(Metrics):
@@ -478,7 +504,7 @@ def load_dataset(reference_doc, hypothesis_doc=None, lowercase=False):
                 sequences.append(line)
 
     if len(ignored) > 0:
-        print("[Warning] There were",len(ignored),"ignored sequences.")
+        print("[Warning] There were", len(ignored), "ignored sequences.")
     return sequences
 
 
@@ -489,7 +515,6 @@ if __name__ == "__main__":
     dataset = [(i, dataset[i]) for i in range(len(dataset))]
     # load the metrics model
     metrics = Metrics(args)
-
 
     def op_wrapper(seq):
         # # maintain the order of the sequences since we're
@@ -502,14 +527,17 @@ if __name__ == "__main__":
         polarity = metrics.polarity(out)
         s = pos_tag(word_tokenize(out))
         # print("POS:",s)
-        lex_match_1 =  metrics.lex_match_1(s)
-        lex_match_2 =  metrics.lex_match_2(s)
-        return (idx, {
-            'polarity'    : polarity,
-            'readability' : readability,
-            'lex_match_1' : lex_match_1,
-            'lex_match_2' : lex_match_2
-        })
+        lex_match_1 = metrics.lex_match_1(s)
+        lex_match_2 = metrics.lex_match_2(s)
+        return (
+            idx,
+            {
+                "polarity": polarity,
+                "readability": readability,
+                "lex_match_1": lex_match_1,
+                "lex_match_2": lex_match_2,
+            },
+        )
 
     results = batch_compute(op_wrapper, dataset)
     # sort by order and remove ordering tag
@@ -518,37 +546,37 @@ if __name__ == "__main__":
 
     def calcmeans(lol):
         loldim = len(lol)
-        keys = {"lex_match_1" : 0, "lex_match_2" : 0}
+        keys = {"lex_match_1": 0, "lex_match_2": 0}
         readability_keys = {}
         polarity_keys = {}
-        
+
         if "readability" in lol[0]:
-            readability_keys = {k:0 for k in lol[0]['readability']}
+            readability_keys = {k: 0 for k in lol[0]["readability"]}
         if "polarity" in lol[0]:
-            polarity_keys = {k:0 for k in lol[0]['polarity']}
-        
+            polarity_keys = {k: 0 for k in lol[0]["polarity"]}
+
         skew_pol_count = 0
-        
+
         for i in lol:
             for k in keys:
                 if k[0:3] == "lex":
                     keys[k] += len(i[k])
             if len(readability_keys) > 0:
                 for k in readability_keys:
-                    readability_keys[k] += i['readability'][k]
+                    readability_keys[k] += i["readability"][k]
             if len(polarity_keys) > 0:
                 for k in polarity_keys:
-                    if i['polarity'][k] in {0.0, 1.0}:
+                    if i["polarity"][k] in {0.0, 1.0}:
                         continue
-                    polarity_keys[k] += i['polarity'][k]
+                    polarity_keys[k] += i["polarity"][k]
                     skew_pol_count += 1
-        
-        keys = {k:keys[k]/loldim for k in keys}
-        readability_keys = {k:readability_keys[k]/loldim for k in readability_keys}
-        polarity_keys = {k:polarity_keys[k]/loldim for k in polarity_keys}
-        
+
+        keys = {k: keys[k] / loldim for k in keys}
+        readability_keys = {k: readability_keys[k] / loldim for k in readability_keys}
+        polarity_keys = {k: polarity_keys[k] / loldim for k in polarity_keys}
+
         return {**keys, **readability_keys, **polarity_keys}
-        
+
     mean_stats = calcmeans(results)
     for k in mean_stats:
         print(k, mean_stats[k])

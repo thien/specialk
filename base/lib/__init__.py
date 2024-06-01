@@ -5,5 +5,4 @@
 
 # __all__ = [transformer, recurrent, TransformerModel]
 
-from . import recurrent
-from . import transformer
+from . import recurrent, transformer

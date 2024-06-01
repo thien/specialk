@@ -1,10 +1,12 @@
 import subprocess
-from tqdm import tqdm
 from multiprocessing import Pool, cpu_count
+
+from tqdm import tqdm
 
 """
 Misc. functions used by a variety of parts of the library.
 """
+
 
 def get_len(filepath):
     """
@@ -16,7 +18,7 @@ def get_len(filepath):
     return int(process.stdout.decode("utf-8").split(" ")[0])
 
 
-def batch_compute(func, args, n_processes=cpu_count()-1):
+def batch_compute(func, args, n_processes=cpu_count() - 1):
     """
     Takes a function and some arguments for those functions,
     and returns a list of outputs generated from the function.
@@ -32,5 +34,3 @@ def batch_compute(func, args, n_processes=cpu_count()-1):
     p.close()
     p.join()
     return res_list
-
-

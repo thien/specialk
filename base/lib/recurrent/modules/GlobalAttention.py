@@ -80,16 +80,18 @@ Constructs a unit mapping.
     The full def is  $$\tanh(W_2 [(softmax((W_1 q + b_1) H) H), q] + b_2)$$.:
 """
 
+import math
+
 import torch
 import torch.nn as nn
-import math
+
 
 class GlobalAttention(nn.Module):
     def __init__(self, dim):
         super(GlobalAttention, self).__init__()
         self.linear_in = nn.Linear(dim, dim, bias=False)
         self.sm = nn.Softmax(dim=1)
-        self.linear_out = nn.Linear(dim*2, dim, bias=False)
+        self.linear_out = nn.Linear(dim * 2, dim, bias=False)
         self.tanh = nn.Tanh()
         self.mask = None
 
@@ -106,7 +108,9 @@ class GlobalAttention(nn.Module):
         # Get attention
         attn = torch.bmm(context, targetT).squeeze(2)  # batch x sourceL
         if self.mask is not None:
-            attn.data.masked_fill_(self.mask.view(-1, self.mask.shape[-1]), -float('inf'))
+            attn.data.masked_fill_(
+                self.mask.view(-1, self.mask.shape[-1]), -float("inf")
+            )
         attn = self.sm(attn)
         attn3 = attn.view(attn.size(0), 1, attn.size(1))  # batch x 1 x sourceL
 
@@ -116,7 +120,6 @@ class GlobalAttention(nn.Module):
         contextOutput = self.tanh(self.linear_out(contextCombined))
 
         return contextOutput, attn
-
 
 
 # """Global attention modules (Luong / Bahdanau)"""
@@ -366,7 +369,6 @@ class GlobalAttention(nn.Module):
 # """
 
 
-
 # def _make_ix_like(input, dim=0):
 #     d = input.size(dim)
 #     rho = torch.arange(1, d + 1, device=input.device, dtype=input.dtype)
@@ -438,4 +440,3 @@ class GlobalAttention(nn.Module):
 
 #     def forward(self, input):
 #         return sparsemax(input, self.dim)
-

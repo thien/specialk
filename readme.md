@@ -10,7 +10,7 @@ You'll need `python3`, `pytorch`, `spacy`, `numpy`, `pyemd`, `bayesian-optimisat
 
 To make life easier I've added a `requirements.txt` that'll allow you to install everything necessary (after installing `python3.6+`):
 
-    pip install -e .
+   uv pip install -e .  
 
 ## Datasets
 

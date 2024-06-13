@@ -10,6 +10,7 @@ class Encoder(nn.Module):
     """
     LSTM Encoder.
     """
+
     def __init__(self, opt, vocabulary_size):
         self.layers = opt.layers
         self.num_directions = 2 if opt.brnn else 1
@@ -18,14 +19,16 @@ class Encoder(nn.Module):
         input_size = opt.d_word_vec
 
         super(Encoder, self).__init__()
-        self.word_lut = nn.Embedding(vocabulary_size,
-                                  opt.d_word_vec,
-                                  padding_idx=Constants.PAD)
-        self.rnn = nn.LSTM(input_size,
-                        self.hidden_size,
-                        num_layers=opt.layers,
-                        dropout=opt.dropout,
-                        bidirectional=opt.brnn)
+        self.word_lut = nn.Embedding(
+            vocabulary_size, opt.d_word_vec, padding_idx=Constants.PAD
+        )
+        self.rnn = nn.LSTM(
+            input_size,
+            self.hidden_size,
+            num_layers=opt.layers,
+            dropout=opt.dropout,
+            bidirectional=opt.brnn,
+        )
 
     def load_pretrained_vectors(self, opt):
         if opt.pre_word_vecs_enc is not None:
@@ -48,8 +51,9 @@ class Encoder(nn.Module):
 
         if isinstance(input, tuple):
             outputs = unpack(outputs)[0]
-            
+
         return hidden_t, outputs
+
 
 class StackedLSTM(nn.Module):
     def __init__(self, num_layers, input_size, rnn_size, dropout):
@@ -78,8 +82,8 @@ class StackedLSTM(nn.Module):
 
         return input, (h_1, c_1)
 
-class Decoder(nn.Module):
 
+class Decoder(nn.Module):
     def __init__(self, opt, vocabulary_size):
         self.layers = opt.layers
         self.input_feed = opt.input_feed
@@ -88,14 +92,10 @@ class Decoder(nn.Module):
             input_size += opt.rnn_size
 
         super(Decoder, self).__init__()
-        self.word_lut = nn.Embedding(vocabulary_size,
-                                  opt.d_word_vec,
-                                  padding_idx=Constants.PAD)
-        self.rnn = StackedLSTM(
-            opt.layers,
-            input_size,
-            opt.rnn_size,
-            opt.dropout)
+        self.word_lut = nn.Embedding(
+            vocabulary_size, opt.d_word_vec, padding_idx=Constants.PAD
+        )
+        self.rnn = StackedLSTM(opt.layers, input_size, opt.rnn_size, opt.dropout)
 
         self.num_directions = 2 if opt.brnn else 1
         assert opt.rnn_size % self.num_directions == 0
@@ -113,9 +113,8 @@ class Decoder(nn.Module):
         self.hidden_size = opt.rnn_size
 
         self.generator = nn.Sequential(
-            nn.Linear(opt.rnn_size, vocabulary_size),
-            nn.LogSoftmax(dim=1)
-            )
+            nn.Linear(opt.rnn_size, vocabulary_size), nn.LogSoftmax(dim=1)
+        )
 
     def load_pretrained_vectors(self, opt):
         if opt.pre_word_vecs_dec is not None:
@@ -153,7 +152,7 @@ class Decoder(nn.Module):
     #     return outputs, hidden, attn
     def forward(self, input, hidden, context, init_output, useGen=True):
         emb = self.word_lut(input)
-        #print(context.size())
+        # print(context.size())
         # n.b. you can increase performance if you compute W_ih * x for all
         # iterations in parallel, but that's only possible if
         # self.input_feed=False
@@ -174,8 +173,8 @@ class Decoder(nn.Module):
         outputs = torch.stack(outputs)
         return outputs, hidden, attn
 
-class NMTModel(nn.Module):
 
+class NMTModel(nn.Module):
     def __init__(self, encoder, decoder):
         super(NMTModel, self).__init__()
         self.encoder = encoder
@@ -190,9 +189,12 @@ class NMTModel(nn.Module):
         #  the encoder hidden is  (layers*directions) x batch x dim
         #  we need to convert it to layers x batch x (directions*dim)
         if self.encoder.num_directions == 2:
-            return h.view(h.size(0) // 2, 2, h.size(1), h.size(2)) \
-                    .transpose(1, 2).contiguous() \
-                    .view(h.size(0) // 2, h.size(1), h.size(2) * 2)
+            return (
+                h.view(h.size(0) // 2, 2, h.size(1), h.size(2))
+                .transpose(1, 2)
+                .contiguous()
+                .view(h.size(0) // 2, h.size(1), h.size(2) * 2)
+            )
         else:
             return h
 
@@ -207,12 +209,14 @@ class NMTModel(nn.Module):
         # swap batch relationship order.
         x = x.transpose(0, 1)
         y = y.transpose(0, 1)
-        
+
         enc_hidden, context = self.encoder((x, sorted_lengths))
         init_output = self.make_init_decoder_output(context)
 
-        enc_hidden = (self._fix_enc_hidden(enc_hidden[0]),
-                      self._fix_enc_hidden(enc_hidden[1]))
+        enc_hidden = (
+            self._fix_enc_hidden(enc_hidden[0]),
+            self._fix_enc_hidden(enc_hidden[1]),
+        )
 
         out, dec_hidden, _attn = self.decoder(y, enc_hidden, context, init_output)
         # reverse tensor relationship order

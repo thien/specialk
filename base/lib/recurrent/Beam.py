@@ -18,7 +18,6 @@ from . import Constants
 
 class Beam(object):
     def __init__(self, size, cuda=False):
-
         self.size = size
         self.done = False
 
@@ -55,7 +54,6 @@ class Beam(object):
     #
     # Returns: True if beam search is complete.
     def advance(self, wordLk, attnOut):
-
         numWords = wordLk.size(1)
 
         # Sum the previous scores.
@@ -104,7 +102,7 @@ class Beam(object):
         hyp, attn = [], []
         # print(len(self.prevKs), len(self.nextYs), len(self.attn))
         for j in range(len(self.prevKs) - 1, -1, -1):
-            hyp.append(self.nextYs[j+1][k])
+            hyp.append(self.nextYs[j + 1][k])
             attn.append(self.attn[j][k])
             k = self.prevKs[j][k]
 

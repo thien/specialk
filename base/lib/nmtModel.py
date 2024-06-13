@@ -19,19 +19,20 @@ import numpy as np
 from preprocess import load_file, seq2idx, reclip
 from tqdm import tqdm
 
+
 class NMTModel:
     def __init__(self, opt, models_folder="models"):
         self.opt = opt
 
         if opt.cuda_device:
-            self.device = torch.device('cuda:'+str(opt.cuda_device))
+            self.device = torch.device("cuda:" + str(opt.cuda_device))
         else:
-            self.device = torch.device('cuda' if opt.cuda else 'cpu')
+            self.device = torch.device("cuda" if opt.cuda else "cpu")
         print("Using device:", self.device)
 
         self.constants = constants
         self.opt.directory = self.init_dir(stores=models_folder)
-        
+
         # update variables.
         self.train_losses = []
         self.valid_losses = []
@@ -59,14 +60,14 @@ class NMTModel:
         """
         print("[Warning]: load() is not implemented.")
         return self
-    
+
     def initiate(self):
         """
         Loads models into memory and initiate parameters.
         """
         print("[Warning]: initiate() is not implemented.")
         return self
-    
+
     def setup_optimiser(self):
         # based on the opt.
         print("[Warning] setup_optimiser() is not implemented.")
@@ -91,7 +92,7 @@ class NMTModel:
         """
         print("[Warning]: translate() is not implemented.")
         return self
-    
+
     def save(self):
         """
         save model weights and parameters to file.
@@ -115,7 +116,7 @@ class NMTModel:
     def init_dir(self, stores):
         """
         initiates a directory model data will be in.
-        If theres no preloaded encoder/decoder it'll 
+        If theres no preloaded encoder/decoder it'll
         create a new folder.
         """
         if self.opt.checkpoint_encoder:
@@ -131,39 +132,46 @@ class NMTModel:
         else:
             # setup current model directory
             directory_name = self.opt.model
-            directory_name += "-" + datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S")
+            directory_name += "-" + datetime.datetime.now().strftime(
+                "%y-%m-%d-%H-%M-%S"
+            )
         directory = os.path.join(basepath, directory_name)
         # create container for that folder.
         if not os.path.isdir(directory):
             if self.opt.save_model:
                 os.mkdir(directory)
-        return directory 
+        return directory
 
     def init_logs(self):
         """
         If called, saves output logs to file.
         """
-        self.log_train_file = os.path.join(self.opt.directory,"train.log")
-        self.log_valid_file = os.path.join(self.opt.directory,"valid.log")
+        self.log_train_file = os.path.join(self.opt.directory, "train.log")
+        self.log_valid_file = os.path.join(self.opt.directory, "valid.log")
         # check if log files exists already.
         # if it does, then we need to increment the log name
         step = 1
         while os.path.isfile(self.log_train_file):
             filename = "train_" + str(step) + ".log"
-            self.log_train_file = os.path.join(self.opt.directory,filename)
+            self.log_train_file = os.path.join(self.opt.directory, filename)
             step += 1
         step = 1
         while os.path.isfile(self.log_valid_file):
             filename = "valid_" + str(step) + ".log"
-            self.log_valid_file = os.path.join(self.opt.directory,filename)
+            self.log_valid_file = os.path.join(self.opt.directory, filename)
             step += 1
-        
-        print('[Info] Training performance will be written to file: {} and {}'.format(
-            self.log_train_file, self.log_valid_file))
 
-        with open(self.log_train_file, 'w') as log_tf, open(self.log_valid_file, 'w') as log_vf:
-            log_tf.write('epoch,loss,ppl,accuracy\n')
-            log_vf.write('epoch,loss,ppl,accuracy\n')
+        print(
+            "[Info] Training performance will be written to file: {} and {}".format(
+                self.log_train_file, self.log_valid_file
+            )
+        )
+
+        with open(self.log_train_file, "w") as log_tf, open(
+            self.log_valid_file, "w"
+        ) as log_vf:
+            log_tf.write("epoch,loss,ppl,accuracy\n")
+            log_vf.write("epoch,loss,ppl,accuracy\n")
 
     def update_logs(self, epoch_i):
         """
@@ -175,29 +183,43 @@ class NMTModel:
 
         # deal with logs
         if self.log_train_file and self.log_valid_file:
-            with open(self.log_train_file, 'a') as log_tf, open(self.log_valid_file, 'a') as log_vf:
-                log_tf.write('{epoch},{loss: 8.5f},{ppl: 8.5f},{accu:3.3f}\n'.format(
-                    epoch=epoch_i, loss=train_loss,
-                    ppl=math.exp(min(train_loss, 100)), accu=100*train_acc))
-                log_vf.write('{epoch},{loss: 8.5f},{ppl: 8.5f},{accu:3.3f}\n'.format(
-                    epoch=epoch_i, loss=valid_loss,
-                    ppl=math.exp(min(valid_loss, 100)), accu=100*valid_acc))
+            with open(self.log_train_file, "a") as log_tf, open(
+                self.log_valid_file, "a"
+            ) as log_vf:
+                log_tf.write(
+                    "{epoch},{loss: 8.5f},{ppl: 8.5f},{accu:3.3f}\n".format(
+                        epoch=epoch_i,
+                        loss=train_loss,
+                        ppl=math.exp(min(train_loss, 100)),
+                        accu=100 * train_acc,
+                    )
+                )
+                log_vf.write(
+                    "{epoch},{loss: 8.5f},{ppl: 8.5f},{accu:3.3f}\n".format(
+                        epoch=epoch_i,
+                        loss=valid_loss,
+                        ppl=math.exp(min(valid_loss, 100)),
+                        accu=100 * valid_acc,
+                    )
+                )
         else:
-            print("[Warning] log files are not initiated. No updates are kept into storage.")
+            print(
+                "[Warning] log files are not initiated. No updates are kept into storage."
+            )
 
     def load_dataset(self):
         """
         Loads PyTorch pickled training and validation dataset.
         """
         data = torch.load(self.opt.data)
-        self.dataset_settings = data['settings']
+        self.dataset_settings = data["settings"]
         # the token sequence length is determined by `preprocess.py`
-        self.opt.max_token_seq_len = data['settings'].max_token_seq_len
+        self.opt.max_token_seq_len = data["settings"].max_token_seq_len
         # here we need to check whether the dataset is BPE or not.
-        if 'byte_pairs' in data['dict']['src']:
-            if '__sow' in data['dict']['src']['byte_pairs']:
-                self.src_bpe = BPE.from_dict(data['dict']['src'])
-                self.tgt_bpe = BPE.from_dict(data['dict']['tgt'])
+        if "byte_pairs" in data["dict"]["src"]:
+            if "__sow" in data["dict"]["src"]["byte_pairs"]:
+                self.src_bpe = BPE.from_dict(data["dict"]["src"])
+                self.tgt_bpe = BPE.from_dict(data["dict"]["tgt"])
 
         datasets = self.init_dataloaders(data, self.opt)
         self.training_data, self.validation_data = datasets
@@ -216,18 +238,20 @@ class NMTModel:
         test_datapath: some text file.
         test_vocab: it's the same PyTorch pickled training dataset.
         """
-        
+
         # load vocabulary
         data = torch.load(test_vocab)
-        settings = data['settings']
+        settings = data["settings"]
         # print(settings)
         # load test sequences
-        token_instances = load_file(test_datapath, 
-                                    settings.max_word_seq_len,
-                                    settings.format,
-                                    settings.case_sensitive)
+        token_instances = load_file(
+            test_datapath,
+            settings.max_word_seq_len,
+            settings.format,
+            settings.case_sensitive,
+        )
         is_bpe = settings.format.lower() == "bpe"
-        
+
         SOS, EOS = constants.SOS, constants.EOS
 
         decoder = None
@@ -243,107 +267,124 @@ class NMTModel:
             # load test data
             # TODO: fix preprocessing method for BPE when loading test data.
             # TODO: this is a night fix we'll need to clean the code debt later.
-            bpe_src = BPE.from_dict(data['dict']['src'])
-            decoder = BPE.from_dict(data['dict']['tgt'])
+            bpe_src = BPE.from_dict(data["dict"]["src"])
+            decoder = BPE.from_dict(data["dict"]["tgt"])
             # convert test sequences into IDx
             test_src_insts = bpe_src.transform(token_instances)
             test_src_insts = [i for i in test_src_insts]
             # some of the sequences made may be too long, so we'll need to fix that.
-            for i in tqdm(range(len(token_instances)), desc="Reclipping Test Sequences"):
+            for i in tqdm(
+                range(len(token_instances)), desc="Reclipping Test Sequences"
+            ):
                 raw = token_instances[i]
                 encoded = test_src_insts[i]
-                test_src_insts[i] = reclip(raw, encoded, bpe_src, settings.max_token_seq_len-2)
+                test_src_insts[i] = reclip(
+                    raw, encoded, bpe_src, settings.max_token_seq_len - 2
+                )
                 test_src_insts[i] = [SOS] + test_src_insts[i] + [EOS]
 
             # setup data loader
-            src_word2idx = data['dict']['src']
-            tgt_word2idx = data['dict']['tgt']
+            src_word2idx = data["dict"]["src"]
+            tgt_word2idx = data["dict"]["tgt"]
 
-            src_byte_pairs = {x+"_": y for x,y in src_word2idx['byte_pairs'].items()}
-            tgt_byte_pairs = {x+"_": y for x,y in tgt_word2idx['byte_pairs'].items()}
-            src_word2idx = {**src_byte_pairs, **src_word2idx['words']}
-            tgt_word2idx = {**tgt_byte_pairs, **tgt_word2idx['words']}
-            
+            src_byte_pairs = {x + "_": y for x, y in src_word2idx["byte_pairs"].items()}
+            tgt_byte_pairs = {x + "_": y for x, y in tgt_word2idx["byte_pairs"].items()}
+            src_word2idx = {**src_byte_pairs, **src_word2idx["words"]}
+            tgt_word2idx = {**tgt_byte_pairs, **tgt_word2idx["words"]}
+
             test_loader = torch.utils.data.DataLoader(
                 TranslationDataset(
                     src_word2idx=src_word2idx,
                     tgt_word2idx=tgt_word2idx,
-                    src_insts=test_src_insts),
+                    src_insts=test_src_insts,
+                ),
                 num_workers=0,
                 batch_size=self.opt.batch_size,
-                collate_fn=collate_fn)
+                collate_fn=collate_fn,
+            )
 
         else:
             # convert test sequences into IDx
-            test_src_insts = seq2idx(token_instances, data['dict']['src'])
+            test_src_insts = seq2idx(token_instances, data["dict"]["src"])
             # trim sequence lengths
-            test_src_insts = [seq[:settings.max_word_seq_len] for seq in test_src_insts]
+            test_src_insts = [
+                seq[: settings.max_word_seq_len] for seq in test_src_insts
+            ]
             # add SOS and EOS
             test_src_insts = [[SOS] + x + [EOS] for x in test_src_insts]
-            
+
             # setup data loaders.
             test_loader = torch.utils.data.DataLoader(
                 TranslationDataset(
-                    src_word2idx=data['dict']['src'],
-                    tgt_word2idx=data['dict']['tgt'],
-                    src_insts=test_src_insts),
+                    src_word2idx=data["dict"]["src"],
+                    tgt_word2idx=data["dict"]["tgt"],
+                    src_insts=test_src_insts,
+                ),
                 num_workers=0,
                 batch_size=self.opt.batch_size,
-                collate_fn=collate_fn)
-            
-            decoder = data['dict']['tgt']
-        
-        return test_loader, settings.max_token_seq_len, is_bpe, decoder
+                collate_fn=collate_fn,
+            )
 
+            decoder = data["dict"]["tgt"]
+
+        return test_loader, settings.max_token_seq_len, is_bpe, decoder
 
     @staticmethod
     def init_dataloaders(data, opt):
         """
-        Initiates memory efficient vanilla dataloaders for feeding 
+        Initiates memory efficient vanilla dataloaders for feeding
         into the models. (Assumes dataset is not BPE)
         """
-        src_word2idx = data['dict']['src']
-        tgt_word2idx = data['dict']['tgt']
+        src_word2idx = data["dict"]["src"]
+        tgt_word2idx = data["dict"]["tgt"]
         # check if we have BPE dictionaries
         is_bpe = False
-        if 'byte_pairs' in src_word2idx:
-            if '__sow' in src_word2idx['byte_pairs']:
+        if "byte_pairs" in src_word2idx:
+            if "__sow" in src_word2idx["byte_pairs"]:
                 is_bpe = True
                 # we have BPE
-                src_byte_pairs = {x+"_": y for x,y in src_word2idx['byte_pairs'].items()}
-                tgt_byte_pairs = {x+"_": y for x,y in tgt_word2idx['byte_pairs'].items()}
-                src_word2idx = {**src_byte_pairs, **src_word2idx['words']}
-                tgt_word2idx = {**tgt_byte_pairs, **tgt_word2idx['words']}
+                src_byte_pairs = {
+                    x + "_": y for x, y in src_word2idx["byte_pairs"].items()
+                }
+                tgt_byte_pairs = {
+                    x + "_": y for x, y in tgt_word2idx["byte_pairs"].items()
+                }
+                src_word2idx = {**src_byte_pairs, **src_word2idx["words"]}
+                tgt_word2idx = {**tgt_byte_pairs, **tgt_word2idx["words"]}
 
         train_loader = torch.utils.data.DataLoader(
             TranslationDataset(
                 src_word2idx=src_word2idx,
                 tgt_word2idx=tgt_word2idx,
-                src_insts=data['train']['src'],
-                tgt_insts=data['train']['tgt']),
+                src_insts=data["train"]["src"],
+                tgt_insts=data["train"]["tgt"],
+            ),
             num_workers=0,
             batch_size=opt.batch_size,
             collate_fn=paired_collate_fn,
-            shuffle=True)
+            shuffle=True,
+        )
 
         valid_loader = torch.utils.data.DataLoader(
             TranslationDataset(
                 src_word2idx=src_word2idx,
                 tgt_word2idx=tgt_word2idx,
-                src_insts=data['valid']['src'],
-                tgt_insts=data['valid']['tgt']),
+                src_insts=data["valid"]["src"],
+                tgt_insts=data["valid"]["tgt"],
+            ),
             num_workers=0,
             batch_size=opt.batch_size,
-            collate_fn=paired_collate_fn)
-        
+            collate_fn=paired_collate_fn,
+        )
+
         # validate the tables if weight sharing flag is called.
         if opt.embs_share_weight:
-            assert train_loader.dataset.src_word2idx == train_loader.dataset.tgt_word2idx, \
-                'The src/tgt word2idx table are different but you asked to share the word embeddings.'
+            assert (
+                train_loader.dataset.src_word2idx == train_loader.dataset.tgt_word2idx
+            ), "The src/tgt word2idx table are different but you asked to share the word embeddings."
 
         return train_loader, valid_loader
 
-    
     @staticmethod
     def translate_decode_bpe(hypotheses, bpe_enc):
         """
@@ -368,7 +409,7 @@ class NMTModel:
                 line = constants.UNK_WORD
             lines.append(line)
         return lines
-    
+
     @staticmethod
     def translate_decode_dict(hypotheses, idx2w):
         EOS = constants.EOS
@@ -380,7 +421,6 @@ class NMTModel:
                 line = " ".join(tokens)
                 lines.append(line)
         return lines
-
 
     def exit_handler(self):
         """
@@ -400,8 +440,8 @@ class NMTModel:
         training.)
         """
         api_q = json.load(api_json_path)
-        self.bot = telebot.TeleBot(api_q['api_private_key'])
-        self.bot_chatid = api_q['chat_id']
+        self.bot = telebot.TeleBot(api_q["api_private_key"])
+        self.bot_chatid = api_q["chat_id"]
 
     def t_msg(self, msg):
         """

@@ -7,17 +7,17 @@ from tqdm import tqdm
 
 # import CNN classifier code.
 if __name__ == "__main__":
-    sys.path.append('../../classifier')
-    CNN_MODELS_DIR="../cnn_models"
+    sys.path.append("../../classifier")
+    CNN_MODELS_DIR = "../cnn_models"
     import onmt
 else:
-    sys.path.append('classifier')
-    CNN_MODELS_DIR="metrics/cnn_models"
+    sys.path.append("classifier")
+    CNN_MODELS_DIR = "metrics/cnn_models"
     import classifier.onmt as onmt
 
 NATURALNESS_DEFAULTS = {
-    'political': os.path.join(CNN_MODELS_DIR, "naturalness_political.pt"),
-    'publication': os.path.join(CNN_MODELS_DIR, "naturalness_publication.pt")
+    "political": os.path.join(CNN_MODELS_DIR, "naturalness_political.pt"),
+    "publication": os.path.join(CNN_MODELS_DIR, "naturalness_publication.pt"),
 }
 
 FAKE_LABEL = 0
@@ -25,10 +25,12 @@ REAL_LABEL = 1
 
 # assumes that you have already trained a model.
 
+
 def addone(f):
     for line in f:
         yield line
     yield None
+
 
 def setup_args(category, src):
     assert category in NATURALNESS_DEFAULTS
@@ -36,16 +38,19 @@ def setup_args(category, src):
     opt.model = NATURALNESS_DEFAULTS[category]
     opt.label0 = FAKE_LABEL
     opt.label1 = REAL_LABEL
-    opt.tgt = REAL_LABEL # we want the model to think the dataset is real. (but its fake!)
+    opt.tgt = (
+        REAL_LABEL  # we want the model to think the dataset is real. (but its fake!)
+    )
     opt.src = src
     opt.batch_size = 128
     opt.max_sent_length = 50
 
     # is there a gpu?
-    opt.cuda = False 
+    opt.cuda = False
     if opt.cuda:
         torch.cuda.set_device(0)
     return opt
+
 
 def classify(category, src):
     opt = setup_args(category, src)
@@ -61,7 +66,7 @@ def classify(category, src):
         if line is None and len(src_batch) == 0:
             break
 
-        src_batch += [line.split()[:opt.max_sent_length]]
+        src_batch += [line.split()[: opt.max_sent_length]]
         tgt_batch += [opt.tgt]
 
         if len(src_batch) < opt.batch_size:

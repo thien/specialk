@@ -10,6 +10,7 @@ Misc. functions used by a variety of parts of the library.
 
 log = structlog.get_logger()
 
+
 def get_len(filepath):
     """
     Reads number of lines in the mose corpus without using python
@@ -21,7 +22,7 @@ def get_len(filepath):
     return int(value)
 
 
-def batch_compute(func, args, n_processes=cpu_count()-1):
+def batch_compute(func, args, n_processes=cpu_count() - 1):
     """
     Takes a function and some arguments for those functions,
     and returns a list of outputs generated from the function.
@@ -37,6 +38,3 @@ def batch_compute(func, args, n_processes=cpu_count()-1):
     p.close()
     p.join()
     return res_list
-
-
-

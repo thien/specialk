@@ -1,20 +1,19 @@
-
 import math
 import torch.optim as optim
 import torch.nn as nn
 from torch.nn.utils import clip_grad_norm
 
-class Optim(object):
 
+class Optim(object):
     def set_parameters(self, params):
         self.params = list(params)  # careful: params may be a generator
-        if self.method == 'sgd':
+        if self.method == "sgd":
             self.optimizer = optim.SGD(self.params, lr=self.lr)
-        elif self.method == 'adagrad':
+        elif self.method == "adagrad":
             self.optimizer = optim.Adagrad(self.params, lr=self.lr)
-        elif self.method == 'adadelta':
+        elif self.method == "adadelta":
             self.optimizer = optim.Adadelta(self.params, lr=self.lr)
-        elif self.method == 'adam':
+        elif self.method == "adam":
             self.optimizer = optim.Adam(self.params, lr=self.lr)
         else:
             raise RuntimeError("Invalid optim method: " + self.method)
@@ -46,4 +45,4 @@ class Optim(object):
             print("Decaying learning rate to %g" % self.lr)
 
         self.last_ppl = ppl
-        self.optimizer.param_groups[0]['lr'] = self.lr
+        self.optimizer.param_groups[0]["lr"] = self.lr

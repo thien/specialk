@@ -1,20 +1,21 @@
-""" Manage beam search info structure.
+"""Manage beam search info structure.
 
-    Heavily borrowed from OpenNMT-py.
-    For code in OpenNMT-py, please check the following link:
-    https://github.com/OpenNMT/OpenNMT-py/blob/master/onmt/Beam.py
+Heavily borrowed from OpenNMT-py.
+For code in OpenNMT-py, please check the following link:
+https://github.com/OpenNMT/OpenNMT-py/blob/master/onmt/Beam.py
 """
 
 import torch
 import numpy as np
+
 # import transformer.Constants as Constants
 import core.constants as Constants
 
-class Beam():
-    ''' Beam search '''
+
+class Beam:
+    """Beam search"""
 
     def __init__(self, size, device=False):
-
         self.size = size
         self._done = False
 
@@ -26,7 +27,9 @@ class Beam():
         self.prev_ks = []
 
         # The outputs at each time-step.
-        self.next_ys = [torch.full((size,), Constants.PAD, dtype=torch.long, device=device)]
+        self.next_ys = [
+            torch.full((size,), Constants.PAD, dtype=torch.long, device=device)
+        ]
         self.next_ys[0][0] = Constants.SOS
 
     def get_current_state(self):
@@ -53,8 +56,12 @@ class Beam():
 
         flat_beam_lk = beam_lk.view(-1)
 
-        best_scores, best_scores_id = flat_beam_lk.topk(self.size, 0, True, True) # 1st sort
-        best_scores, best_scores_id = flat_beam_lk.topk(self.size, 0, True, True) # 2nd sort
+        best_scores, best_scores_id = flat_beam_lk.topk(
+            self.size, 0, True, True
+        )  # 1st sort
+        best_scores, best_scores_id = flat_beam_lk.topk(
+            self.size, 0, True, True
+        )  # 2nd sort
 
         self.all_scores.append(self.scores)
         self.scores = best_scores
@@ -95,10 +102,10 @@ class Beam():
         return dec_seq
 
     def get_hypothesis(self, k):
-        """ Walk back to construct the full hypothesis. """
+        """Walk back to construct the full hypothesis."""
         hyp = []
         for j in range(len(self.prev_ks) - 1, -1, -1):
-            hyp.append(self.next_ys[j+1][k])
+            hyp.append(self.next_ys[j + 1][k])
             k = self.prev_ks[j][k]
 
         return list(map(lambda x: x.item(), hyp[::-1]))

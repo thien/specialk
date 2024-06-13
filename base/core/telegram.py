@@ -8,6 +8,7 @@ import telebot
 import argparse
 import json
 
+
 class Telegram:
     def __init__(self, api_json_path):
         """
@@ -18,14 +19,14 @@ class Telegram:
         """
         with open(api_json_path) as f:
             api_q = json.load(f)
-        self.bot = telebot.TeleBot(api_q['api_private_key'])
-        self.bot_chatid = api_q['chat_id']
+        self.bot = telebot.TeleBot(api_q["api_private_key"])
+        self.bot_chatid = api_q["chat_id"]
 
-        @self.bot.message_handler(commands=['hello'])
+        @self.bot.message_handler(commands=["hello"])
         def send_something(message):
             print(message)
             pass
-        
+
     def print(self, msg):
         """
         Sends messages to telegram chat ID.
@@ -37,14 +38,15 @@ class Telegram:
 def get_args():
     parser = argparse.ArgumentParser(description="telegram.py")
     # data options
-    parser.add_argument('-config', default="telegram.json",
-                        help='filepath to json config.')
+    parser.add_argument(
+        "-config", default="telegram.json", help="filepath to json config."
+    )
 
     parser.add_argument("-m", required=True, help="messge to send.")
     return parser.parse_args()
-    
+
+
 if __name__ == "__main__":
     args = get_args()
     p = Telegram(args.config)
     p.print(args.m)
-    

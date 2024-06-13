@@ -9,9 +9,9 @@ import multiprocessing
 import numpy as np
 import hashlib
 
-import nlgeval
+# import nlgeval
 
-from pyemd import emd
+# from pyemd import emd
 from gensim.models.word2vec import Word2Vec
 # from gensim.corpora.dictionary import Dictionary
 

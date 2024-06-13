@@ -1,6 +1,7 @@
 
 from scipy.stats import linregress
-from sklearn.externals import joblib
+# from sklearn.externals import joblib
+import joblib
 import json
 import math
 import numpy as np

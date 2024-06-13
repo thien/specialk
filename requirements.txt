@@ -33,11 +33,17 @@ numpy==1.26.4
     # via
     #   bayesian-optimization
     #   gensim
+    #   pandas
     #   scikit-learn
     #   scipy
     #   torchvision
+pandas==2.2.2
 pillow==10.2.0
     # via torchvision
+python-dateutil==2.9.0.post0
+    # via pandas
+pytz==2024.1
+    # via pandas
 regex==2024.5.15
     # via nltk
 requests==2.32.3
@@ -49,7 +55,9 @@ scipy==1.12.0
     #   gensim
     #   scikit-learn
 six==1.16.0
-    # via absl-py
+    # via
+    #   absl-py
+    #   python-dateutil
 smart-open==7.0.4
     # via gensim
 soupsieve==2.5
@@ -58,6 +66,7 @@ sympy==1.12
     # via torch
 threadpoolctl==3.5.0
     # via scikit-learn
+toolz==0.12.1
 torch==2.3.1
     # via
     #   torchaudio
@@ -68,6 +77,8 @@ tqdm==4.66.4
     # via nltk
 typing-extensions==4.9.0
     # via torch
+tzdata==2024.1
+    # via pandas
 urllib3==2.2.1
     # via requests
 wrapt==1.16.0

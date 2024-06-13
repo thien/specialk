@@ -67,7 +67,7 @@ def train(regularization_type, C, vec_x_train, y_train):
 
     '''
     
-    lr = LogisticRegression(penalty=regularization_type, C=C)
+    lr = LogisticRegression(penalty=regularization_type, C=C, solver="liblinear")
     lr.fit(vec_x_train, y_train)  
     return lr
 

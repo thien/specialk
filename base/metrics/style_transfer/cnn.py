@@ -42,7 +42,7 @@ def setup_args(category, src):
     opt.max_sent_length = 50
 
     # is there a gpu?
-    opt.cuda = True
+    opt.cuda = False 
     if opt.cuda:
         torch.cuda.set_device(0)
     return opt

@@ -29,10 +29,12 @@ from nltk import pos_tag
 from nltk import RegexpParser
 from nltk import word_tokenize
 
-sys.path.append('/home/t/Data/Files/Github/msc_project_model/base/')
+# sys.path.append('/home/t/Data/Files/Github/msc_project_model/base/')
+
 from core.bpe import Encoder
 from core.utils import batch_compute, get_len
 from core.sentenciser import *
+from core.utils import log
 
 cachedir = "/home/t/Data/Datasets/msc_proj_cache/"
 
@@ -85,6 +87,7 @@ class Measurements:
         """
         self.cachedir = cachedir
         if not os.path.exists(self.cachedir):
+            log.info("Making cache dir:", self.cachedir)
             os.makedirs(self.cachedir)
         subdirs = [
             "style_lexicons",
@@ -260,10 +263,10 @@ def express(opt):
 
     # calculate preservation of meaning
     preservation = metrics.preservation(src, tgt)
-    print("Preservation:", preservation)
+    log.info(f"Preservation: {preservation}")
     # calculate naturalness
-    # naturalness = metrics.naturalness(tgt, opt.type)
-    # print("Naturalness",naturalness)
+    naturalness = metrics.naturalness(tgt, opt.type)
+    log.info(f"Naturalness: {naturalness}")
     
     # if newspaper, then we can proceed to do newspaper
     # specific measurements.
@@ -272,4 +275,5 @@ def express(opt):
 
 if __name__ == "__main__":
     args = load_args()
+    log.info("Loaded args", args=args)
     express(args)

@@ -1,10 +1,14 @@
 import subprocess
 from tqdm import tqdm
 from multiprocessing import Pool, cpu_count
+import structlog
+import logging
 
 """
 Misc. functions used by a variety of parts of the library.
 """
+
+log = structlog.get_logger()
 
 def get_len(filepath):
     """
@@ -13,7 +17,8 @@ def get_len(filepath):
     """
     command = "wc -l " + filepath
     process = subprocess.run(command.split(" "), stdout=subprocess.PIPE)
-    return int(process.stdout.decode("utf-8").split(" ")[0])
+    value = process.stdout.decode("utf-8").strip().split().pop(0)
+    return int(value)
 
 
 def batch_compute(func, args, n_processes=cpu_count()-1):
@@ -32,5 +37,6 @@ def batch_compute(func, args, n_processes=cpu_count()-1):
     p.close()
     p.join()
     return res_list
+
 
 

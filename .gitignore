@@ -25,3 +25,5 @@ datasets/machine_translation/global_voices/training/*
 *.atok
 base/models
 hansard.36
+.DS_Store
+base/results

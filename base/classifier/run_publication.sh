@@ -28,6 +28,7 @@ VOCABSIZE=40000
 
 MODELNAME="publication_model_test"
 
+BESTMODEL="publication_model_acc_91.76_loss_0.00_e10.pt"
 # Train the classifier
 python3 cnn_train.py \
     -gpus 0 \
@@ -35,12 +36,8 @@ python3 cnn_train.py \
     -save_model $MODELNAME \
     -sequence_length $MAX_SEQ_LEN \
     -batch_size 64 \
-    -epochs 1
-
-BESTMODEL="publication_model_acc_91.76_loss_0.00_e10.pt"
-
-# # Test the classifier accuracy
-python3 cnn_translate.py\
+    -epochs 1 \
+&& python3 cnn_translate.py\
     -gpu 0 \
     -model $BESTMODEL \
     -src $TEST_DATA \

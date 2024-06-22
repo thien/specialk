@@ -10,7 +10,7 @@ import time
 import math
 import os
 
-import core.constants as Constants
+import specialk.core.constants as Constants
 from lib.nmtModel import NMTModel
 from lib.recurrent.Models import Encoder, Decoder
 from lib.recurrent.Models import NMTModel as Seq2Seq

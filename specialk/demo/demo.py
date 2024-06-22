@@ -6,11 +6,11 @@ sys.path.append("../")
 from lib.TransformerModel import TransformerModel as transformer
 from train import load_args
 import torch
-from core.bpe import Encoder as BPE
+from specialk.core.bpe import Encoder as BPE
 from preprocess import reclip
 
 from googletrans import Translator as GTranslator
-from core.dataset import TranslationDataset, collate_fn, paired_collate_fn
+from specialk.core.dataset import TranslationDataset, collate_fn, paired_collate_fn
 from lib.transformer.Translator import Translator
 
 googt = GTranslator()

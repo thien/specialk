@@ -19,7 +19,7 @@ from lib.transformer.Models import (
 )
 from lib.transformer.Optim import ScheduledOptim
 from lib.transformer.Translator import Translator
-from core.bpe import Encoder as BPE
+from specialk.core.bpe import Encoder as BPE
 
 """
 Wrapper class for Transformer.

@@ -1,14 +1,15 @@
-import onmt
+import specialk.classifier.onmt as onmt
 import argparse
 import torch
 import codecs
 from typing import Union, List, Tuple, Iterable
 from pathlib import Path
 from tqdm import tqdm
-from core.bpe import Encoder as BPEEncoder
-from preprocess import parse as bpe_parse
-import core.constants as BPEConstants
-from core.utils import log
+from specialk.core.bpe import Encoder as BPEEncoder
+from specialk.preprocess import parse as bpe_parse
+import specialk.core.constants as BPEConstants
+from specialk.core.utils import log
+
 
 def get_args() -> argparse.Namespace:
     """Loads args.
@@ -45,7 +46,15 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("-seed", type=int, default=3435, help="Random seed")
 
     parser.add_argument("-bpe", action="store_true", help="If set, uses BPE encoding")
-    
+    parser.add_argument(
+        "-pct_bpe", type=float, default=0.1, help="Percentage of tokens to use BPE"
+    )
+    parser.add_argument(
+        "-load_vocab",
+        action="store_true",
+        help="If set, will only load vocabulary file. Error is raised if file does not exist.",
+    )
+
     parser.add_argument("-lower", action="store_true", help="lowercase data")
 
     parser.add_argument(
@@ -101,6 +110,7 @@ class BPEVocabulary(Vocabulary):
         self.vocab: BPEEncoder
 
     def make(self, data_path: Union[Path, str]) -> BPEEncoder:
+        log.info("Creating BPEEncoder")
         src_bpe = BPEEncoder(
             vocab_size=self.vocab_size,
             pct_bpe=self.pct_bpe,
@@ -110,6 +120,8 @@ class BPEVocabulary(Vocabulary):
             word_tokenizer=bpe_parse,
         )
         src_bpe.fit(data_path)
+        self.vocab = src_bpe
+        log.info("Finished creating BPEEncoder")
 
     def to_tensor(self, text: Union[str, List[str]]) -> Iterable[List[int]]:
         """_summary_
@@ -132,6 +144,9 @@ class BPEVocabulary(Vocabulary):
     def save(self):
         self.vocab.save(self.filename)
 
+    def detokenize(self, tokens: List[int]) -> List[str]:
+        raise NotImplementedError
+
 
 class WordVocabulary(Vocabulary):
     """White-space level tokenization."""
@@ -140,6 +155,7 @@ class WordVocabulary(Vocabulary):
         self, name: str, filename: str, vocab_size: int, seq_length: int, lower: bool
     ):
         super().__init__(name, filename, vocab_size)
+        self.vocab: onmt.Dict
         self.seq_length = seq_length
         self.lower = lower
 
@@ -150,6 +166,7 @@ class WordVocabulary(Vocabulary):
         args:
             data_path: path of file to use (this is text data).
         """
+        log.info("Creating WordVocabulary")
         vocab = onmt.Dict(
             [
                 onmt.Constants.PAD_WORD,
@@ -167,9 +184,24 @@ class WordVocabulary(Vocabulary):
                     vocab.add(word)
 
         originalSize = vocab.size()
-        self.vocab = vocab.prune(self.size)
+
+        # for debugging purposes, show the head distribution of the
+        # token freuqencies.
+        top_n = 10
+        head_freq = sorted(
+            vocab.labelToIdx.keys(),
+            key=lambda label: vocab.frequencies[vocab.labelToIdx[label]],
+            reverse=True,
+        )[:top_n]
+        log.debug(
+            "Most frequent tokens found",
+            tokens={k: vocab.frequencies[vocab.labelToIdx[k]] for k in head_freq},
+            filepath=data_path,
+        )
+
+        self.vocab = vocab.prune(self.vocab_size)
         log.info(
-            "Created dictionary of size %d (pruned from %d)"
+            "Created space-separated token dictionary of size %d (pruned from %d)"
             % (self.vocab.size(), originalSize)
         )
 
@@ -177,7 +209,7 @@ class WordVocabulary(Vocabulary):
         if Path(self.filename).exists():
             # If given, load existing word dictionary.
             log.info(f"Reading {self.name} vocabulary from {self.filename}..")
-            self.vocab.loadFile(self.vocabulary_file)
+            self.vocab.loadFile(self.filename)
             self.vocab_size = self.vocab.size()
             log.info(f"Loaded {self.vocab.size()} {self.name} tokens.")
         else:
@@ -205,6 +237,10 @@ class WordVocabulary(Vocabulary):
         """Performs space level tokenization."""
         return [word for word in text.split()]
 
+    def detokenize(self, tokens: List[torch.LongTensor]) -> List[str]:
+        """Returns detokenized form (not concatenated though)"""
+        return [self.vocab.idxToLabel[t.item()] for t in tokens]
+
 
 def make_data(
     filepath: Union[Path, str],
@@ -213,7 +249,7 @@ def make_data(
     label_1: str,
     shuffle: bool = True,
     sort: bool = True,
-) -> Tuple[List[torch.LongTensor, torch.LongTensor]]:
+) -> Tuple[List[torch.LongTensor], List[torch.LongTensor]]:
     """Generates tokenized items.
 
     Args:
@@ -232,6 +268,7 @@ def make_data(
     log.info(f"Processing {filepath} ...")
     src_file = codecs.open(filepath, "r", "utf-8")
 
+    PRINT_FIRST_LINE = False
     while True:
         sequence_line = src_file.readline()
 
@@ -246,11 +283,27 @@ def make_data(
             continue
 
         src_tokens = sequence_line.split()
-        tgt_tokens = src_tokens[0]
-        src_tokens = src_tokens[1:]
+        src_tokens, tgt_tokens = " ".join(src_tokens[1:]), src_tokens[0]
+
+        if not PRINT_FIRST_LINE:
+            log.debug(
+                "Printing first item in src_file",
+                src_tokens=src_tokens,
+                tgt_tokens=tgt_tokens,
+                raw_line=sequence_line,
+            )
 
         if len(src_tokens) <= vocab.seq_length and len(tgt_tokens) <= vocab.seq_length:
             src += [vocab.to_tensor(src_tokens)]
+            if not PRINT_FIRST_LINE:
+                sample_tokens = list(src[-1])
+                log.debug(
+                    "Printing tokenized line",
+                    tokens=sample_tokens,
+                    detokens=vocab.detokenize(sample_tokens),
+                )
+                PRINT_FIRST_LINE = True
+
             if tgt_tokens == label_0:
                 tgt += [torch.LongTensor([0])]
             elif tgt_tokens == label_1:
@@ -293,18 +346,37 @@ def main():
     dicts = {}
     log.info("Preparing source vocab ....")
 
-    if opt.use_bpe:
+    if opt.bpe:
+        log.info("Using BPE Tokenizer")
         tokenizer = BPEVocabulary(
-           "source", opt.src_vocab, opt.src_vocab_size, opt.seq_length, opt.pct_bpe 
+            "source", opt.src_vocab, opt.src_vocab_size, opt.seq_length, opt.pct_bpe
         )
-    tokenizer = WordVocabulary(
-        "source", opt.src_vocab, opt.src_vocab_size, opt.seq_length, opt.lower
-    )
-    tokenizer_exists = Path(opt.src_vocab).exists()
-    if tokenizer_exists:
-        tokenizer.load()
     else:
+        log.info("Using space-separated Tokenizer")
+        tokenizer = WordVocabulary(
+            "source", opt.src_vocab, opt.src_vocab_size, opt.seq_length, opt.lower
+        )
+    vocabulary_file_exists = Path(opt.src_vocab).exists()
+    if opt.load_vocab:
+        if vocabulary_file_exists:
+            log.info(
+                "Path to vocabulary file is valid, attempting to load.",
+                vocab_path=opt.src_vocab,
+            )
+            tokenizer.load()
+        else:
+            log.error(
+                "Could not load vocabulary file, please check that the path to the file is valid.",
+                vocab_path=opt.src_vocab,
+            )
+            raise FileNotFoundError
+    else:
+        log.info(
+            "Could not load vocabulary file, generating new vocabulary.",
+            vocab_path=opt.src_vocab,
+        )
         tokenizer.make(opt.train_src)
+
     dicts["src"] = tokenizer.vocab
 
     log.info("Preparing training ...")
@@ -319,7 +391,7 @@ def main():
         opt.valid_src, tokenizer, opt.label0, opt.label1, opt.shuffle
     )
 
-    if not tokenizer_exists:
+    if not vocabulary_file_exists:
         tokenizer.save()
 
     log.info("Saving data to '" + opt.save_data + ".train.pt'...")

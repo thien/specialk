@@ -24,7 +24,7 @@ import os
 if os.getcwd().split("/")[-1] == "core":
     import constants as Constants
 else:
-    import core.constants as Constants
+    import specialk.core.constants as Constants
 
 DEFAULT_EOW = "__eow"
 DEFAULT_SOW = "__sow"

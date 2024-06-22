@@ -12,9 +12,9 @@ from copy import deepcopy as copy
 
 sys.path.append("../")
 
-import core.constants as Constants
-from core.utils import get_len
-from core.bpe import Encoder as bpe_encoder
+import specialk.core.constants as Constants
+from specialk.core.utils import get_len
+from specialk.core.bpe import Encoder as bpe_encoder
 from preprocess import seq2idx, reclip, load_file
 from preprocess import parse as bpe_parse
 import unicodedata

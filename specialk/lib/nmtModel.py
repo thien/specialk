@@ -6,9 +6,9 @@ init does have some logic in it.
 
 import torch
 import math
-import core.constants as constants
-from core.dataset import TranslationDataset, collate_fn, paired_collate_fn
-from core.bpe import Encoder as BPE
+import specialk.core.constants as constants
+from specialk.core.dataset import TranslationDataset, collate_fn, paired_collate_fn
+from specialk.core.bpe import Encoder as BPE
 import os
 import torch.utils.data
 import datetime

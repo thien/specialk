@@ -8,9 +8,9 @@ for use when training nmt models.
 import argparse
 from tqdm import tqdm
 import torch
-import core.constants as Constants
-from core.bpe import Encoder as bpe_encoder
-from preprocess import load_file, seq2idx, reclip
+import specialk.core.constants as Constants
+from specialk.core.bpe import Encoder as bpe_encoder
+from specialk.preprocess import load_file, seq2idx, reclip
 from copy import deepcopy as copy
 
 

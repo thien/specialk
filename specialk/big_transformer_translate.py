@@ -14,7 +14,7 @@ from fairseq import checkpoint_utils, options, tasks, utils
 from fairseq.data import encoders
 from tqdm import tqdm
 import inspect
-from core.utils import get_len
+from specialk.core.utils import get_len
 
 
 # In[2]:

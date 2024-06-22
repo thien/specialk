@@ -11,8 +11,8 @@ import pandas as pd
 import numpy as np
 
 
-from core.utils import get_len, batch_compute
-from core.sentenciser import *
+from specialk.core.utils import get_len, batch_compute
+from specialk.core.sentenciser import *
 
 from rouge import Rouge
 from metrics.meteor.meteor import Meteor

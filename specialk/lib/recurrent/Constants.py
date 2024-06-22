@@ -8,4 +8,4 @@
 # BOS_WORD = '<s>'
 # EOS_WORD = '</s>'
 
-from core.constants import *
+from specialk.core.constants import *

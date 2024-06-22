@@ -48,6 +48,7 @@ class ConvNet(nn.Module):
         ## src size is seq_size x batch_size x vocab_size. Most cases (50 x 64 x v)
         ## matrix multiply instead of lookup
         # print("input:",input.shape)
+        
         emb = torch.mm(input.view(-1, input.size(2)), self.word_lut.weight)
         emb = emb.view(-1, input.size(1), self.word_vec_size)
         emb = emb.transpose(0, 1)

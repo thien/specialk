@@ -1,5 +1,5 @@
 import numpy as np
-import core.constants as Constants
+import specialk.core.constants as Constants
 import torch
 from torch.autograd import Variable
 from torch import optim

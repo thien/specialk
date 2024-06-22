@@ -1,6 +1,6 @@
 from __future__ import division
 
-import onmt
+import specialk.classifier.onmt as onmt
 import argparse
 import torch
 import torch.nn as nn
@@ -13,7 +13,7 @@ from tqdm import tqdm
 from pathlib import Path
 
 sys.path.append("../")
-from core.dataset import TranslationDataset, collate_fn, paired_collate_fn
+from specialk.core.dataset import TranslationDataset, collate_fn, paired_collate_fn
 
 
 def get_args() -> argparse.Namespace:
@@ -165,6 +165,7 @@ opt = get_args()
 
 print(opt)
 
+DEVICE=onmt.core.check_torch_device()
 
 def NMTCriterion(vocabSize):
     crit = nn.BCELoss()
@@ -180,7 +181,7 @@ def memoryEfficientLoss(outputs, targets, generator, crit, eval=False):
 
     # outputs and targets are size batch_size
     batch_size = outputs.size(0)
-    loss_t = crit(outputs.squeeze(-1), targets[0].float())
+    loss_t = crit(outputs.squeeze(-1), targets[0].float().squeeze(-1))
     if opt.gpus:
         pred_t = torch.ge(
             outputs.data,
@@ -188,7 +189,7 @@ def memoryEfficientLoss(outputs, targets, generator, crit, eval=False):
         )
     else:
         pred_t = torch.ge(
-            outputs.data, torch.FloatTensor(outputs.size(0), outputs.size(1)).fill_(0.5)
+            outputs.data, torch.FloatTensor(outputs.size(0), outputs.size(1)).to(DEVICE).fill_(0.5)
         )
 
     # print("OUTPUT:", (outputs >=0.5).transpose(0,1))
@@ -196,7 +197,7 @@ def memoryEfficientLoss(outputs, targets, generator, crit, eval=False):
     # print("ACC:", (outputs >=0.5).transpose(0,1).long().eq(targets).sum())
 
     # w
-    # num_correct = pred_t.long().squeeze(-1).eq(targets[0].data).sum()
+    num_correct = pred_t.long().squeeze(-1).eq(targets[0].data).sum()
     num_correct = (outputs >= 0.5).transpose(0, 1).long().eq(targets).sum()
     # print("NUM COR:", num_correct)
     loss += loss_t.item()
@@ -215,7 +216,7 @@ def eval(model, criterion, data, vocab_size, opt):
     model.eval()
 
     for batch in tqdm(data, desc="Eval"):
-        src_seq, _, tgt_seq, _ = map(lambda x: x.to("cuda"), batch)
+        src_seq, _, tgt_seq, _ = map(lambda x: x.to(DEVICE), batch)
         # batch = data[i][:-1] # exclude original indices
 
         # src = batch[0]
@@ -276,7 +277,7 @@ def trainModel(model, trainData, validData, dataset, optim, opt):
         start = time.time()
         i = 0
         for batch in tqdm(trainData, desc="Train"):
-            src_seq, _, tgt_seq, _ = map(lambda x: x.to("cuda"), batch)
+            src_seq, _, tgt_seq, _ = map(lambda x: x.to(DEVICE), batch)
 
             # batch = trainData[batchIdx][:-1] # exclude original indices
 
@@ -291,10 +292,11 @@ def trainModel(model, trainData, validData, dataset, optim, opt):
             )  # Size is seq_len x batch_size x 1, type: torch.cuda.LongTensor, Variable
             # print(inp_.shape)
 
-            tensor = torch.cuda.FloatTensor if len(opt.gpus) >= 1 else torch.FloatTensor
+            # tensor = torch.cuda.FloatTensor if len(opt.gpus) >= 1 else torch.FloatTensor
+
 
             # print(src[0].shape)
-            one_hot = Variable(tensor(src.size(0), src.size(1), vocab_size).zero_())
+            one_hot = torch.FloatTensor(src.size(0), src.size(1), vocab_size).zero_().to(DEVICE)
             one_hot_scatt = one_hot.scatter_(
                 2, inp_, 1
             )  # Size: seq_len x batch_size x vocab_size, type: torch.cuda.FloatTensor, Variable
@@ -446,7 +448,9 @@ def main():
 
     print("Building model...")
 
-    model = onmt.CNNModels.ConvNet(opt, vocabulary_size)
+    model:onmt.CNNModels.ConvNet = onmt.CNNModels.ConvNet(opt, vocabulary_size)
+
+    model.word_lut.to(DEVICE)
 
     if opt.train_from:
         print("Loading model from checkpoint at %s" % opt.train_from)
@@ -462,13 +466,6 @@ def main():
         model.load_state_dict(checkpoint["model"])
         opt.start_epoch = checkpoint["epoch"] + 1
 
-    if len(opt.gpus) >= 1:
-        model.cuda()
-    else:
-        model.cpu()
-
-    if len(opt.gpus) > 1:
-        model = nn.DataParallel(model, device_ids=opt.gpus, dim=1)
 
     if not opt.train_from_state_dict and not opt.train_from:
         for p in model.parameters():
@@ -487,6 +484,14 @@ def main():
         print("Loading optimizer from checkpoint:")
         optim = checkpoint["optim"]
         print(optim)
+
+
+    model = model.to(DEVICE)
+
+
+    if len(opt.gpus) > 1:
+        model = nn.DataParallel(model, device_ids=opt.gpus, dim=1)
+
 
     optim.set_parameters(model.parameters())
 

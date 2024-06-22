@@ -15,10 +15,10 @@ import sys
 
 sys.path.append("../")
 
-from preprocess import seq2idx, reclip, load_file
-from preprocess import parse as bpe_parse
-import core.constants as Constants
-from core.bpe import Encoder as bpe_encoder
+from specialk.preprocess import seq2idx, reclip, load_file
+from specialk.preprocess import parse as bpe_parse
+import specialk.core.constants as Constants
+from specialk.core.bpe import Encoder as bpe_encoder
 from tqdm import tqdm
 from copy import deepcopy as copy
 import unicodedata

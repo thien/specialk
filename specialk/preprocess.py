@@ -1,11 +1,11 @@
 import argparse
 import torch
-import core.constants as Constants
-from core.bpe import Encoder as bpe_encoder
+import specialk.core.constants as Constants
+from specialk.core.bpe import Encoder as bpe_encoder
 import subprocess
 from tqdm import tqdm
 from functools import reduce
-from core.utils import get_len
+from specialk.core.utils import get_len
 from copy import deepcopy as copy
 import unicodedata
 

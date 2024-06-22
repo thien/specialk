@@ -15,12 +15,12 @@ from gensim.models.word2vec import Word2Vec
 # from gensim.corpora.dictionary import Dictionary
 
 # style transfer metrics codebase
-import metrics.style_transfer.content_preservation as preserv
-import metrics.style_transfer.style_lexicon as stme_lexicon
-import metrics.style_transfer.utils as stme_utils
-import metrics.style_transfer.tokenizer as stme_tokeniser
+import specialk.metrics.style_transfer.content_preservation as preserv
+import specialk.metrics.style_transfer.style_lexicon as stme_lexicon
+import specialk.metrics.style_transfer.utils as stme_utils
+import specialk.metrics.style_transfer.tokenizer as stme_tokeniser
 
-import metrics.style_transfer.cnn as cnn
+import specialk.metrics.style_transfer.cnn as cnn
 
 from nltk.corpus import cmudict, stopwords
 from nltk.translate.bleu_score import sentence_bleu
@@ -30,10 +30,10 @@ from nltk import word_tokenize
 
 # sys.path.append('/home/t/Data/Files/Github/msc_project_model/base/')
 
-from core.bpe import Encoder
-from core.utils import batch_compute, get_len
-from core.sentenciser import *
-from core.utils import log
+from specialk.core.bpe import Encoder
+from specialk.core.utils import batch_compute, get_len
+from specialk.core.sentenciser import *
+from specialk.core.utils import log
 
 cachedir = "/home/t/Data/Datasets/msc_proj_cache/"
 

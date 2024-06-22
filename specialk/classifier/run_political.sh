@@ -4,16 +4,19 @@
 ## 1. Each instance is on a new line
 ## 2. The label and the sentence are separated by a space
 
-political_dataset="political_new"
-cnn_model_name="political_model_new"
-python3 preprocess_token.py \
-    -train_src ../../datasets/political_data/classtrain.txt \
+# please load this from the specialk root directory.
+
+political_dataset="political_new_2024"
+cnn_model_name="political_model_new_2024"
+python3 specialk/classifier/preprocess_token.py \
+    -train_src ./datasets/political_data/classtrain.txt \
     -label0 democratic \
     -label1 republican \
-    -valid_src  ../../datasets/political_data/classdev.txt \
+    -valid_src  ./datasets/political_data/classdev.txt \
     -save_data $political_dataset \
-    -src_vocab ../results/nmt_fren_goldmaster_bpe_republican.tgt.dict \
+    -src_vocab specialk/results/nmt_fren_goldmaster_bpe_republican.tgt.dict \
     -seq_length 80 \
+    -load_vocab
 
 # Train the classifier
 # python3 cnn_train.py \

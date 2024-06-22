@@ -13,7 +13,7 @@ from tqdm import tqdm
 from pathlib import Path
 
 sys.path.append("../")
-from core.dataset import TranslationDataset, collate_fn, paired_collate_fn
+from specialk.core.dataset import TranslationDataset, collate_fn, paired_collate_fn
 
 
 def get_args() -> argparse.Namespace:

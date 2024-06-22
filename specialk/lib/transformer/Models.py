@@ -8,11 +8,11 @@ import numpy as np
 
 
 # import transformer.Constants as Constants
-import core.constants as Constants
+import specialk.core.constants as Constants
 # if os.getcwd().split("/")[-1] == "transformer":
-#     import core.constants as Constants
+#     import specialk.core.constants as Constants
 # else:
-#     import core.constants as Constants
+#     import specialk.core.constants as Constants
 
 # print(sys.path)
 

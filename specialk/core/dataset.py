@@ -7,7 +7,7 @@ import os
 if os.getcwd().split("/")[-1] == "core":
     import constants as Constants
 else:
-    import core.constants as Constants
+    import specialk.core.constants as Constants
 
 
 def paired_collate_fn(insts):

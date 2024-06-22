@@ -27,3 +27,4 @@ base/models
 hansard.36
 .DS_Store
 base/results
+cache

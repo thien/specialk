@@ -8,8 +8,9 @@ import argparse
 
 import torch
 import torch.nn as nn
-from lib.RecurrentModel import RecurrentModel as recurrent
-from lib.TransformerModel import TransformerModel as transformer
+from specialk.lib.nmtModel import NMTModel
+from specialk.lib.RecurrentModel import RecurrentModel as recurrent
+from specialk.lib.TransformerModel import TransformerModel as transformer
 from tqdm import tqdm
 
 
@@ -362,7 +363,7 @@ def load_args():
 
 
 def train_model(opt):
-    model = transformer(opt) if opt.model == "transformer" else recurrent(opt)
+    model: NMTModel = transformer(opt) if opt.model == "transformer" else recurrent(opt)
     print("Setup model wrapper.")
     model.load_dataset()
     print("Loaded data.")

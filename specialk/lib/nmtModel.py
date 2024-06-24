@@ -10,11 +10,10 @@ import json
 import math
 import os
 
-import numpy as np
 import telebot
 import torch
 import torch.utils.data
-from preprocess import load_file, reclip, seq2idx
+from specialk.preprocess import load_file, reclip, seq2idx
 from tqdm import tqdm
 
 import specialk.core.constants as constants

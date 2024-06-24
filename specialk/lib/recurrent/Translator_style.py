@@ -1,4 +1,4 @@
-# import onmt
+# import specialk.classifier.onmt as onmt
 import numpy as np
 import torch
 import torch.nn as nn

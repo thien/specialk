@@ -7,7 +7,7 @@ import os
 import sys
 from copy import deepcopy as copy
 
-import onmt
+import specialk.classifier.onmt as onmt
 import torch
 from tqdm import tqdm
 

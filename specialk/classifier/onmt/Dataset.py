@@ -6,7 +6,7 @@ import random
 import torch
 from torch.autograd import Variable
 
-import onmt
+import specialk.classifier.onmt as onmt
 
 
 class Dataset(object):

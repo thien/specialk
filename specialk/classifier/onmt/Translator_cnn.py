@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
-import onmt
+import specialk.classifier.onmt as onmt
 
 
 class Translator(object):

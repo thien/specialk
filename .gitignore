@@ -24,7 +24,11 @@ datasets/machine_translation/global_voices/training/*
 *.pyc
 *.atok
 base/models
+base/results
 hansard.36
 .DS_Store
-base/results
+specialk/results
+specialk/models
+specialk/telegram.json
 cache
+*.ruff_cache

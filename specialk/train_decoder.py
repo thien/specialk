@@ -1,13 +1,14 @@
 import argparse
-from tqdm import tqdm
-from lib.RecurrentModel import RecurrentModel as recurrent
-from lib.TransformerModel import TransformerModel as transformer
+import os
+import sys
+
+import numpy as np
 import torch
 import torch.nn as nn
-import sys
+from lib.RecurrentModel import RecurrentModel as recurrent
+from lib.TransformerModel import TransformerModel as transformer
 from torch.autograd import Variable
-import numpy as np
-import os
+from tqdm import tqdm
 
 sys.path.append("classifier")
 import classifier.onmt as onmt

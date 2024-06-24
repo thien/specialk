@@ -4,18 +4,16 @@
 # In[1]:
 
 
-import torch
-from collections import namedtuple
 import fileinput
+import inspect
+from collections import namedtuple
 
 import torch
-
 from fairseq import checkpoint_utils, options, tasks, utils
 from fairseq.data import encoders
 from tqdm import tqdm
-import inspect
-from specialk.core.utils import get_len
 
+from specialk.core.utils import get_len
 
 # In[2]:
 
@@ -200,7 +198,7 @@ def main(args):
 def parse_args_and_arch(parser, input_args=None, parse_known=False):
     parser.add_argument("-f")
     #     parser.add_argument("data")
-    from fairseq.models import ARCH_MODEL_REGISTRY, ARCH_CONFIG_REGISTRY
+    from fairseq.models import ARCH_CONFIG_REGISTRY, ARCH_MODEL_REGISTRY
 
     # The parser doesn't know about model/criterion/optimizer-specific args, so
     # we parse twice. First we parse the model/criterion/optimizer, then we

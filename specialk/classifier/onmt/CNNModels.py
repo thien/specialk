@@ -1,11 +1,12 @@
 import numpy as np
-import onmt
 import torch
-from torch.autograd import Variable
-from torch import optim
 import torch.nn as nn
-from torch.nn.utils.rnn import pad_packed_sequence as unpack
+from torch import optim
+from torch.autograd import Variable
 from torch.nn.utils.rnn import pack_padded_sequence as pack
+from torch.nn.utils.rnn import pad_packed_sequence as unpack
+
+import onmt
 
 
 class ConvNet(nn.Module):
@@ -48,7 +49,7 @@ class ConvNet(nn.Module):
         ## src size is seq_size x batch_size x vocab_size. Most cases (50 x 64 x v)
         ## matrix multiply instead of lookup
         # print("input:",input.shape)
-        
+
         emb = torch.mm(input.view(-1, input.size(2)), self.word_lut.weight)
         emb = emb.view(-1, input.size(1), self.word_vec_size)
         emb = emb.transpose(0, 1)

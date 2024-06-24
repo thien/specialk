@@ -5,11 +5,12 @@ train.py will load some datasets, and will produce some results and save the enc
 """
 
 import argparse
-from tqdm import tqdm
-from lib.RecurrentModel import RecurrentModel as recurrent
-from lib.TransformerModel import TransformerModel as transformer
+
 import torch
 import torch.nn as nn
+from lib.RecurrentModel import RecurrentModel as recurrent
+from lib.TransformerModel import TransformerModel as transformer
+from tqdm import tqdm
 
 
 def load_args():

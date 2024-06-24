@@ -1,21 +1,21 @@
+import math
+import os
+import time
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data
-from torch.autograd import Variable
-
-from tqdm import tqdm
-import time
-import math
-import os
-
-import specialk.core.constants as Constants
 from lib.nmtModel import NMTModel
-from lib.recurrent.Models import Encoder, Decoder
+from lib.recurrent.Models import Decoder, Encoder
 from lib.recurrent.Models import NMTModel as Seq2Seq
 from lib.recurrent.Optim import Optim
 from lib.recurrent.Translator import Translator
+from torch.autograd import Variable
+from tqdm import tqdm
+
+import specialk.core.constants as Constants
 
 
 class RecurrentModel(NMTModel):

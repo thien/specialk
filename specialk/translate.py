@@ -6,10 +6,11 @@ on the encoder and decoders used.)
 """
 
 import argparse
-from tqdm import tqdm
+
 import torch
-from lib.TransformerModel import TransformerModel as transformer
 from lib.RecurrentModel import RecurrentModel as recurrent
+from lib.TransformerModel import TransformerModel as transformer
+from tqdm import tqdm
 
 
 def load_args():

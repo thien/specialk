@@ -1,8 +1,9 @@
-from . import Models, Constants, Dataset, modules
-from .Beam import Beam
-import torch.nn as nn
 import torch
+import torch.nn as nn
 from torch.autograd import Variable
+
+from . import Constants, Dataset, Models, modules
+from .Beam import Beam
 
 
 class Translator(object):

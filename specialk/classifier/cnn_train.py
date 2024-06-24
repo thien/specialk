@@ -1,16 +1,18 @@
 from __future__ import division
 
-import specialk.classifier.onmt as onmt
 import argparse
+import math
+import sys
+import time
+from pathlib import Path
+
 import torch
 import torch.nn as nn
 from torch import cuda
 from torch.autograd import Variable
-import math
-import time
-import sys
 from tqdm import tqdm
-from pathlib import Path
+
+import specialk.classifier.onmt as onmt
 
 sys.path.append("../")
 from specialk.core.dataset import TranslationDataset, collate_fn, paired_collate_fn

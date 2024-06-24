@@ -1,7 +1,8 @@
-import sys
-import os
 import argparse
 import codecs
+import os
+import sys
+
 import torch
 from tqdm import tqdm
 

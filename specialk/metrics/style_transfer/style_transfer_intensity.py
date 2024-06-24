@@ -26,10 +26,10 @@ Usage:
 
 """
 
-from globals import MODEL_TO_PARAMS, MODEL_TO_PARAM_NAMES
+import numpy as np
+from globals import MODEL_TO_PARAM_NAMES, MODEL_TO_PARAMS
 from pyemd import emd
 from utils import calculate_correlations, get_val_as_str, load_turk_scores
-import numpy as np
 
 ASPECT = "style_transfer_intensity"
 AUTOMATED_SCORES_PATH = (

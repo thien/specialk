@@ -1,7 +1,8 @@
-import onmt
-import torch.nn as nn
 import torch
+import torch.nn as nn
 from torch.autograd import Variable
+
+import onmt
 
 
 class Translator(object):
@@ -95,9 +96,6 @@ class Translator(object):
         dataset = self.buildData(srcBatch, goldBatch)
         src, tgt, indices = dataset[0]
 
-        #         print(src[].shape)
-        #         # src is a tuple
-        #         print(src.shape, tgt.shape)
         #  (2) translate
         num_correct, batchSize, outs, pred = self.translateBatch(src, tgt)
 
@@ -111,7 +109,6 @@ class Translator(object):
             srcBatch = torch.LongTensor(srcBatch)
             goldBatch = torch.LongTensor(goldBatch)
         #  (2) translate
-        #         print("SRC:", srcBatch.shape, goldBatch.shape)
 
         srcBatch = srcBatch.transpose(0, 1)
         srcLens = [srcBatch.size(0) for i in range(srcBatch.size(1))]

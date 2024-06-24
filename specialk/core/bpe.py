@@ -11,15 +11,16 @@ https://github.com/soaxelbrooke/python-bpe/tree/master/bpe
 from collections import Counter
 
 try:
-    from typing import Dict, Iterable, Callable, List, Any, Iterator
+    from typing import Any, Callable, Dict, Iterable, Iterator, List
 except ImportError:
     pass
 
-from nltk.tokenize import wordpunct_tokenize
-from tqdm import tqdm
-import toolz
 import json
 import os
+
+import toolz
+from nltk.tokenize import wordpunct_tokenize
+from tqdm import tqdm
 
 if os.getcwd().split("/")[-1] == "core":
     import constants as Constants

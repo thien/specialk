@@ -6,12 +6,14 @@ for use when training nmt models.
 """
 
 import argparse
-from tqdm import tqdm
+from copy import deepcopy as copy
+
 import torch
+from tqdm import tqdm
+
 import specialk.core.constants as Constants
 from specialk.core.bpe import Encoder as bpe_encoder
-from specialk.preprocess import load_file, seq2idx, reclip
-from copy import deepcopy as copy
+from specialk.preprocess import load_file, reclip, seq2idx
 
 
 def load_args():

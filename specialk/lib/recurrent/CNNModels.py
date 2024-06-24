@@ -1,9 +1,10 @@
 import numpy as np
-import specialk.core.constants as Constants
 import torch
-from torch.autograd import Variable
-from torch import optim
 import torch.nn as nn
+from torch import optim
+from torch.autograd import Variable
+
+import specialk.core.constants as Constants
 
 
 class ConvNet(nn.Module):

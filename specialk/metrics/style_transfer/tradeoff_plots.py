@@ -20,10 +20,11 @@ You can find examples of more detailed usage commands below.
 
 """
 
-from globals import *
-from matplotlib import pyplot as plt, lines as mlines
-from numpy.polynomial import Polynomial
 import numpy as np
+from globals import *
+from matplotlib import lines as mlines
+from matplotlib import pyplot as plt
+from numpy.polynomial import Polynomial
 
 
 ## DATA LOADING

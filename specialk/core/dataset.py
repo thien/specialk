@@ -1,7 +1,8 @@
+import os
+
 import numpy as np
 import torch
 import torch.utils.data
-import os
 
 # deal with constants
 if os.getcwd().split("/")[-1] == "core":

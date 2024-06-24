@@ -1,8 +1,9 @@
-import subprocess
-from tqdm import tqdm
-from multiprocessing import Pool, cpu_count
-import structlog
 import logging
+import subprocess
+from multiprocessing import Pool, cpu_count
+
+import structlog
+from tqdm import tqdm
 
 """
 Misc. functions used by a variety of parts of the library.

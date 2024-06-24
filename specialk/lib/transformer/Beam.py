@@ -5,8 +5,8 @@ For code in OpenNMT-py, please check the following link:
 https://github.com/OpenNMT/OpenNMT-py/blob/master/onmt/Beam.py
 """
 
-import torch
 import numpy as np
+import torch
 
 # import transformer.Constants as Constants
 import specialk.core.constants as Constants

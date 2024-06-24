@@ -23,7 +23,11 @@ You can find examples of more detailed usage commands below.
 
 """
 
+import re
 from collections import Counter
+
+import numpy as np
+import pandas as pd
 from globals import *
 from keras.models import load_model as load_keras_model
 from keras.preprocessing.sequence import pad_sequences
@@ -36,9 +40,6 @@ from utils import (
     load_turk_scores,
     merge_datasets,
 )
-import numpy as np
-import pandas as pd
-import re
 
 ASPECT = "naturalness"
 AUTOMATED_EVALUATION_BASE_PATH = f"../evaluations/automated/{ASPECT}/sentence_level"

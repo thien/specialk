@@ -1,35 +1,36 @@
 import argparse
-from tqdm import tqdm
 import sys
+
+from tqdm import tqdm
 
 sys.path.append("../")
-from lib.TransformerModel import TransformerModel as transformer
-from train import load_args
 import torch
-from specialk.core.bpe import Encoder as BPE
-from preprocess import reclip
-
 from googletrans import Translator as GTranslator
-from specialk.core.dataset import TranslationDataset, collate_fn, paired_collate_fn
 from lib.transformer.Translator import Translator
+from lib.TransformerModel import TransformerModel as transformer
+from preprocess import reclip
+from train import load_args
+
+from specialk.core.bpe import Encoder as BPE
+from specialk.core.dataset import TranslationDataset, collate_fn, paired_collate_fn
 
 googt = GTranslator()
-import subprocess
 import os
-from nltk.tokenize import sent_tokenize
-import torch.nn.functional as F
+import subprocess
+
 import torch.nn as nn
+import torch.nn.functional as F
 from mosestokenizer import MosesDetokenizer
+from nltk.tokenize import sent_tokenize
 
 detokeniser = MosesDetokenizer("en")
-import textwrap
-from termcolor import colored, cprint
-
 import sys
+import textwrap
+
+from termcolor import colored, cprint
 
 sys.path.append("/home/t/Data/Files/Github/msc_project")
 from Downloader import Downloader
-
 
 pub_colours = {"popular": "red", "quality": "blue"}
 classes = {

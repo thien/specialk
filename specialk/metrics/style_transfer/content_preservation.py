@@ -16,6 +16,7 @@ You can find examples of more detailed usage commands below.
 
 """
 
+import numpy as np
 from gensim.models.word2vec import Word2Vec
 
 # from globals import MODEL_TO_PARAMS, MODEL_TO_PARAM_NAMES
@@ -28,7 +29,6 @@ from metrics.style_transfer.utils import (
     load_turk_scores,
     merge_datasets,
 )
-import numpy as np
 
 ASPECT = "content_preservation"
 AUTOMATED_SCORES_PATH = "../evaluations/automated/content_preservation/sentence_level"

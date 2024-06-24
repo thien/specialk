@@ -13,18 +13,19 @@ To load the lexicon, use load_lexicon().
 """
 
 from operator import itemgetter
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.linear_model import LogisticRegression
+
+import numpy as np
 from metrics.style_transfer.tokenizer import tokenize
 from metrics.style_transfer.utils import (
     invert_dict,
     load_json,
-    load_train_set,
     load_model,
+    load_train_set,
     save_json,
     save_model,
 )
-import numpy as np
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.linear_model import LogisticRegression
 
 DATA_VECTORIZER_PATH = "../models/vectorizer.pkl"
 

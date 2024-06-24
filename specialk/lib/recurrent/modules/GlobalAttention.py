@@ -80,9 +80,10 @@ Constructs a unit mapping.
     The full def is  $$\tanh(W_2 [(softmax((W_1 q + b_1) H) H), q] + b_2)$$.:
 """
 
+import math
+
 import torch
 import torch.nn as nn
-import math
 
 
 class GlobalAttention(nn.Module):

@@ -8,18 +8,19 @@ https://github.com/shrimai/Style-Transfer-Through-Back-Translation/blob/master/c
 
 from __future__ import division
 
-import specialk.classifier.onmt as onmt
-from specialk.core.utils import log
 import argparse
+from pathlib import Path
+from typing import Optional, Tuple, Union
+
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-from tqdm import tqdm
-from pathlib import Path
-from typing import Union, Tuple, Optional
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
+import specialk.classifier.onmt as onmt
 from specialk.core.dataset import TranslationDataset, paired_collate_fn
+from specialk.core.utils import log
 
 DEVICE: str = onmt.core.check_torch_device()
 

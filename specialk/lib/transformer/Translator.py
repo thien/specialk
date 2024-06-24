@@ -7,8 +7,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .Models import Transformer
 from .Beam import Beam
+from .Models import Transformer
 
 
 class Translator(object):

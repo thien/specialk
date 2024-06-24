@@ -7,6 +7,7 @@ clear
 POLITICAL_DATASET="political_bpe_2019"
 cnn_model_name="specialk/models/political_model_bpe_2019"
 seq_len=100
+
 # python3 specialk/classifier/preprocess_bpe.py \
 #     -train_src ./datasets/political_data/classtrain.txt \
 #     -label0 democratic \

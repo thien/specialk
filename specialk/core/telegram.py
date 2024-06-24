@@ -4,9 +4,10 @@ It's a wrapper of a wrapper.
 We'll use this so we can do bash calls.
 """
 
-import telebot
 import argparse
 import json
+
+import telebot
 
 
 class Telegram:

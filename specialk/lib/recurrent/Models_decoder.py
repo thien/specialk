@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-from . import modules
-from torch.nn.utils.rnn import pad_packed_sequence as unpack
 from torch.nn.utils.rnn import pack_padded_sequence as pack
+from torch.nn.utils.rnn import pad_packed_sequence as unpack
+
+from . import modules
 
 """
 I'm not sure where this is used.

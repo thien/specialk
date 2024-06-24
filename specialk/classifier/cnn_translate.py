@@ -1,11 +1,13 @@
 from __future__ import division
 
-import onmt
-import torch
 import argparse
-import math
 import codecs
+import math
 import sys
+
+import torch
+
+import specialk.classifier.onmt as onmt
 
 parser = argparse.ArgumentParser(description="translate.py")
 

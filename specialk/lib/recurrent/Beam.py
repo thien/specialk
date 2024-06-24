@@ -11,8 +11,8 @@ from __future__ import division
 #         ========================
 #
 # Takes care of beams, back pointers, and scores.
-
 import torch
+
 from . import Constants
 
 

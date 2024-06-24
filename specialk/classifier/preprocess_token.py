@@ -1,14 +1,16 @@
-import specialk.classifier.onmt as onmt
 import argparse
-import torch
 import codecs
-from typing import Union, List, Tuple, Iterable
 from pathlib import Path
+from typing import Iterable, List, Tuple, Union
+
+import torch
 from tqdm import tqdm
-from specialk.core.bpe import Encoder as BPEEncoder
-from specialk.preprocess import parse as bpe_parse
+
+import specialk.classifier.onmt as onmt
 import specialk.core.constants as BPEConstants
+from specialk.core.bpe import Encoder as BPEEncoder
 from specialk.core.utils import log
+from specialk.preprocess import parse as bpe_parse
 
 
 def get_args() -> argparse.Namespace:

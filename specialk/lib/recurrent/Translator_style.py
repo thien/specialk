@@ -1,9 +1,10 @@
 # import onmt
-from . import Models_decoder, Models, Constants, Dataset, modules, Beam
-import torch.nn as nn
-import torch
-from torch.autograd import Variable
 import numpy as np
+import torch
+import torch.nn as nn
+from torch.autograd import Variable
+
+from . import Beam, Constants, Dataset, Models, Models_decoder, modules
 
 
 class Translator(object):

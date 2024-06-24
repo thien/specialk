@@ -1,23 +1,26 @@
 from __future__ import division
 
+import argparse
+import codecs
+import math
+import os
+import sys
+from copy import deepcopy as copy
+
 import onmt
 import torch
-import argparse
-import math
-import codecs
-import sys
-import os
 from tqdm import tqdm
-from copy import deepcopy as copy
 
 sys.path.append("../")
 
-import specialk.core.constants as Constants
-from specialk.core.utils import get_len
-from specialk.core.bpe import Encoder as bpe_encoder
-from preprocess import seq2idx, reclip, load_file
-from preprocess import parse as bpe_parse
 import unicodedata
+
+from preprocess import load_file, reclip, seq2idx
+from preprocess import parse as bpe_parse
+
+import specialk.core.constants as Constants
+from specialk.core.bpe import Encoder as bpe_encoder
+from specialk.core.utils import get_len
 
 SOS, EOS = Constants.SOS, Constants.EOS
 

@@ -5,23 +5,26 @@ dataset.
 
 """
 
-import onmt
-import numpy as np
 import argparse
-import torch
 import codecs
 import json
 import sys
 
+import numpy as np
+import onmt
+import torch
+
 sys.path.append("../")
 
-from specialk.preprocess import seq2idx, reclip, load_file
-from specialk.preprocess import parse as bpe_parse
+import unicodedata
+from copy import deepcopy as copy
+
+from tqdm import tqdm
+
 import specialk.core.constants as Constants
 from specialk.core.bpe import Encoder as bpe_encoder
-from tqdm import tqdm
-from copy import deepcopy as copy
-import unicodedata
+from specialk.preprocess import load_file, reclip, seq2idx
+from specialk.preprocess import parse as bpe_parse
 
 
 def load_args():

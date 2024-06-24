@@ -1,38 +1,32 @@
-import spacy
-import torch
-import os
-import json
-from tqdm import tqdm
 import argparse
+import json
 import multiprocessing
+import os
 import subprocess
-
-import pandas as pd
-import numpy as np
-
-
-from specialk.core.utils import get_len, batch_compute
-from specialk.core.sentenciser import *
-
-from rouge import Rouge
-from metrics.meteor.meteor import Meteor
-
-from nltk.corpus import cmudict, stopwords
-from nltk.translate.bleu_score import sentence_bleu
-from nltk import pos_tag
-from nltk import RegexpParser
-from nltk import word_tokenize
-from nltk.sentiment.vader import SentimentIntensityAnalyzer
-
-# for emd
-from pyemd import emd
-from gensim.corpora.dictionary import Dictionary
 
 # TODO: need to move spacy to outside s.t. it can be used for multiprocessing.
 # TODO: need to move glove to outside for similar reasons to as spacy.
 # TODO: same for syllables dict.
-
 import warnings
+
+import numpy as np
+import pandas as pd
+import spacy
+import torch
+from gensim.corpora.dictionary import Dictionary
+from metrics.meteor.meteor import Meteor
+from nltk import RegexpParser, pos_tag, word_tokenize
+from nltk.corpus import cmudict, stopwords
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+from nltk.translate.bleu_score import sentence_bleu
+
+# for emd
+from pyemd import emd
+from rouge import Rouge
+from tqdm import tqdm
+
+from specialk.core.sentenciser import *
+from specialk.core.utils import batch_compute, get_len
 
 warnings.filterwarnings("ignore")
 

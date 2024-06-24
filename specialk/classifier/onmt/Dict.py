@@ -1,5 +1,6 @@
-import torch
 import codecs
+
+import torch
 
 
 class Dict(object):

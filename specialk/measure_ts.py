@@ -1,39 +1,34 @@
 import argparse
-import torch
+import hashlib
+import json
+import multiprocessing
 import os
 import sys
-import json
-from tqdm import tqdm
-import multiprocessing
+
 import numpy as np
-import hashlib
+import torch
 
 # import nlgeval
-
 # from pyemd import emd
 from gensim.models.word2vec import Word2Vec
-# from gensim.corpora.dictionary import Dictionary
-
-# style transfer metrics codebase
-import specialk.metrics.style_transfer.content_preservation as preserv
-import specialk.metrics.style_transfer.style_lexicon as stme_lexicon
-import specialk.metrics.style_transfer.utils as stme_utils
-import specialk.metrics.style_transfer.tokenizer as stme_tokeniser
+from nltk import RegexpParser, pos_tag, word_tokenize
+from nltk.corpus import cmudict, stopwords
+from nltk.translate.bleu_score import sentence_bleu
+from tqdm import tqdm
 
 import specialk.metrics.style_transfer.cnn as cnn
 
-from nltk.corpus import cmudict, stopwords
-from nltk.translate.bleu_score import sentence_bleu
-from nltk import pos_tag
-from nltk import RegexpParser
-from nltk import word_tokenize
+# from gensim.corpora.dictionary import Dictionary
+# style transfer metrics codebase
+import specialk.metrics.style_transfer.content_preservation as preserv
+import specialk.metrics.style_transfer.style_lexicon as stme_lexicon
+import specialk.metrics.style_transfer.tokenizer as stme_tokeniser
+import specialk.metrics.style_transfer.utils as stme_utils
 
 # sys.path.append('/home/t/Data/Files/Github/msc_project_model/base/')
-
 from specialk.core.bpe import Encoder
-from specialk.core.utils import batch_compute, get_len
 from specialk.core.sentenciser import *
-from specialk.core.utils import log
+from specialk.core.utils import batch_compute, get_len, log
 
 cachedir = "/home/t/Data/Datasets/msc_proj_cache/"
 

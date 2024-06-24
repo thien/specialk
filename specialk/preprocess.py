@@ -1,13 +1,15 @@
 import argparse
+import subprocess
+import unicodedata
+from copy import deepcopy as copy
+from functools import reduce
+
 import torch
+from tqdm import tqdm
+
 import specialk.core.constants as Constants
 from specialk.core.bpe import Encoder as bpe_encoder
-import subprocess
-from tqdm import tqdm
-from functools import reduce
 from specialk.core.utils import get_len
-from copy import deepcopy as copy
-import unicodedata
 
 """
 Preprocesses mose style code to pytorch ready files.

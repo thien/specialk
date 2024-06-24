@@ -14,7 +14,6 @@ import argparse
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-import time
 from tqdm import tqdm
 from pathlib import Path
 from typing import Union, Tuple, Optional
@@ -170,7 +169,6 @@ def get_args() -> argparse.Namespace:
 
 DEVICE: str = onmt.core.check_torch_device()
 
-
 def memory_efficient_loss(
     outputs: torch.Tensor,
     targets: torch.Tensor,
@@ -237,13 +235,15 @@ def eval(model, criterion, data, vocab_size: int, opt):
         seq_len: int = src.size(0)
         batch_size: int = src.size(1)
 
-        one_hot = Variable(torch.FloatTensor(seq_len, batch_size, vocab_size).zero_())
+        one_hot = Variable(
+            torch.FloatTensor(seq_len, batch_size, vocab_size).zero_()
+        ).to(DEVICE)
         one_hot_scatter = one_hot.scatter_(2, torch.unsqueeze(src, 2), 1)
 
         outputs = model(one_hot_scatter)
         targets = tgt_seq.transpose(0, 1)
         loss, _ = memory_efficient_loss(outputs, targets, criterion, eval=True)
-        
+
         total_loss += loss
         total_n_correct += calculate_classification_metrics(outputs, targets)
         total_words += targets.size(1)
@@ -252,11 +252,15 @@ def eval(model, criterion, data, vocab_size: int, opt):
     return total_loss / total_words, total_n_correct / total_words
 
 
-def trainModel(
-    model, data_train: DataLoader, data_validation: DataLoader, dataset, optim, opt, criterion
+def train_model(
+    model,
+    data_train: DataLoader,
+    data_validation: DataLoader,
+    dataset,
+    optim,
+    opt,
+    criterion,
 ):
-    
-
     def train_epoch(epoch: int, opt: dict):
         model.train()
         if opt.extra_shuffle and epoch > opt.curriculum:
@@ -278,7 +282,7 @@ def trainModel(
             model.zero_grad()
             outputs = model(one_hot_scatter)
 
-            targets = tgt_seq.transpose(0, 1) # shape output to calculate loss.
+            targets = tgt_seq.transpose(0, 1)  # shape output to calculate loss.
             loss, gradients = memory_efficient_loss(outputs, targets, criterion)
             outputs.backward(gradients)
             optim.step()  # update the parameters
@@ -286,18 +290,18 @@ def trainModel(
             n_correct = calculate_classification_metrics(outputs, targets)
 
             # metrics
-            num_words = targets.size(1) # this is the same as the batch 
+            num_words = targets.size(1)  # this is the same as the batch
             # size (this is a classification task).
 
             total_loss += loss
             total_n_correct += n_correct
             total_words += num_words
-            accuracy = (n_correct / num_words)
+            accuracy = n_correct / num_words
             log.info(
                 "Metrics",
                 epoch=epoch,
-                loss=loss.item(),
-                accuracy=accuracy,
+                loss=f"{loss.item():.3f}",
+                accuracy=f"{accuracy:.3f}",
             )
 
         return total_loss / total_words, total_n_correct / total_words
@@ -310,7 +314,9 @@ def trainModel(
         print("Train Loss: ", train_loss)
 
         #  (2) evaluate on the validation set
-        valid_loss, valid_acc = eval(model, criterion, data_validation, model.vocab_size, opt)
+        valid_loss, valid_acc = eval(
+            model, criterion, data_validation, model.vocab_size, opt
+        )
         print("Validation accuracy: %g" % (valid_acc * 100))
         print("Validation Loss: ", valid_loss)
 
@@ -517,7 +523,7 @@ def main():
 
     criterion = nn.BCELoss()
 
-    trainModel(model, data_train, data_validation, dataset, optim, opt, criterion)
+    train_model(model, data_train, data_validation, dataset, optim, opt, criterion)
 
 
 if __name__ == "__main__":

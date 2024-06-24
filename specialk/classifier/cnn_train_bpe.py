@@ -296,7 +296,7 @@ def trainModel(
             log.info(
                 "Metrics",
                 epoch=epoch,
-                loss=loss,
+                loss=loss.item(),
                 accuracy=accuracy,
             )
 

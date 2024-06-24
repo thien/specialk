@@ -1,11 +1,13 @@
-from datasets import Dataset, load_dataset
-from torch.utils.data import DataLoader
+from pathlib import Path
+
 import pytest
 import torch
-from specialk.lib.tokenizer import WordVocabulary, BPEVocabulary
-from tests.tokenizer.test_tokenizer import VOCABULARY_SIZE, SEQUENCE_LENGTH, PCT_BPE
-from pathlib import Path
+from torch.utils.data import DataLoader
+
+from datasets import Dataset, load_dataset
 from specialk.core.utils import log
+from specialk.lib.tokenizer import BPEVocabulary, WordVocabulary
+from tests.tokenizer.test_tokenizer import PCT_BPE, SEQUENCE_LENGTH, VOCABULARY_SIZE
 
 dirpath = "tests/tokenizer/test_files"
 

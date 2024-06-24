@@ -1,4 +1,5 @@
 import codecs
+from typing import List
 
 import torch
 
@@ -113,19 +114,31 @@ class Dict(object):
     # Convert `labels` to indices. Use `unkWord` if not found.
     # Optionally insert `bosWord` at the beginning and `eosWord` at the .
     # Also adding padding for sentences with less than 50 tokens .
-    def convertToIdx(self, labels, unkWord, padding=False, bosWord=None, eosWord=None):
+    def convertToIdx(
+        self,
+        labels: List[str],
+        unkWord,
+        padding=False,
+        bosWord=None,
+        eosWord=None,
+        paddingWord=None,
+    ):
         vec = []
 
         if bosWord is not None:
             vec += [self.lookup(bosWord)]
 
         unk = self.lookup(unkWord)
-        vec += [self.lookup(label, default=unk) for label in labels]
-        if padding == True:
-            vec += [3] * (self.seq_length - len(labels))
+        pad = 3
+        if paddingWord:
+            pad = self.lookup(paddingWord)
 
+        vec += [self.lookup(label, default=unk) for label in labels]
+        # EOS should come before Padding.
         if eosWord is not None:
             vec += [self.lookup(eosWord)]
+        if padding:
+            vec += [pad] * (self.seq_length - len(vec))
 
         return torch.LongTensor(vec)
 

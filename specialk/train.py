@@ -8,10 +8,11 @@ import argparse
 
 import torch
 import torch.nn as nn
+from tqdm import tqdm
+
 from specialk.lib.nmtModel import NMTModel
 from specialk.lib.RecurrentModel import RecurrentModel as recurrent
 from specialk.lib.TransformerModel import TransformerModel as transformer
-from tqdm import tqdm
 
 
 def load_args():

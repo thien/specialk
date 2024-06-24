@@ -1,12 +1,12 @@
 import json
 import math
+from typing import List
 
 # from sklearn.externals import joblib
 import joblib
 import numpy as np
 import pandas
 from scipy.stats import linregress
-from typing import List
 
 # hyperparameter settings for each examined style transfer model
 MODEL_TO_PARAMS = {

@@ -1,15 +1,16 @@
 import codecs
 from pathlib import Path
-from typing import Iterable, List, Union, Optional
+from typing import Iterable, List, Optional, Union
 
 import torch
+from sacremoses import MosesDetokenizer, MosesTokenizer
 from tqdm import tqdm
 
 import specialk.classifier.onmt as onmt
-from specialk.core.bpe import Encoder as BPEEncoder
-from specialk.core.utils import log, load_dataset
-from specialk.preprocess import parse as bpe_parse
 import specialk.core.constants as Constants
+from specialk.core.bpe import Encoder as BPEEncoder
+from specialk.core.utils import load_dataset, log
+from specialk.preprocess import parse as bpe_parse
 
 
 class Vocabulary:
@@ -145,6 +146,8 @@ class WordVocabulary(Vocabulary):
         self.UNK_TOKEN = onmt.Constants.UNK_WORD
         self.BOS_TOKEN = onmt.Constants.BOS_WORD
         self.EOS_TOKEN = onmt.Constants.EOS_WORD
+        self.mt = MosesTokenizer(lang="en")
+        self.md = MosesDetokenizer(lang="en")
 
     def make(self, data_path: Union[Path, str]):
         """
@@ -198,9 +201,12 @@ class WordVocabulary(Vocabulary):
             log.info(f"Reading {self.name} vocabulary from {self.filename}..")
             self.vocab.loadFile(self.filename)
             self.vocab_size = self.vocab.size()
-            self.seq_len = self.max_length
+            self.vocab.seq_length = self.max_length
             self.lower = self.lower
-            log.info(f"Loaded {self.vocab.size()} {self.name} tokens.")
+            log.info(
+                f"Loaded {self.vocab.size()} {self.name} tokens.",
+                max_len=self.vocab.seq_length,
+            )
         else:
             raise FileNotFoundError(f"{self.filename} doesn't exist.")
 
@@ -221,14 +227,20 @@ class WordVocabulary(Vocabulary):
         Returns:
             torch.LongTensor: List of indices corresponding to the token index from the vocab.
         """
-        tokens = self.tokenize(text)
-        return self.vocab.convertToIdx(tokens, onmt.Constants.UNK_WORD, padding=True)
+        return self.vocab.convertToIdx(
+            self.tokenize(text),
+            unkWord=self.UNK_TOKEN,
+            padding=True,
+            bosWord=self.BOS_TOKEN,
+            eosWord=self.EOS_TOKEN,
+            paddingWord=self.PAD_TOKEN,
+        )
 
-    @staticmethod
-    def tokenize(text: str) -> List[str]:
-        """Performs space level tokenization."""
-        return [word for word in text.split()]
+    def tokenize(self, text: str) -> List[str]:
+        """Performs space level tokenization.
+        Ensure that Moses Tokenization is used here."""
+        return [word for word in self.mt.tokenize(text, return_str=True).split()]
 
-    def detokenize(self, tokens: List[torch.LongTensor]) -> List[str]:
+    def detokenize(self, tokens: List[torch.LongTensor]) -> str:
         """Returns detokenized form (not concatenated though)"""
-        return [self.vocab.idxToLabel[t.item()] for t in tokens]
+        return self.md.detokenize([self.vocab.idxToLabel[t.item()] for t in tokens])

@@ -19,7 +19,6 @@ SEP_WORD = "<sep>"
 CLS_TOKEN = "<cls>"
 
 
-
 def get_tokens():
     g = globals()
     k = list({i for i in g if i[-5:] == "_WORD"})

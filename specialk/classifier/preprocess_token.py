@@ -6,7 +6,7 @@ from typing import List, Tuple, Union
 import torch
 
 from specialk.core.utils import log
-from specialk.lib.tokenizer import Vocabulary, WordVocabulary, BPEVocabulary
+from specialk.lib.tokenizer import BPEVocabulary, Vocabulary, WordVocabulary
 
 
 def get_args() -> argparse.Namespace:

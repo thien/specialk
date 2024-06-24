@@ -1,7 +1,9 @@
-from specialk.lib.tokenizer import WordVocabulary, BPEVocabulary
-from pathlib import Path
 import tempfile
+from pathlib import Path
+
 import pytest
+
+from specialk.lib.tokenizer import BPEVocabulary, WordVocabulary
 
 VOCABULARY_SIZE = 1000
 SEQUENCE_LENGTH = 100
@@ -39,6 +41,7 @@ def bpe_tokenizer():
     tokenizer = BPEVocabulary("source", "", VOCABULARY_SIZE, SEQUENCE_LENGTH, PCT_BPE)
     tokenizer.make(SRC_VOCAB)
     return tokenizer
+
 
 def test_bpe_vocabulary(bpe_tokenizer):
     print(bpe_tokenizer.tokenize("hello world"))

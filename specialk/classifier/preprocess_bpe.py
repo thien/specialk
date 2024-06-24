@@ -11,8 +11,9 @@ import json
 import sys
 
 import numpy as np
-import specialk.classifier.onmt as onmt
 import torch
+
+import specialk.classifier.onmt as onmt
 
 sys.path.append("../")
 

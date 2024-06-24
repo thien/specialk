@@ -1,5 +1,7 @@
-from typing import Tuple, Optional, Union
+from typing import Optional, Tuple, Union
+
 from torch.utils.data import DataLoader
+
 from specialk.core.dataset import TranslationDataset, paired_collate_fn
 from specialk.core.utils import log
 

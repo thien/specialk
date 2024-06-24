@@ -47,7 +47,7 @@ python3 specialk/classifier/cnn_train_bpe.py \
     -data $POLITICAL_DATASET".train.pt" \
     -save_model $cnn_model_name \
     -sequence_length $seq_len \
-    -batch_size 256 \
+    -batch_size 128 \
     -filter_size 10 \
     -optim adamw \
     -learning_rate 0.001 

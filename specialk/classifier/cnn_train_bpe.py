@@ -254,8 +254,10 @@ def eval(model, criterion, data):
 def train(model, criterion, data, optim):
     total_loss, total_words, total_n_correct = 0, 0, 0
 
+    iterator_label = "Train"
+    iterator = tqdm(data, desc=iterator_label, leave=True)
     model.train()
-    for batch in tqdm(data, desc="Train"):
+    for batch in iterator:
         src_seq, _, tgt_seq, _ = map(lambda x: x.to(DEVICE), batch)
 
         src = src_seq.transpose(0, 1)
@@ -283,11 +285,11 @@ def train(model, criterion, data, optim):
         total_n_correct += n_correct
         total_words += num_words
         accuracy = n_correct / num_words
-        log.info(
-            "Metrics",
-            loss=f"{loss.item():.3f}",
-            accuracy=f"{accuracy:.3f}",
+
+        iterator.set_description(
+            f"{iterator_label} Loss={loss.item():.3f}, Accuracy={accuracy:.3f}"
         )
+        iterator.refresh()
 
     return total_loss / total_words, total_n_correct / total_words
 

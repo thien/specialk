@@ -19,7 +19,9 @@ from pathlib import Path
 from typing import Union, Tuple, Optional
 from torch.utils.data import DataLoader
 
-from specialk.core.dataset import TranslationDataset, collate_fn, paired_collate_fn
+from specialk.core.dataset import TranslationDataset, paired_collate_fn
+
+DEVICE: str = onmt.core.check_torch_device()
 
 
 def get_args() -> argparse.Namespace:
@@ -167,8 +169,6 @@ def get_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-DEVICE: str = onmt.core.check_torch_device()
-
 def memory_efficient_loss(
     outputs: torch.Tensor,
     targets: torch.Tensor,
@@ -193,7 +193,7 @@ def memory_efficient_loss(
     loss: int = 0
     batch_size: int = outputs.size(0)
 
-    outputs = Variable(outputs.data, requires_grad=(not eval), volatile=eval)
+    outputs = Variable(outputs.data, requires_grad=(not eval))
     loss = criterion(outputs.squeeze(-1), targets[0].float().squeeze(-1))
 
     if not eval:
@@ -222,33 +222,73 @@ def calculate_classification_metrics(
     return n_correct
 
 
-def eval(model, criterion, data, vocab_size: int, opt):
-    total_loss = 0
-    total_words = 0
-    total_n_correct = 0
+def eval(model, criterion, data):
+    total_loss, total_words, total_n_correct = 0, 0, 0
 
     model.eval()
-    for batch in tqdm(data, desc="Eval"):
+    with torch.no_grad():
+        for batch in tqdm(data, desc="Eval"):
+            src_seq, _, tgt_seq, _ = map(lambda x: x.to(DEVICE), batch)
+
+            src = src_seq.transpose(0, 1)
+            seq_len: int = src.size(0)
+            batch_size: int = src.size(1)
+            num_words: int = batch_size
+
+            one_hot = Variable(
+                torch.FloatTensor(seq_len, batch_size, model.vocab_size).zero_()
+            ).to(DEVICE)
+            one_hot_scatter = one_hot.scatter_(2, torch.unsqueeze(src, 2), 1)
+
+            outputs = model(one_hot_scatter)
+            targets = tgt_seq.transpose(0, 1)
+            loss, _ = memory_efficient_loss(outputs, targets, criterion, eval=True)
+
+            total_loss += loss
+            total_n_correct += calculate_classification_metrics(outputs, targets)
+            total_words += num_words
+
+    return total_loss / total_words, total_n_correct / total_words
+
+
+def train(model, criterion, data, optim):
+    total_loss, total_words, total_n_correct = 0, 0, 0
+
+    model.train()
+    for batch in tqdm(data, desc="Train"):
         src_seq, _, tgt_seq, _ = map(lambda x: x.to(DEVICE), batch)
 
         src = src_seq.transpose(0, 1)
         seq_len: int = src.size(0)
         batch_size: int = src.size(1)
+        num_words: int = batch_size  # this is a binary classification task.
 
         one_hot = Variable(
-            torch.FloatTensor(seq_len, batch_size, vocab_size).zero_()
+            torch.FloatTensor(seq_len, batch_size, model.vocab_size).zero_()
         ).to(DEVICE)
         one_hot_scatter = one_hot.scatter_(2, torch.unsqueeze(src, 2), 1)
 
+        model.zero_grad()
         outputs = model(one_hot_scatter)
-        targets = tgt_seq.transpose(0, 1)
-        loss, _ = memory_efficient_loss(outputs, targets, criterion, eval=True)
 
+        targets = tgt_seq.transpose(0, 1)  # shape output to calculate loss.
+        loss, gradients = memory_efficient_loss(outputs, targets, criterion)
+        outputs.backward(gradients)
+        optim.step()  # update the parameters
+
+        n_correct = calculate_classification_metrics(outputs, targets)
+
+        # metrics
         total_loss += loss
-        total_n_correct += calculate_classification_metrics(outputs, targets)
-        total_words += targets.size(1)
+        total_n_correct += n_correct
+        total_words += num_words
+        accuracy = n_correct / num_words
+        log.info(
+            "Metrics",
+            loss=f"{loss.item():.3f}",
+            accuracy=f"{accuracy:.3f}",
+        )
 
-    model.train()
     return total_loss / total_words, total_n_correct / total_words
 
 
@@ -261,70 +301,20 @@ def train_model(
     opt,
     criterion,
 ):
-    def train_epoch(epoch: int, opt: dict):
-        model.train()
+    epoch: int
+    for epoch in tqdm(range(opt.start_epoch, opt.epochs + 1), desc="Epoch"):
         if opt.extra_shuffle and epoch > opt.curriculum:
             data_train.shuffle()
 
-        total_loss, total_words, total_n_correct = 0, 0, 0
-        for batch in tqdm(data_train, desc="Train"):
-            src_seq, _, tgt_seq, _ = map(lambda x: x.to(DEVICE), batch)
+        train_loss, train_acc = train(model, criterion, data_train, optim, epoch)
+        log.info("Train Metrics", accuracy=(train_acc * 100), loss=train_loss)
 
-            src = src_seq.transpose(0, 1)
-            seq_len: int = src.size(0)
-            batch_size: int = src.size(1)
+        valid_loss, valid_acc = eval(model, criterion, data_validation)
+        log.info("Validation Metrics", accuracy=(valid_acc * 100), loss=valid_loss)
 
-            one_hot = Variable(
-                torch.FloatTensor(seq_len, batch_size, model.vocab_size).zero_()
-            ).to(DEVICE)
-            one_hot_scatter = one_hot.scatter_(2, torch.unsqueeze(src, 2), 1)
-
-            model.zero_grad()
-            outputs = model(one_hot_scatter)
-
-            targets = tgt_seq.transpose(0, 1)  # shape output to calculate loss.
-            loss, gradients = memory_efficient_loss(outputs, targets, criterion)
-            outputs.backward(gradients)
-            optim.step()  # update the parameters
-
-            n_correct = calculate_classification_metrics(outputs, targets)
-
-            # metrics
-            num_words = targets.size(1)  # this is the same as the batch
-            # size (this is a classification task).
-
-            total_loss += loss
-            total_n_correct += n_correct
-            total_words += num_words
-            accuracy = n_correct / num_words
-            log.info(
-                "Metrics",
-                epoch=epoch,
-                loss=f"{loss.item():.3f}",
-                accuracy=f"{accuracy:.3f}",
-            )
-
-        return total_loss / total_words, total_n_correct / total_words
-
-    epoch: int
-    for epoch in tqdm(range(opt.start_epoch, opt.epochs + 1), desc="Epoch"):
-        #  (1) train for one epoch on the training set
-        train_loss, train_acc = train_epoch(epoch, opt)
-        print("Train accuracy: %g" % (train_acc * 100))
-        print("Train Loss: ", train_loss)
-
-        #  (2) evaluate on the validation set
-        valid_loss, valid_acc = eval(
-            model, criterion, data_validation, model.vocab_size, opt
-        )
-        print("Validation accuracy: %g" % (valid_acc * 100))
-        print("Validation Loss: ", valid_loss)
-
-        #  (3) update the learning rate
         optim.updateLearningRate(valid_loss, epoch)
 
-        # save checkpoint
-        checkpoint_filename = "%s_acc_%.2f_loss_%.2f_e%d.pt" % (
+        checkpoint_filename: str = "%s_acc_%.2f_loss_%.2f_e%d.pt" % (
             opt.save_model,
             100 * valid_acc,
             valid_loss,
@@ -366,10 +356,12 @@ def save_checkpoint(
         "epoch": epoch,
         "optim": optim,
     }
+    log.info(f"Saving checkpoint to {checkpoint_path}")
     torch.save(
         checkpoint,
         checkpoint_path,
     )
+    log.info("Checkpoint successfully saved.")
 
 
 def init_dataloaders(

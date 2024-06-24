@@ -306,7 +306,7 @@ def train_model(
         if opt.extra_shuffle and epoch > opt.curriculum:
             data_train.shuffle()
 
-        train_loss, train_acc = train(model, criterion, data_train, optim, epoch)
+        train_loss, train_acc = train(model, criterion, data_train, optim)
         log.info("Train Metrics", accuracy=(train_acc * 100), loss=train_loss)
 
         valid_loss, valid_acc = eval(model, criterion, data_validation)

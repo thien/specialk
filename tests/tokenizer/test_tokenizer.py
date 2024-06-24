@@ -22,8 +22,9 @@ def test_word_vocabulary(word_tokenizer):
 
 def test_save_load_word_vocabulary(word_tokenizer):
     dirpath = tempfile.mkdtemp()
+    dirpath = "/Users/t/Projects/specialk/tests/tokenizer/test_files"
 
-    tokenizer_filepath = Path(dirpath) / "bpe.pt"
+    tokenizer_filepath = Path(dirpath) / "word_tokenizer"
     word_tokenizer.save(tokenizer_filepath)
 
     new_tokenizer = WordVocabulary(
@@ -39,8 +40,8 @@ def bpe_tokenizer():
     tokenizer.make(SRC_VOCAB)
     return tokenizer
 
-
 def test_bpe_vocabulary(bpe_tokenizer):
+    print(bpe_tokenizer.tokenize("hello world"))
     assert bpe_tokenizer.tokenize("hello world") == [
         "__sow",
         "he",
@@ -53,8 +54,9 @@ def test_bpe_vocabulary(bpe_tokenizer):
 
 def test_save_load_bpe_vocabulary(bpe_tokenizer):
     dirpath = tempfile.mkdtemp()
+    dirpath = "/Users/t/Projects/specialk/tests/tokenizer/test_files"
 
-    tokenizer_filepath = Path(dirpath) / "bpe.pt"
+    tokenizer_filepath = Path(dirpath) / "bpe_tokenizer"
     bpe_tokenizer.save(tokenizer_filepath)
 
     new_tokenizer = BPEVocabulary(

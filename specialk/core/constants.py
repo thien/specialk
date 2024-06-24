@@ -8,12 +8,16 @@ UNK = 1
 SOS = 2
 EOS = 3
 BLO = 4
+SEP = 5
 
 PAD_WORD = "<blank>"
 UNK_WORD = "<unk>"
 SOS_WORD = "<s>"
 EOS_WORD = "</s>"
 BLO_WORD = "<p>"  # paragraph block
+SEP_WORD = "<sep>"
+CLS_TOKEN = "<cls>"
+
 
 
 def get_tokens():

@@ -6,28 +6,57 @@ import torch
 from tqdm import tqdm
 
 import specialk.classifier.onmt as onmt
-import specialk.core.constants as BPEConstants
 from specialk.core.bpe import Encoder as BPEEncoder
 from specialk.core.utils import log, load_dataset
 from specialk.preprocess import parse as bpe_parse
+import specialk.core.constants as Constants
 
 
 class Vocabulary:
-    def __init__(self, name: str, filename: str, vocab_size: int):
+    def __init__(
+        self,
+        name: str,
+        filename: str,
+        vocab_size: int,
+        max_length: int,
+        BOS_TOKEN: Optional[str] = Constants.SOS_WORD,
+        EOS_TOKEN: Optional[str] = Constants.EOS_WORD,
+        UNK_TOKEN: Optional[str] = Constants.UNK_WORD,
+        SEP_TOKEN: Optional[str] = Constants.UNK_WORD,
+        PAD_TOKEN: Optional[str] = Constants.SEP_WORD,
+        CLS_TOKEN: Optional[str] = Constants.CLS_TOKEN,
+        BLO_TOKEN: Optional[str] = Constants.BLO_WORD,
+    ):
         """
         Args:
             name (str): name of vocabulary.
             data_file (Union[Path,str]): path of file containing training data to use for the vocabulary.
             vocabulary_file (Union[Path,str]): path of vocabulary file to either load from, or save to.
             vocab_size (int, Optional): If set, sets cap on vocabulary size.
-
+            fixed_length (int): maxiumum token length of a sequence.
+            BOS_TOKEN (Optional[str], optional): A special token representing the beginning of a sentence. Defaults to Constants.SOS_WORD.
+            EOS_TOKEN (Optional[str], optional): A special token representing the end of a sentence. Defaults to Constants.EOS_WORD.
+            UNK_TOKEN (Optional[str], optional):  A special token representing an out-of-vocabulary token. Defaults to Constants.UNK_WORD.
+            SEP_TOKEN (Optional[str], optional): A special token separating two different sentences in the same input (used by BERT for instance).. Defaults to Constants.UNK_WORD.
+            PAD_TOKEN (Optional[str], optional): A special token used to make arrays of tokens the same size for batching purpose. Will then be ignored by attention mechanisms or loss computation. Defaults to Constants.SEP_WORD.
+            CLS_TOKEN (Optional[str], optional):  A special token representing the class of the input (used by BERT for instance). Defaults to Constants.CLS_TOKEN.
+            BLO_TOKEN (Optional[str], optional):  A special token representing the separation of paragraph blocks. Defaults to Constants.BLO_WORD.
         Returns:
             onmt.Dict: Vocabulary file.
         """
         self.name = name
         self.filename = filename
         self.vocab_size = vocab_size
+        self.max_length = max_length
         self.vocab: onmt.Dict = onmt.Dict()
+
+        self.BOS_TOKEN = BOS_TOKEN
+        self.EOS_TOKEN = EOS_TOKEN
+        self.UNK_TOKEN = UNK_TOKEN
+        self.SEP_TOKEN = SEP_TOKEN
+        self.PAD_TOKEN = PAD_TOKEN
+        self.CLS_TOKEN = CLS_TOKEN
+        self.BLO_TOKEN = BLO_TOKEN
 
     def make(self, data_path: Union[Path, str]):
         raise NotImplementedError
@@ -49,10 +78,9 @@ class Vocabulary:
 
 class BPEVocabulary(Vocabulary):
     def __init__(
-        self, name: str, filename: str, vocab_size: int, seq_length: int, pct_bpe: float
+        self, name: str, filename: str, vocab_size: int, max_length: int, pct_bpe: float
     ):
-        super().__init__(name, filename, vocab_size)
-        self.seq_length = seq_length
+        super().__init__(name, filename, vocab_size, max_length=max_length)
         self.pct_bpe = pct_bpe
         self.vocab: BPEEncoder
 
@@ -62,8 +90,8 @@ class BPEVocabulary(Vocabulary):
             vocab_size=self.vocab_size,
             pct_bpe=self.pct_bpe,
             ngram_min=1,
-            UNK=BPEConstants.UNK_WORD,
-            PAD=BPEConstants.PAD_WORD,
+            UNK=self.UNK_TOKEN,
+            PAD=self.PAD_TOKEN,
             word_tokenizer=bpe_parse,
         )
         # loading data path
@@ -82,10 +110,10 @@ class BPEVocabulary(Vocabulary):
             Iterable[List[int]]: _description_
         """
         if isinstance(text, str):
-            return self.vocab.transform([text])
+            return list(self.vocab.transform([text], fixed_length=self.max_length))
         else:
             # it's a list
-            return self.vocab.transform(text)
+            return list(self.vocab.transform(text, fixed_length=self.max_length))
 
     def load(self):
         self.vocab = BPEEncoder.load(self.filename)
@@ -108,12 +136,15 @@ class WordVocabulary(Vocabulary):
     """White-space level tokenization."""
 
     def __init__(
-        self, name: str, filename: str, vocab_size: int, seq_length: int, lower: bool
+        self, name: str, filename: str, vocab_size: int, max_length: int, lower: bool
     ):
-        super().__init__(name, filename, vocab_size)
+        super().__init__(name, filename, vocab_size, max_length=max_length)
         self.vocab: onmt.Dict
-        self.seq_length = seq_length
         self.lower = lower
+        self.PAD_TOKEN = onmt.Constants.PAD_WORD
+        self.UNK_TOKEN = onmt.Constants.UNK_WORD
+        self.BOS_TOKEN = onmt.Constants.BOS_WORD
+        self.EOS_TOKEN = onmt.Constants.EOS_WORD
 
     def make(self, data_path: Union[Path, str]):
         """
@@ -125,13 +156,13 @@ class WordVocabulary(Vocabulary):
         log.info("Creating WordVocabulary")
         vocab = onmt.Dict(
             [
-                onmt.Constants.PAD_WORD,
-                onmt.Constants.UNK_WORD,
-                onmt.Constants.BOS_WORD,
-                onmt.Constants.EOS_WORD,
+                self.PAD_TOKEN,
+                self.UNK_TOKEN,
+                self.BOS_TOKEN,
+                self.EOS_TOKEN,
             ],
             lower=self.lower,
-            seq_len=self.seq_length,
+            seq_len=self.max_length,
         )
 
         with codecs.open(data_path, "r", "utf-8") as f:
@@ -167,6 +198,8 @@ class WordVocabulary(Vocabulary):
             log.info(f"Reading {self.name} vocabulary from {self.filename}..")
             self.vocab.loadFile(self.filename)
             self.vocab_size = self.vocab.size()
+            self.seq_len = self.max_length
+            self.lower= self.lower
             log.info(f"Loaded {self.vocab.size()} {self.name} tokens.")
         else:
             raise FileNotFoundError(f"{self.filename} doesn't exist.")

@@ -199,7 +199,7 @@ class WordVocabulary(Vocabulary):
             self.vocab.loadFile(self.filename)
             self.vocab_size = self.vocab.size()
             self.seq_len = self.max_length
-            self.lower= self.lower
+            self.lower = self.lower
             log.info(f"Loaded {self.vocab.size()} {self.name} tokens.")
         else:
             raise FileNotFoundError(f"{self.filename} doesn't exist.")

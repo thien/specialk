@@ -1,7 +1,7 @@
 import logging
 import subprocess
 from multiprocessing import Pool, cpu_count
-
+from typing import List
 import structlog
 from tqdm import tqdm
 
@@ -11,6 +11,12 @@ Misc. functions used by a variety of parts of the library.
 
 log = structlog.get_logger()
 
+def load_dataset(path: str) -> List[str]:
+    data = []
+    with open(path) as f:
+        for line in f:
+            data.append(line.strip())
+    return data
 
 def get_len(filepath):
     """

@@ -6,6 +6,7 @@ import joblib
 import numpy as np
 import pandas
 from scipy.stats import linregress
+from typing import List
 
 # hyperparameter settings for each examined style transfer model
 MODEL_TO_PARAMS = {
@@ -45,7 +46,7 @@ def compile_binary_dataset(negative_samples, positive_samples):
     return x, y
 
 
-def load_dataset(path):
+def load_dataset(path: str) -> List[str]:
     data = []
     with open(path) as f:
         for line in f:

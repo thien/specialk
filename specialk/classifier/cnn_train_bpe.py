@@ -1,18 +1,23 @@
+"""
+CNN Training Runner.
+
+Trains classifier used for style transfer.
+"""
+
 from __future__ import division
 
 import specialk.classifier.onmt as onmt
+from specialk.core.utils import log
 import argparse
 import torch
 import torch.nn as nn
-from torch import cuda
 from torch.autograd import Variable
-import math
 import time
-import sys
 from tqdm import tqdm
 from pathlib import Path
+from typing import Union, Tuple, Optional
+from torch.utils.data import DataLoader
 
-sys.path.append("../")
 from specialk.core.dataset import TranslationDataset, collate_fn, paired_collate_fn
 
 
@@ -161,299 +166,358 @@ def get_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-opt = get_args()
-
-print(opt)
-
-DEVICE=onmt.core.check_torch_device()
-
-def NMTCriterion(vocabSize):
-    crit = nn.BCELoss()
-    if opt.gpus:
-        crit.cuda()
-    return crit
+DEVICE: str = onmt.core.check_torch_device()
 
 
-def memoryEfficientLoss(outputs, targets, generator, crit, eval=False):
+def memory_efficient_loss(
+    outputs: torch.Tensor,
+    targets: torch.Tensor,
+    criterion: nn.modules.loss._Loss,
+    eval=False,
+) -> Tuple[int, torch.Tensor, int]:
+    """Calculates loss between output and target against the given criterion.
+
+    Args:
+        outputs (torch.Tensor): Output generated from a model.
+            dimensions: [batch_size, 1]
+        targets (torch.Tensor): Target values the output should attempt to match.
+            dimensions: [1, batch_size, 1]
+        criterion (nn.modules.loss._Loss): Criterion metric to use.
+        eval (bool, optional): Flag to check if metric is for eval only. If not set,
+            then gradients are calculated. Defaults to False.
+
+    Returns:
+        _type_: _description_
+    """
     # compute generations one piece at a time
-    num_correct, loss = 0, 0
-    outputs = Variable(outputs.data, requires_grad=(not eval))
+    n_correct: int = 0
+    loss: int = 0
+    batch_size: int = outputs.size(0)
 
-    # outputs and targets are size batch_size
-    batch_size = outputs.size(0)
-    loss_t = crit(outputs.squeeze(-1), targets[0].float().squeeze(-1))
-    if opt.gpus:
-        pred_t = torch.ge(
-            outputs.data,
-            torch.cuda.FloatTensor(outputs.size(0), outputs.size(1)).fill_(0.5),
-        )
-    else:
-        pred_t = torch.ge(
-            outputs.data, torch.FloatTensor(outputs.size(0), outputs.size(1)).to(DEVICE).fill_(0.5)
-        )
+    outputs = Variable(outputs.data, requires_grad=(not eval), volatile=eval)
 
-    # print("OUTPUT:", (outputs >=0.5).transpose(0,1))
-    # print("TARGET:", targets)
-    # print("ACC:", (outputs >=0.5).transpose(0,1).long().eq(targets).sum())
+    loss_t = criterion(outputs.squeeze(-1), targets[0].float().squeeze(-1))
+    n_correct = (outputs > 0.5).transpose(0, 1).long().eq(targets).sum()
 
-    # w
-    num_correct = pred_t.long().squeeze(-1).eq(targets[0].data).sum()
-    num_correct = (outputs >= 0.5).transpose(0, 1).long().eq(targets).sum()
-    # print("NUM COR:", num_correct)
     loss += loss_t.item()
     if not eval:
+        # normalize the loss w.r.t batch size.
         loss_t.div(batch_size).backward()
 
     grad_output = None if outputs.grad is None else outputs.grad.data
-    return loss, grad_output, num_correct
+    return loss, grad_output, n_correct
 
 
-def eval(model, criterion, data, vocab_size, opt):
+def calculate_metrics(
+    output: torch.Tensor,
+    target: torch.Tensor,
+    loss: Optional[torch.Tensor] = None,
+    criterion: Optional[nn.modules.loss._Loss] = None,
+):
+    """Calculate downstream metrics.
+
+    This is not used for the loss.
+
+    Args:
+        output (torch.Tensor): Predicted values generated from the model.
+        target (torch.Tensor): Values we want to predict.
+        loss (Optional[torch.Tensor], optional): If set, then uses the loss 
+            values instead. Defaults to None.
+    """
+    if not loss:
+        loss = memory_efficient_loss(output, target, criterion, eval=True)
+
+    n_correct: int = (output > 0.5).transpose(0, 1).long().eq(target).sum().item()
+    num_words: int = target.size(1)
+    # accuracy = 
+    report_src_words += sum(batch[0][1])
+    total_loss += loss
+    total_n_correct += n_correct.item()
+    total_words += num_words
+
+    accuracy = (report_n_correct / report_tgt_words * 100) / opt.batch_size
+    n_src_words_per_sec = (report_src_words / (time.time() - start)).item()
+
+    
+
+
+def eval(model, criterion, data, vocab_size: int, opt):
     total_loss = 0
     total_words = 0
-    total_num_correct = 0
+    total_n_correct = 0
 
     model.eval()
-
     for batch in tqdm(data, desc="Eval"):
         src_seq, _, tgt_seq, _ = map(lambda x: x.to(DEVICE), batch)
-        # batch = data[i][:-1] # exclude original indices
-
-        # src = batch[0]
-        # inp = src[0] % vocab_size # Size is seq_len x batch_size, type: torch.cuda.LongTensor, Variable
-        # inp_ = torch.unsqueeze(inp, 2) # Size is seq_len x batch_size x 1, type: torch.cuda.LongTensor, Variable
 
         src = src_seq.transpose(0, 1)
-        # tgt_seq= tgt_seq.squeeze(1)
-        # print(src.shape, tgt_seq.shape)
-        inp = src  # Size is seq_len x batch_size, type: torch.cuda.LongTensor, Variable
-        # print(inp.shape)
-        inp_ = torch.unsqueeze(inp, 2)
+        seq_len: int = src.size(0)
+        batch_size: int = src.size(1)
 
-        tensor = torch.FloatTensor
+        one_hot = Variable(torch.FloatTensor(seq_len, batch_size, vocab_size).zero_())
+        one_hot_scatter = one_hot.scatter_(2, torch.unsqueeze(src, 2), 1)
 
-        # print(src[0].shape)
-        one_hot = Variable(tensor(src.size(0), src.size(1), vocab_size).zero_())
-        one_hot_scatt = one_hot.scatter_(
-            2, inp_, 1
-        )  # Size: seq_len x batch_size x vocab_size, type: torch.cuda.FloatTensor, Variable
-
-        outputs = model(one_hot_scatt)
+        outputs = model(one_hot_scatter)
         targets = tgt_seq.transpose(0, 1)
-        loss, _, num_correct = memoryEfficientLoss(
-            outputs, targets, model, criterion, eval=True
+        loss, _, n_correct = memory_efficient_loss(
+            outputs, targets, criterion, eval=True
         )
         total_loss += loss
-        total_num_correct += num_correct.item()
+        total_n_correct += n_correct.item()
         total_words += targets.size(1)
 
     model.train()
-    return total_loss / total_words, total_num_correct / total_words
+    return total_loss / total_words, total_n_correct / total_words
 
 
-def trainModel(model, trainData, validData, dataset, optim, opt):
-    # print(model)
-    sys.stdout.flush()
+def trainModel(
+    model, data_train: DataLoader, data_validation: DataLoader, dataset, optim, opt
+):
     model.train()
 
     # define criterion
-    criterion = NMTCriterion(opt.num_classes)
+    criterion = nn.BCELoss()
 
     # Vocab Size
     vocab_size = model.vocab_size
-    # vocab_size = dataset['dicts']['src'].size()
 
     start_time = time.time()
 
-    def trainEpoch(epoch, opt):
+    def train_epoch(epoch: int, opt: dict):
         if opt.extra_shuffle and epoch > opt.curriculum:
-            trainData.shuffle()
+            data_train.shuffle()
 
         # shuffle mini batch order
-        batchOrder = torch.randperm(len(trainData))
+        batchOrder = torch.randperm(len(data_train))
 
-        total_loss, total_words, total_num_correct = 0, 0, 0
-        report_loss, report_tgt_words, report_src_words, report_num_correct = 0, 0, 0, 0
+        total_loss, total_words, total_n_correct = 0, 0, 0
+        report_loss, report_tgt_words, report_src_words, report_n_correct = 0, 0, 0, 0
         start = time.time()
         i = 0
-        for batch in tqdm(trainData, desc="Train"):
+        for batch in tqdm(data_train, desc="Train"):
+            # add tensors to memory
             src_seq, _, tgt_seq, _ = map(lambda x: x.to(DEVICE), batch)
 
-            # batch = trainData[batchIdx][:-1] # exclude original indices
+            # batch = data_train[batchIdx][:-1] # exclude original indices
 
             # making one hot encoding
             src = src_seq.transpose(0, 1)
-            # tgt_seq= tgt_seq.squeeze(1)
-            # print(src.shape, tgt_seq.shape)
+
             inp = src  # Size is seq_len x batch_size, type: torch.cuda.LongTensor, Variable
-            # print(inp.shape)
+
             inp_ = torch.unsqueeze(
                 inp, 2
             )  # Size is seq_len x batch_size x 1, type: torch.cuda.LongTensor, Variable
-            # print(inp_.shape)
 
-            # tensor = torch.cuda.FloatTensor if len(opt.gpus) >= 1 else torch.FloatTensor
-
-
-            # print(src[0].shape)
-            one_hot = torch.FloatTensor(src.size(0), src.size(1), vocab_size).zero_().to(DEVICE)
+            one_hot = (
+                torch.FloatTensor(src.size(0), src.size(1), vocab_size)
+                .zero_()
+                .to(DEVICE)
+            )
             one_hot_scatt = one_hot.scatter_(
                 2, inp_, 1
             )  # Size: seq_len x batch_size x vocab_size, type: torch.cuda.FloatTensor, Variable
 
             model.zero_grad()
             outputs = model(one_hot_scatt)
-            # print("outputs:", outputs.shape)
-            targets = tgt_seq.transpose(0, 1)
-            # print("targets",targets.shape)
-            loss, gradOutput, num_correct = memoryEfficientLoss(
-                outputs, targets, model, criterion
-            )
-            outputs.backward(gradOutput)
 
-            # update the parameters
-            optim.step()
+            targets = tgt_seq.transpose(0, 1)  # shape output to calculate loss.
+
+            loss, gradients, n_correct = memory_efficient_loss(
+                outputs, targets, criterion
+            )
+            outputs.backward(gradients)
+            optim.step()  # update the parameters
+
+            # metrics
             num_words = targets.size(1)
             report_loss += loss
-            report_num_correct += num_correct.item()
+            report_n_correct += n_correct.item()
             report_tgt_words += num_words
             report_src_words += sum(batch[0][1])
             total_loss += loss
-            total_num_correct += num_correct.item()
+            total_n_correct += n_correct.item()
             total_words += num_words
-
-            if i % opt.log_interval == -1 % opt.log_interval:
-                runtime = time.time() - start_time
-
-                print(
-                    "Epoch %2d, %5d/%5d; acc: %6.2f;  %3.0f src tok/s; %3.0f tgt tok/s; %6.0f s elapsed"
-                    % (
-                        epoch,
-                        i + 1,
-                        len(trainData),
-                        report_num_correct / report_tgt_words * 100,
-                        report_src_words / (time.time() - start),
-                        report_tgt_words / (time.time() - start),
-                        runtime,
-                    )
-                )
-
-                sys.stdout.flush()
-                report_loss = report_tgt_words = report_src_words = (
-                    report_num_correct
-                ) = 0
-                start = time.time()
+            runtime = time.time() - start_time
+            accuracy = (report_n_correct / report_tgt_words * 100) / opt.batch_size
+            n_src_words_per_sec = (report_src_words / (time.time() - start)).item()
+            log.info(
+                "Metrics",
+                epoch=epoch,
+                loss=loss,
+                accuracy=accuracy,
+                n_src_words_per_sec=n_src_words_per_sec,
+                time_elapsed=runtime,
+            )
+            report_loss = report_tgt_words = report_src_words = report_n_correct = 0
             i += 1
-        return total_loss / total_words, total_num_correct / total_words
+        return total_loss / total_words, total_n_correct / total_words
 
+    epoch: int
     for epoch in tqdm(range(opt.start_epoch, opt.epochs + 1), desc="Epoch"):
-        print("")
-
         #  (1) train for one epoch on the training set
-        train_loss, train_acc = trainEpoch(epoch, opt)
+        train_loss, train_acc = train_epoch(epoch, opt)
         print("Train accuracy: %g" % (train_acc * 100))
         print("Train Loss: ", train_loss)
 
         #  (2) evaluate on the validation set
-        valid_loss, valid_acc = eval(model, criterion, validData, vocab_size, opt)
+        valid_loss, valid_acc = eval(model, criterion, data_validation, vocab_size, opt)
         print("Validation accuracy: %g" % (valid_acc * 100))
         print("Validation Loss: ", valid_loss)
 
-        sys.stdout.flush()
         #  (3) update the learning rate
         optim.updateLearningRate(valid_loss, epoch)
-        model_state_dict = (
-            model.module.state_dict() if len(opt.gpus) > 1 else model.state_dict()
+
+        # save checkpoint
+        checkpoint_filename = "%s_acc_%.2f_loss_%.2f_e%d.pt" % (
+            opt.save_model,
+            100 * valid_acc,
+            valid_loss,
+            epoch,
         )
-        model_state_dict = {
-            k: v for k, v in model_state_dict.items() if "generator" not in k
-        }
-        #  (4) drop a checkpoint
-        checkpoint = {
-            "model": model_state_dict,
-            "dicts": dataset["dicts"],
-            "opt": opt,
-            "epoch": epoch,
-            "optim": optim,
-        }
-        torch.save(
-            checkpoint,
-            "%s_acc_%.2f_loss_%.2f_e%d.pt"
-            % (opt.save_model, 100 * valid_acc, valid_loss, epoch),
-        )
+        save_checkpoint(model, checkpoint_filename, opt, epoch, optim, dataset)
 
 
-def init_dataloaders(data, opt):
-    src_word2idx = data["dicts"]["src"]
-    # tgt_word2idx = data['dict']['tgt']
+def save_checkpoint(
+    model: nn.Module,
+    checkpoint_path: Union[Path, str],
+    opt: Optional[argparse.Namespace] = None,
+    epoch: Optional[int] = 0,
+    optim: Optional[torch.optim.Optimizer] = None,
+    dataset: dict = {},
+):
+    """Save model checkpoint to model_path.
 
-    if "__sow" in src_word2idx["byte_pairs"]:
-        # we have BPE
+    Args:
+        model (nn.Module): Model to save.
+        checkpoint_path (Union[Path, str]): filepath
+            (including filename) of checkpoint object.
+    """
+    model_state_dict = (
+        model.module.state_dict() if len(opt.gpus) > 1 else model.state_dict()
+    )
+    model_state_dict = {
+        k: v for k, v in model_state_dict.items() if "generator" not in k
+    }
+    #  (4) drop a checkpoint
+    checkpoint = {
+        "model": model_state_dict,
+        "dicts": dataset["dicts"],
+        "opt": opt,
+        "epoch": epoch,
+        "optim": optim,
+    }
+    torch.save(
+        checkpoint,
+        checkpoint_path,
+    )
+
+
+def init_dataloaders(
+    data: dict, batch_size: int, n_workers: int = 8
+) -> Tuple[DataLoader, DataLoader]:
+    """Initialise DataLoaders for dataset.
+
+    Note that onmt has their own dataset loader, but no need to use that if we could
+    leverage existing PyTorch Dataloaders.
+
+    Args:
+        data (dict): object container containing dataset.
+        batch_size (int): batch size for dataset iteration.
+        n_workers (int, Optional): number of workers to operate on the dataloader.
+
+    Returns:
+        Tuple[DataLoader, DataLoader]: Train and validation dataloaders.
+    """
+    src_word2idx = data["dicts"]["src"]  # it's the same as the tgt.
+
+    DATASET_IS_BPE = "byte_pairs" in src_word2idx.keys()
+    if DATASET_IS_BPE:
+        log.info("BPE Tokenised input detected.")
+        # we have BPE loaded (detection is a heuristic).
         src_byte_pairs = {x + "_": y for x, y in src_word2idx["byte_pairs"].items()}
-        # tgt_byte_pairs = {x+"_": y for x,y in tgt_word2idx['byte_pairs'].items()}
         src_word2idx = {**src_byte_pairs, **src_word2idx["words"]}
-        # tgt_word2idx = {**tgt_byte_pairs, **tgt_word2idx['words']}
+    else:
+        log.info("Space-Separated Tokenised input detected.")
 
-    train_loader = torch.utils.data.DataLoader(
+    train_loader = DataLoader(
         TranslationDataset(
             src_word2idx=src_word2idx,
             tgt_word2idx=src_word2idx,
             src_insts=data["train"]["src"],
             tgt_insts=data["train"]["tgt"],
         ),
-        num_workers=2,
-        batch_size=opt.batch_size,
+        num_workers=n_workers,
+        batch_size=batch_size,
         collate_fn=paired_collate_fn,
         shuffle=True,
     )
 
-    valid_loader = torch.utils.data.DataLoader(
+    valid_loader = DataLoader(
         TranslationDataset(
             src_word2idx=src_word2idx,
             tgt_word2idx=src_word2idx,
             src_insts=data["valid"]["src"],
             tgt_insts=data["valid"]["tgt"],
         ),
-        num_workers=2,
-        batch_size=opt.batch_size,
+        num_workers=n_workers,
+        batch_size=batch_size,
         collate_fn=paired_collate_fn,
+    )
+
+    # printing for sanity checks.
+    show_first_n: int = 2
+    log.debug(
+        f"Showing first {show_first_n} rows of training dataset.",
+        source=data["train"]["src"][:show_first_n],
+        target=data["train"]["tgt"][:show_first_n],
+    )
+    log.debug(
+        f"Showing first {show_first_n} rows of validation dataset.",
+        source=data["valid"]["src"][:show_first_n],
+        target=data["valid"]["tgt"][:show_first_n],
     )
 
     return train_loader, valid_loader
 
 
 def main():
-    print("Loading data from '%s'" % opt.data)
+    opt: argparse.Namespace = get_args()
+    log.info("Loaded args", args=opt)
 
-    dataset = torch.load(opt.data)
+    log.info("Loading dataset dict.", dataset_path=opt.data)
+    dataset: dict = torch.load(opt.data)
 
     dict_checkpoint = opt.train_from if opt.train_from else opt.train_from_state_dict
     if dict_checkpoint:
-        print("Loading dicts from checkpoint at %s" % dict_checkpoint)
+        log.info("Loading dicts from checkpoint at %s" % dict_checkpoint)
         checkpoint = torch.load(dict_checkpoint)
         dataset["dicts"] = checkpoint["dicts"]
 
-    trainData, validData = init_dataloaders(dataset, opt)
-
-    vocabulary_size = 0
-
+    vocabulary_size: int
     if "settings" in dataset:
         vocabulary_size = dataset["dicts"]["src"]["kwargs"]["vocab_size"]
     else:
         vocabulary_size = dataset["dicts"]["src"].size()
 
-    print(" * vocabulary size. source = %d;" % vocabulary_size)
-    print(" * number of training sentences. %d" % len(dataset["train"]["src"]))
-    print(" * maximum batch size. %d" % opt.batch_size)
+    # create dataloaders
+    data_train, data_validation = init_dataloaders(dataset, opt.batch_size)
 
-    print("Building model...")
+    log.info(
+        "Successfully loaded dataset.",
+        dataset_path=opt.data,
+        vocabulary_size=vocabulary_size,
+        num_training_sequences=len(dataset["train"]["src"]),
+        num_validation_sequences=len(dataset["valid"]["src"]),
+        batch_size=opt.batch_size,
+    )
 
-    model:onmt.CNNModels.ConvNet = onmt.CNNModels.ConvNet(opt, vocabulary_size)
+    log.info("Building model...")
 
-    model.word_lut.to(DEVICE)
+    model: onmt.CNNModels.ConvNet = onmt.CNNModels.ConvNet(opt, vocabulary_size)
 
     if opt.train_from:
-        print("Loading model from checkpoint at %s" % opt.train_from)
+        log.info("Loading model from checkpoint at %s" % opt.train_from)
         chk_model = checkpoint["model"]
         model_state_dict = {
             k: v for k, v in chk_model.state_dict().items() if "generator" not in k
@@ -462,18 +526,18 @@ def main():
         opt.start_epoch = checkpoint["epoch"] + 1
 
     if opt.train_from_state_dict:
-        print("Loading model from checkpoint at %s" % opt.train_from_state_dict)
+        log.info("Loading model from checkpoint at %s" % opt.train_from_state_dict)
         model.load_state_dict(checkpoint["model"])
         opt.start_epoch = checkpoint["epoch"] + 1
 
-
     if not opt.train_from_state_dict and not opt.train_from:
+        # kaiming uniform
         for p in model.parameters():
             p.data.uniform_(-opt.param_init, opt.param_init)
 
         model.load_pretrained_vectors(opt)
 
-        optim = onmt.Optim(
+        optim: torch.optim.Optimizer = onmt.Optim(
             opt.optim,
             opt.learning_rate,
             opt.max_grad_norm,
@@ -481,27 +545,24 @@ def main():
             start_decay_at=opt.start_decay_at,
         )
     else:
-        print("Loading optimizer from checkpoint:")
+        log.info("Loading optimizer from checkpoint:")
         optim = checkpoint["optim"]
-        print(optim)
-
+        log.info(optim)
 
     model = model.to(DEVICE)
 
-
     if len(opt.gpus) > 1:
         model = nn.DataParallel(model, device_ids=opt.gpus, dim=1)
-
 
     optim.set_parameters(model.parameters())
 
     if opt.train_from or opt.train_from_state_dict:
         optim.optimizer.load_state_dict(checkpoint["optim"].optimizer.state_dict())
 
-    nParams = sum([p.nelement() for p in model.parameters()])
-    print("* number of parameters: %d" % nParams)
+    n_params = sum([p.nelement() for p in model.parameters()])
+    log.info("Successfully initialised model weights.", n_params=n_params)
 
-    trainModel(model, trainData, validData, dataset, optim, opt)
+    trainModel(model, data_train, data_validation, dataset, optim, opt)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 from __future__ import division
 
-import onmt
+import specialk.classifier.onmt as onmt
 import argparse
 import torch
 import torch.nn as nn

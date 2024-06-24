@@ -2,6 +2,8 @@
 CNN Training Runner.
 
 Trains classifier used for style transfer.
+Modified version of the following code:
+https://github.com/shrimai/Style-Transfer-Through-Back-Translation/blob/master/classifier/cnn_train.py.
 """
 
 from __future__ import division
@@ -174,7 +176,7 @@ def memory_efficient_loss(
     targets: torch.Tensor,
     criterion: nn.modules.loss._Loss,
     eval=False,
-) -> Tuple[int, torch.Tensor, int]:
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """Calculates loss between output and target against the given criterion.
 
     Args:
@@ -183,62 +185,43 @@ def memory_efficient_loss(
         targets (torch.Tensor): Target values the output should attempt to match.
             dimensions: [1, batch_size, 1]
         criterion (nn.modules.loss._Loss): Criterion metric to use.
-        eval (bool, optional): Flag to check if metric is for eval only. If not set,
+        eval (bool, Optional): Flag to check if metric is for eval only. If not set,
             then gradients are calculated. Defaults to False.
 
     Returns:
         _type_: _description_
     """
     # compute generations one piece at a time
-    n_correct: int = 0
     loss: int = 0
     batch_size: int = outputs.size(0)
 
     outputs = Variable(outputs.data, requires_grad=(not eval), volatile=eval)
+    loss = criterion(outputs.squeeze(-1), targets[0].float().squeeze(-1))
 
-    loss_t = criterion(outputs.squeeze(-1), targets[0].float().squeeze(-1))
-    n_correct = (outputs > 0.5).transpose(0, 1).long().eq(targets).sum()
-
-    loss += loss_t.item()
     if not eval:
         # normalize the loss w.r.t batch size.
-        loss_t.div(batch_size).backward()
+        loss.div(batch_size).backward()
 
-    grad_output = None if outputs.grad is None else outputs.grad.data
-    return loss, grad_output, n_correct
+    gradients = None if outputs.grad is None else outputs.grad.data
+    return loss, gradients
 
 
-def calculate_metrics(
+def calculate_classification_metrics(
     output: torch.Tensor,
     target: torch.Tensor,
-    loss: Optional[torch.Tensor] = None,
-    criterion: Optional[nn.modules.loss._Loss] = None,
-):
+) -> int:
     """Calculate downstream metrics.
-
-    This is not used for the loss.
 
     Args:
         output (torch.Tensor): Predicted values generated from the model.
         target (torch.Tensor): Values we want to predict.
-        loss (Optional[torch.Tensor], optional): If set, then uses the loss 
-            values instead. Defaults to None.
+
+    Returns:
+        int: Accuracy.
     """
-    if not loss:
-        loss = memory_efficient_loss(output, target, criterion, eval=True)
-
-    n_correct: int = (output > 0.5).transpose(0, 1).long().eq(target).sum().item()
-    num_words: int = target.size(1)
-    # accuracy = 
-    report_src_words += sum(batch[0][1])
-    total_loss += loss
-    total_n_correct += n_correct.item()
-    total_words += num_words
-
-    accuracy = (report_n_correct / report_tgt_words * 100) / opt.batch_size
-    n_src_words_per_sec = (report_src_words / (time.time() - start)).item()
-
-    
+    outputs = (output > 0.5).transpose(0, 1).long()
+    n_correct: int = outputs.eq(target.squeeze(-1)).sum().item()
+    return n_correct
 
 
 def eval(model, criterion, data, vocab_size: int, opt):
@@ -259,11 +242,10 @@ def eval(model, criterion, data, vocab_size: int, opt):
 
         outputs = model(one_hot_scatter)
         targets = tgt_seq.transpose(0, 1)
-        loss, _, n_correct = memory_efficient_loss(
-            outputs, targets, criterion, eval=True
-        )
+        loss, _ = memory_efficient_loss(outputs, targets, criterion, eval=True)
+        
         total_loss += loss
-        total_n_correct += n_correct.item()
+        total_n_correct += calculate_classification_metrics(outputs, targets)
         total_words += targets.size(1)
 
     model.train()
@@ -271,86 +253,53 @@ def eval(model, criterion, data, vocab_size: int, opt):
 
 
 def trainModel(
-    model, data_train: DataLoader, data_validation: DataLoader, dataset, optim, opt
+    model, data_train: DataLoader, data_validation: DataLoader, dataset, optim, opt, criterion
 ):
-    model.train()
-
-    # define criterion
-    criterion = nn.BCELoss()
-
-    # Vocab Size
-    vocab_size = model.vocab_size
-
-    start_time = time.time()
+    
 
     def train_epoch(epoch: int, opt: dict):
+        model.train()
         if opt.extra_shuffle and epoch > opt.curriculum:
             data_train.shuffle()
 
-        # shuffle mini batch order
-        batchOrder = torch.randperm(len(data_train))
-
         total_loss, total_words, total_n_correct = 0, 0, 0
-        report_loss, report_tgt_words, report_src_words, report_n_correct = 0, 0, 0, 0
-        start = time.time()
-        i = 0
         for batch in tqdm(data_train, desc="Train"):
-            # add tensors to memory
             src_seq, _, tgt_seq, _ = map(lambda x: x.to(DEVICE), batch)
 
-            # batch = data_train[batchIdx][:-1] # exclude original indices
-
-            # making one hot encoding
             src = src_seq.transpose(0, 1)
+            seq_len: int = src.size(0)
+            batch_size: int = src.size(1)
 
-            inp = src  # Size is seq_len x batch_size, type: torch.cuda.LongTensor, Variable
-
-            inp_ = torch.unsqueeze(
-                inp, 2
-            )  # Size is seq_len x batch_size x 1, type: torch.cuda.LongTensor, Variable
-
-            one_hot = (
-                torch.FloatTensor(src.size(0), src.size(1), vocab_size)
-                .zero_()
-                .to(DEVICE)
-            )
-            one_hot_scatt = one_hot.scatter_(
-                2, inp_, 1
-            )  # Size: seq_len x batch_size x vocab_size, type: torch.cuda.FloatTensor, Variable
+            one_hot = Variable(
+                torch.FloatTensor(seq_len, batch_size, model.vocab_size).zero_()
+            ).to(DEVICE)
+            one_hot_scatter = one_hot.scatter_(2, torch.unsqueeze(src, 2), 1)
 
             model.zero_grad()
-            outputs = model(one_hot_scatt)
+            outputs = model(one_hot_scatter)
 
-            targets = tgt_seq.transpose(0, 1)  # shape output to calculate loss.
-
-            loss, gradients, n_correct = memory_efficient_loss(
-                outputs, targets, criterion
-            )
+            targets = tgt_seq.transpose(0, 1) # shape output to calculate loss.
+            loss, gradients = memory_efficient_loss(outputs, targets, criterion)
             outputs.backward(gradients)
             optim.step()  # update the parameters
 
+            n_correct = calculate_classification_metrics(outputs, targets)
+
             # metrics
-            num_words = targets.size(1)
-            report_loss += loss
-            report_n_correct += n_correct.item()
-            report_tgt_words += num_words
-            report_src_words += sum(batch[0][1])
+            num_words = targets.size(1) # this is the same as the batch 
+            # size (this is a classification task).
+
             total_loss += loss
-            total_n_correct += n_correct.item()
+            total_n_correct += n_correct
             total_words += num_words
-            runtime = time.time() - start_time
-            accuracy = (report_n_correct / report_tgt_words * 100) / opt.batch_size
-            n_src_words_per_sec = (report_src_words / (time.time() - start)).item()
+            accuracy = (n_correct / num_words)
             log.info(
                 "Metrics",
                 epoch=epoch,
                 loss=loss,
                 accuracy=accuracy,
-                n_src_words_per_sec=n_src_words_per_sec,
-                time_elapsed=runtime,
             )
-            report_loss = report_tgt_words = report_src_words = report_n_correct = 0
-            i += 1
+
         return total_loss / total_words, total_n_correct / total_words
 
     epoch: int
@@ -361,7 +310,7 @@ def trainModel(
         print("Train Loss: ", train_loss)
 
         #  (2) evaluate on the validation set
-        valid_loss, valid_acc = eval(model, criterion, data_validation, vocab_size, opt)
+        valid_loss, valid_acc = eval(model, criterion, data_validation, model.vocab_size, opt)
         print("Validation accuracy: %g" % (valid_acc * 100))
         print("Validation Loss: ", valid_loss)
 
@@ -392,6 +341,10 @@ def save_checkpoint(
         model (nn.Module): Model to save.
         checkpoint_path (Union[Path, str]): filepath
             (including filename) of checkpoint object.
+        opt (Optional[argparse.Namespace], optional): _description_. Defaults to None.
+        epoch (Optional[int], optional): _description_. Defaults to 0.
+        optim (Optional[torch.optim.Optimizer], optional): _description_. Defaults to None.
+        dataset (dict, optional): _description_. Defaults to {}.
     """
     model_state_dict = (
         model.module.state_dict() if len(opt.gpus) > 1 else model.state_dict()
@@ -399,7 +352,7 @@ def save_checkpoint(
     model_state_dict = {
         k: v for k, v in model_state_dict.items() if "generator" not in k
     }
-    #  (4) drop a checkpoint
+
     checkpoint = {
         "model": model_state_dict,
         "dicts": dataset["dicts"],
@@ -562,7 +515,9 @@ def main():
     n_params = sum([p.nelement() for p in model.parameters()])
     log.info("Successfully initialised model weights.", n_params=n_params)
 
-    trainModel(model, data_train, data_validation, dataset, optim, opt)
+    criterion = nn.BCELoss()
+
+    trainModel(model, data_train, data_validation, dataset, optim, opt, criterion)
 
 
 if __name__ == "__main__":

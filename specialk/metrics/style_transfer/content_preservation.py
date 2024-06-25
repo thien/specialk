@@ -20,9 +20,9 @@ import numpy as np
 from gensim.models.word2vec import Word2Vec
 
 # from globals import MODEL_TO_PARAMS, MODEL_TO_PARAM_NAMES
-from metrics.style_transfer.style_lexicon import load_lexicon
-from metrics.style_transfer.tokenizer import tokenize
-from metrics.style_transfer.utils import (
+from specialk.metrics.style_transfer.style_lexicon import load_lexicon
+from specialk.metrics.style_transfer.tokenizer import tokenize
+from specialk.metrics.style_transfer.utils import (
     calculate_correlations,
     get_val_as_str,
     load_dataset,

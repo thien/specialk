@@ -188,7 +188,7 @@ def memory_efficient_loss(
             then gradients are calculated. Defaults to False.
 
     Returns:
-        _type_: _description_
+        Tuple[torch.Tensor, torch.Tensor]: loss tensor, gradients tensor.
     """
     # compute generations one piece at a time
     loss: int = 0

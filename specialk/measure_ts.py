@@ -7,6 +7,8 @@ import sys
 
 import numpy as np
 import torch
+from typing import Union, Optional
+from pathlib import Path
 
 # import nlgeval
 # from pyemd import emd
@@ -17,19 +19,15 @@ from nltk.translate.bleu_score import sentence_bleu
 from tqdm import tqdm
 
 import specialk.metrics.style_transfer.cnn as cnn
+from specialk.core.utils import log
 
 # from gensim.corpora.dictionary import Dictionary
 # style transfer metrics codebase
-import specialk.metrics.style_transfer.content_preservation as preserv
-import specialk.metrics.style_transfer.style_lexicon as stme_lexicon
-import specialk.metrics.style_transfer.tokenizer as stme_tokeniser
-import specialk.metrics.style_transfer.utils as stme_utils
 
 # sys.path.append('/home/t/Data/Files/Github/msc_project_model/base/')
-from specialk.core.bpe import Encoder
 from specialk.core.sentenciser import *
 from specialk.core.utils import batch_compute, get_len, log
-
+from specialk.metrics import Preservation, Naturalness, Intensity
 cachedir = "/home/t/Data/Datasets/msc_proj_cache/"
 
 
@@ -90,11 +88,10 @@ def load_args():
     return opt
 
 
+
 class Measurements:
     def __init__(self, opt):
         self.opt = opt
-        self.stopwords = set(stopwords.words("english"))
-        self.cmudict = cmudict.dict()
         self.enable_cache = False
         if opt.cache_dir:
             self.init_cache_dir(opt.cache_dir)
@@ -102,168 +99,38 @@ class Measurements:
         # we'll be working on.
         self.checksum = None
 
-    def init_cache_dir(self, cachedir):
+        self.presevation = Preservation(self.cachedir)
+        self.naturalness = Naturalness(self.cachedir)
+        self.intensity = Intensity(self.cachedir)
+
+    def init_cache_dir(self, cachedir: str):
         """
         Initiates directory and subdirectories
         for caches (a lot of this stuff is expensive to compute).
         """
         self.cachedir = cachedir
+
         if not os.path.exists(self.cachedir):
             log.info("Making cache dir:", self.cachedir)
             os.makedirs(self.cachedir)
+
         subdirs = ["style_lexicons", "word2vec", "preservation"]
         for foldername in subdirs:
             path = os.path.join(self.cachedir, foldername)
-            if not os.path.exists(path):
-                os.makedirs(path)
+            os.makedirs(path, exist_ok=True)
+
         self.enable_cache = True
 
-    def intensity(self, src, tgt):
-        # calculate bleu scores
-        # calculate emd scores
-        return None
-
-    def naturalness(self, tgt, category):
-        # runs a adversarial CNN that discriminates between
-        # fake and real texts.
-
-        # check if theres a model
-        # if there isn't, then make one
-        # load it
-        # run it
-        # return scores.
-        return np.mean(cnn.classify(category, tgt))
-
-    def preservation(self, src, tgt):
-        """
-        Computes preservation (Masked WMD) scores
-        between the source and target sequences.
-        """
-        # check if we've cached it already.
-        checksum = self.checksum if self.checksum else self.hash(src, tgt)
-        if self.enable_cache:
-            p_dir = os.path.join(self.cachedir, "preservation")
-            results_path = os.path.join(p_dir, checksum)
-            if checksum in os.listdir(p_dir):
-                return stme_utils.load_json(results_path)
-
-        lexicon = self.load_style_lexicon(src, tgt, self.opt.style_lexicon)
-        # train w2v model
-        w2v = self.load_w2v(src, tgt)
-        # mask input and output texts
-        src_masked = preserv.mark_style_words(
-            src, style_tokens=lexicon, mask_style=True
-        )
-        tgt_masked = preserv.mark_style_words(
-            tgt, style_tokens=lexicon, mask_style=True
-        )
-        # calculate wmd scores
-        emd_masked = self.calc_wmd(src_masked, tgt_masked, w2v)
-
-        results = {"emd_masked": np.mean(emd_masked)}
-
-        # cache the wmd scores because they're quite
-        # expensive to compute.
-        if self.enable_cache:
-            stme_utils.save_json(results, results_path)
-
-        return results
-
     @staticmethod
-    def calc_wmd(ref, cnd, w2v):
-        n = len(ref)
-        desc = "Calculating WMD"
-        f = w2v.wv.wmdistance
-        return [f(a, b) for a, b in tqdm(zip(ref, cnd), desc=desc, total=n)]
-
-    def train_w2v(self, src, tgt):
-        """
-        Trains a style transfer word2vec s.t we can
-        build a masked wmd comparator.
-        """
-        lexicon = self.load_style_lexicon(src, tgt, self.opt.style_lexicon)
-        masked_txt = preserv.mark_style_words(
-            src + tgt, style_tokens=lexicon, mask_style=True
-        )
-        return Word2Vec([stme_tokeniser.tokenize(x) for x in masked_txt])
-
-    def load_w2v(self, src, tgt):
-        """
-        Loads working word2vec model if it exists,
-        otherwise
-        """
-        checksum = self.checksum if self.checksum else self.hash(src, tgt)
-
-        if self.enable_cache:
-            p_dir = os.path.join(self.cachedir, "word2vec")
-            w2v_path = os.path.join(p_dir, checksum)
-            if checksum in os.listdir(p_dir):
-                model = Word2Vec.load(w2v_path)
-                # normalize vectors
-                model.init_sims(replace=True)
-                return model
-
-        # train the model otherwise
-        w2v = self.train_w2v(src, tgt)
-
-        if self.enable_cache:
-            w2v.save(w2v_path)
-
-        return w2v
-
-    def create_lexicon(self, src, tgt):
-        """
-        finds style lexicon.
-        Returns a set of words following a particular style.
-        """
-        styles = {0: "styles"}
-        # create vectoriser and inverse vocab.
-        x, y = stme_utils.compile_binary_dataset(src, tgt)
-        vectoriser = stme_lexicon.fit_vectorizer(x)
-        inv_vocab = stme_utils.invert_dict(vectoriser.vocabulary_)
-        # train style weights model
-        src_weights = vectoriser.transform(x)
-        model = stme_lexicon.train("l1", 3, src_weights, y)
-        # extract style features and weights
-        nz_weights, f_nums = stme_lexicon.extract_nonzero_weights(model)
-        sf_and_weights = stme_lexicon.collect_style_features_and_weights(
-            nz_weights, styles, inv_vocab, f_nums
-        )
-        # cache the results.
-        return sf_and_weights
-
-    def load_style_lexicon(self, src, tgt, lexicon_src=None):
-        """
-        Loads style lexicon if it was precomputed already.
-        """
-        if lexicon_src:
-            return stme_utils.load_json(lexicon_src)
-        else:
-            # check if we've cached it already.
-            checksum = self.checksum if self.checksum else self.hash(src, tgt)
-            if self.enable_cache:
-                p_dir = os.path.join(self.cachedir, "style_lexicons")
-                lexicon_path = os.path.join(p_dir, checksum)
-                if checksum in os.listdir(p_dir):
-                    return stme_utils.load_json(lexicon_path)
-
-            # otherwise, make it.
-            lexicon = self.create_lexicon(src, tgt)
-
-            if self.enable_cache:
-                stme_utils.save_json(lexicon, lexicon_path)
-        return lexicon
-
-    @staticmethod
-    def hash(src, tgt):
-        # hashing function
+    def hash(src: list[str], tgt: list[str]) -> str:
+        """Returns an md5 hash of the documents."""
         return str(hashlib.md5(str([x for x in zip(src, tgt)]).encode()).hexdigest())
 
 
 # -----------------
 
 
-def load_files(src, tgt):
+def load_files(src: str, tgt: str):
     """
     loads src and tgt files.
     """
@@ -280,10 +147,11 @@ def express(opt):
     metrics.checksum = metrics.hash(src, tgt)
 
     # calculate preservation of meaning
-    preservation = metrics.preservation(src, tgt)
-    log.info(f"Preservation: {preservation}")
+    preservation = metrics.preservation.compute(src, tgt, metrics.checksum)
+    avg_preservation = np.mean(preservation)
+    log.info(f"Preservation: {avg_preservation}")
     # calculate naturalness
-    naturalness = metrics.naturalness(tgt, opt.type)
+    naturalness = metrics.naturalness.compute(tgt, opt.type)
     log.info(f"Naturalness: {naturalness}")
 
     # if newspaper, then we can proceed to do newspaper

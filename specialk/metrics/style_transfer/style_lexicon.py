@@ -15,6 +15,9 @@ To load the lexicon, use load_lexicon().
 from operator import itemgetter
 
 import numpy as np
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.linear_model import LogisticRegression
+
 from metrics.style_transfer.tokenizer import tokenize
 from metrics.style_transfer.utils import (
     invert_dict,
@@ -24,8 +27,6 @@ from metrics.style_transfer.utils import (
     save_json,
     save_model,
 )
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.linear_model import LogisticRegression
 
 DATA_VECTORIZER_PATH = "../models/vectorizer.pkl"
 

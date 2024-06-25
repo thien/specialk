@@ -14,7 +14,7 @@ import pandas as pd
 import spacy
 import torch
 from gensim.corpora.dictionary import Dictionary
-from metrics.meteor.meteor import Meteor
+from specialk.metrics.legacy_meteor.meteor import Meteor
 from nltk import RegexpParser, pos_tag, word_tokenize
 from nltk.corpus import cmudict, stopwords
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
@@ -62,7 +62,8 @@ class Metrics:
         """
         Loads glove dataset.
         """
-        # done some performance studies and found that this pandas method is faster than msgpack, json, and pickling.
+        # done some performance studies and found that this pandas 
+        # method is faster than msgpack, json, and pickling.
         # also does not require creating a new file.
         df = pd.read_csv(glove_path, sep=" ", quoting=3, header=None, index_col=0)
         self.glove = {key: val.values for key, val in df.T.items()}

@@ -2,6 +2,7 @@ import logging
 import subprocess
 from multiprocessing import Pool, cpu_count
 from typing import List
+import torch
 
 import structlog
 from tqdm import tqdm
@@ -11,6 +12,15 @@ Misc. functions used by a variety of parts of the library.
 """
 
 log = structlog.get_logger()
+
+
+def check_torch_device() -> str:
+    """Check which device is available. Returns one of {cpu, cuda, mps}"""
+    if torch.backends.mps.is_available():
+        return "mps"
+    elif torch.cuda.is_available():
+        return "cuda"
+    return "cpu"
 
 
 def load_dataset(path: str) -> List[str]:

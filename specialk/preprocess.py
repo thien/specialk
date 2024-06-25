@@ -21,7 +21,7 @@ def parse(text, formatting="word"):
     text -> string of sentence.
     formatting -> one of 'word', 'character'.
     """
-    assert type(text) == str
+    assert isinstance(text, str)
     assert formatting in ["word", "bpe"]
 
     if formatting == "word":

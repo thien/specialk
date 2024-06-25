@@ -20,9 +20,9 @@ class Translator(object):
         self.vocabulary_size = 0
 
         try:
-            #             if "kwargs" in self.src_dict:
+            # if "kwargs" in self.src_dict:
             self.vocabulary_size = self.src_dict["kwargs"]["vocab_size"]
-        except:
+        except Exception:
             self.vocabulary_size = self.src_dict.size()
 
         model = onmt.CNNModels.ConvNet(self.model_opt, self.vocabulary_size)

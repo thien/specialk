@@ -19,10 +19,10 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import specialk.classifier.onmt as onmt
-from specialk.core.utils import log
+from specialk.core.utils import log, check_torch_device
 from specialk.lib.dataloaders import init_classification_dataloaders as init_dataloaders
 
-DEVICE: str = onmt.core.check_torch_device()
+DEVICE: str = check_torch_device()
 
 
 def get_args() -> argparse.Namespace:

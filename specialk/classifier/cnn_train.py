@@ -17,6 +17,8 @@ import specialk.classifier.onmt as onmt
 sys.path.append("../")
 from specialk.core.dataset import TranslationDataset, collate_fn, paired_collate_fn
 
+from specialk.core.utils import log, check_torch_device
+
 
 def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="train.py")

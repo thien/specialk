@@ -37,7 +37,9 @@ charset-normalizer==3.3.2
 cleo==2.1.0
     # via poetry
 click==8.1.7
-    # via nltk
+    # via
+    #   nltk
+    #   sacremoses
 colorama==0.4.6
     # via sacrebleu
 comm==0.2.2
@@ -49,6 +51,7 @@ crashtest==0.4.1
 cython==3.0.10
     # via fairseq
 datasets==2.20.0
+    # via evaluate
 debugpy==1.8.1
     # via ipykernel
 decorator==5.1.1
@@ -56,11 +59,13 @@ decorator==5.1.1
 dill==0.3.8
     # via
     #   datasets
+    #   evaluate
     #   multiprocess
 distlib==0.3.8
     # via virtualenv
 dulwich==0.21.7
     # via poetry
+evaluate==0.4.2
 exceptiongroup==1.2.1
     # via
     #   ipython
@@ -84,11 +89,14 @@ frozenlist==1.4.1
 fsspec==2024.2.0
     # via
     #   datasets
+    #   evaluate
     #   huggingface-hub
     #   torch
 gensim==4.3.2
 huggingface-hub==0.23.4
-    # via datasets
+    # via
+    #   datasets
+    #   evaluate
 hydra-core==1.0.7
     # via fairseq
 idna==3.7
@@ -118,6 +126,7 @@ jinja2==3.1.3
 joblib==1.4.2
     # via
     #   nltk
+    #   sacremoses
     #   scikit-learn
 jupyter-client==8.6.2
     # via ipykernel
@@ -146,7 +155,9 @@ multidict==6.0.5
     #   aiohttp
     #   yarl
 multiprocess==0.70.16
-    # via datasets
+    # via
+    #   datasets
+    #   evaluate
 nest-asyncio==1.6.0
     # via ipykernel
 networkx==3.2.1
@@ -156,11 +167,13 @@ numpy==1.26.4
     # via
     #   bayesian-optimization
     #   datasets
+    #   evaluate
     #   fairseq
     #   gensim
     #   pandas
     #   pot
     #   pyarrow
+    #   pyemd
     #   sacrebleu
     #   scikit-learn
     #   scipy
@@ -174,13 +187,16 @@ packaging==24.1
     # via
     #   build
     #   datasets
+    #   evaluate
     #   huggingface-hub
     #   ipykernel
     #   poetry
     #   pytest
     #   tensorboardx
 pandas==2.2.2
-    # via datasets
+    # via
+    #   datasets
+    #   evaluate
 parso==0.8.4
     # via jedi
 pexpect==4.9.0
@@ -225,6 +241,7 @@ pyarrow-hotfix==0.6
     # via datasets
 pycparser==2.22
     # via cffi
+pyemd==1.0.0
 pygments==2.18.0
     # via ipython
 pyproject-hooks==1.1.0
@@ -256,10 +273,12 @@ regex==2024.5.15
     #   fairseq
     #   nltk
     #   sacrebleu
+    #   sacremoses
 requests==2.32.3
     # via
     #   cachecontrol
     #   datasets
+    #   evaluate
     #   huggingface-hub
     #   poetry
     #   pytelegrambotapi
@@ -269,6 +288,7 @@ requests-toolbelt==1.0.0
     # via poetry
 sacrebleu==2.4.2
     # via fairseq
+sacremoses==0.1.1
 scikit-learn==1.5.0
     # via bayesian-optimization
 scipy==1.12.0
@@ -277,6 +297,7 @@ scipy==1.12.0
     #   gensim
     #   pot
     #   scikit-learn
+setuptools==70.1.1
 shellingham==1.5.4
     # via poetry
 six==1.16.0
@@ -322,9 +343,11 @@ tornado==6.4.1
 tqdm==4.66.4
     # via
     #   datasets
+    #   evaluate
     #   fairseq
     #   huggingface-hub
     #   nltk
+    #   sacremoses
 traitlets==5.14.3
     # via
     #   comm
@@ -356,7 +379,9 @@ wrapt==1.16.0
 xattr==1.1.0
     # via poetry
 xxhash==3.4.1
-    # via datasets
+    # via
+    #   datasets
+    #   evaluate
 yarl==1.9.4
     # via aiohttp
 zipp==3.19.2

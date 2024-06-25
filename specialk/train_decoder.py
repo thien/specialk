@@ -5,14 +5,14 @@ import sys
 import numpy as np
 import torch
 import torch.nn as nn
-from lib.RecurrentModel import RecurrentModel as recurrent
+from specialk.lib.RecurrentModel import RecurrentModel as recurrent
 from lib.TransformerModel import TransformerModel as transformer
 from torch.autograd import Variable
 from tqdm import tqdm
 
 sys.path.append("classifier")
-import classifier.onmt as onmt
-import classifier.onmt.CNNModels as CNNModels
+import specialk.classifier.onmt as onmt
+import specialk.classifier.onmt.CNNModels as CNNModels
 
 description = """
 train_decoder.py

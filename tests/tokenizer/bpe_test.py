@@ -1,4 +1,4 @@
-from bpe import Encoder
+from specialk.core.bpe import Encoder
 from tqdm import tqdm
 
 sequences = []

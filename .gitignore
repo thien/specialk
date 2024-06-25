@@ -32,3 +32,6 @@ specialk/models
 specialk/telegram.json
 cache
 *.ruff_cache
+models
+.vscode
+.venv

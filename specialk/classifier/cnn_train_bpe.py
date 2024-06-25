@@ -19,6 +19,8 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import specialk.classifier.onmt as onmt
+from specialk.classifier.onmt.CNNModels import ConvNet
+from torch.nn.modules.loss import _Loss as Loss
 from specialk.core.utils import log, check_torch_device
 from specialk.lib.dataloaders import init_classification_dataloaders as init_dataloaders
 
@@ -173,7 +175,7 @@ def get_args() -> argparse.Namespace:
 def memory_efficient_loss(
     outputs: torch.Tensor,
     targets: torch.Tensor,
-    criterion: nn.modules.loss._Loss,
+    criterion: Loss,
     eval=False,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Calculates loss between output and target against the given criterion.
@@ -183,7 +185,7 @@ def memory_efficient_loss(
             dimensions: [batch_size, 1]
         targets (torch.Tensor): Target values the output should attempt to match.
             dimensions: [1, batch_size, 1]
-        criterion (nn.modules.loss._Loss): Criterion metric to use.
+        criterion (Loss): Criterion metric to use.
         eval (bool, Optional): Flag to check if metric is for eval only. If not set,
             then gradients are calculated. Defaults to False.
 
@@ -223,7 +225,7 @@ def calculate_classification_metrics(
     return n_correct
 
 
-def eval(model, criterion, data):
+def eval(model: ConvNet, criterion: Loss, data: DataLoader):
     total_loss, total_words, total_n_correct = 0, 0, 0
 
     model.eval()
@@ -252,7 +254,9 @@ def eval(model, criterion, data):
     return total_loss / total_words, total_n_correct / total_words
 
 
-def train(model, criterion, data, optim):
+def train(
+    model: ConvNet, criterion: Loss, data: DataLoader, optim: torch.optim.Optimizer
+):
     total_loss, total_words, total_n_correct = 0, 0, 0
 
     iterator_label = "Train"
@@ -296,13 +300,13 @@ def train(model, criterion, data, optim):
 
 
 def train_model(
-    model,
+    model: ConvNet,
     data_train: DataLoader,
     data_validation: DataLoader,
-    dataset,
-    optim,
-    opt,
-    criterion,
+    dataset: dict,
+    optim: torch.optim.Optimizer,
+    opt: argparse.Namespace,
+    criterion: Loss,
 ):
     epoch: int
     for epoch in tqdm(range(opt.start_epoch, opt.epochs + 1), desc="Epoch"):
@@ -400,7 +404,7 @@ def main():
 
     log.info("Building model...")
 
-    model: onmt.CNNModels.ConvNet = onmt.CNNModels.ConvNet(opt, vocabulary_size)
+    model: ConvNet = ConvNet(opt, vocabulary_size)
 
     if opt.train_from:
         log.info("Loading model from checkpoint at %s" % opt.train_from)

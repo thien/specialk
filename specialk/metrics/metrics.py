@@ -3,10 +3,9 @@ Various Wrapper functions for evaluation metrics, regarding text datasets.
 """
 
 import hashlib
-import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import evaluate
 import gensim
@@ -344,7 +343,7 @@ class Meteor(AlignmentMetric):
         alpha=0.9,
         beta=3,
         gamma=0.5,
-    ) -> List[int]:
+    ) -> float:
         """Calculate METEOR score.
 
         Args:
@@ -363,7 +362,7 @@ class Meteor(AlignmentMetric):
             alpha=alpha,
             beta=beta,
             gamma=gamma,
-        )
+        )['meteor']
 
 
 class BLEU(AlignmentMetric):

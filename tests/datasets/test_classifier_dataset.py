@@ -18,7 +18,9 @@ torch.manual_seed(1337)
 
 @pytest.fixture(scope="session", autouse=True)
 def dataset() -> Dataset:
-    return load_dataset("thien/political", split="eval")
+    dataset = load_dataset("thien/political", split="eval")
+    dataset = dataset.class_encode_column("label")
+    return dataset
 
 
 @pytest.fixture()
@@ -51,6 +53,7 @@ def test_make_dataloader(dataset):
 
 def test_dataloader_tokenized_bpe(dataset: Dataset, bpe_tokenizer: BPEVocabulary):
     def tokenize(example):
+        # perform tokenization at this stage.
         example["text"] = bpe_tokenizer.to_tensor(example["text"])
         return example
 
@@ -58,14 +61,11 @@ def test_dataloader_tokenized_bpe(dataset: Dataset, bpe_tokenizer: BPEVocabulary
     dataloader = DataLoader(tokenized_dataset, batch_size=BATCH_SIZE, shuffle=True)
     batch = next(iter(dataloader))
     # number chosen by the seed.
-    batch_idx = batch["__index_level_0__"]
-    expected_idx = torch.Tensor([82860, 83526])
+    batch_idx = batch["id"]
+    expected_idx = torch.Tensor([860, 1526])
     assert torch.all(batch_idx.eq(expected_idx))
-    log.info("batch", batch=batch)
     assert isinstance(batch["text"], torch.Tensor)
-    batch["text"] = batch["text"].reshape(
-        2, -1
-    )  # TODO: this is caused by BPE I think. Should investigate.
+    batch["text"] = batch["text"].reshape(2, -1)
     assert batch["text"].shape == torch.Size([BATCH_SIZE, bpe_tokenizer.max_length])
     log.debug("batch shape", shape=batch["text"].shape)
     assert isinstance(batch["text"][0][0].item(), int)
@@ -73,6 +73,7 @@ def test_dataloader_tokenized_bpe(dataset: Dataset, bpe_tokenizer: BPEVocabulary
 
 def test_dataloader_tokenized_word(dataset: Dataset, word_tokenizer: WordVocabulary):
     def tokenize(example):
+        # perform tokenization at this stage.
         example["text"] = word_tokenizer.to_tensor(example["text"])
         return example
 
@@ -80,14 +81,17 @@ def test_dataloader_tokenized_word(dataset: Dataset, word_tokenizer: WordVocabul
     dataloader = DataLoader(tokenized_dataset, batch_size=BATCH_SIZE, shuffle=True)
     batch = next(iter(dataloader))
     # number chosen by the seed.
-    batch_idx = batch["__index_level_0__"]
-    expected_idx = torch.Tensor([82757, 81988])
+    batch_idx = batch["id"]
+    expected_idx = torch.Tensor([757, 1988])
     assert torch.all(batch_idx.eq(expected_idx))
-    log.info("batch", batch=batch)
     assert isinstance(batch["text"], torch.Tensor)
-    batch["text"] = batch["text"].reshape(
-        2, -1
-    )  # TODO: this is caused by BPE I think. Should investigate.
+    batch["text"] = batch["text"].reshape(2, -1)
     assert batch["text"].shape == torch.Size([BATCH_SIZE, word_tokenizer.max_length])
     log.debug("batch shape", shape=batch["text"].shape)
     assert isinstance(batch["text"][0][0].item(), int)
+
+
+def test_dataloader_class_label(dataset: Dataset):
+    torch_dataset = dataset.with_format("torch")
+    log.info("features", features=dataset.features)
+    assert isinstance(torch_dataset["label"][0].item(), int)

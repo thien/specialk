@@ -144,10 +144,10 @@ class WordVocabulary(Vocabulary):
         super().__init__(name, filename, vocab_size, max_length=max_length)
         self.vocab: onmt.Dict
         self.lower = lower
-        self.PAD_TOKEN = onmt.Constants.PAD_WORD
-        self.UNK_TOKEN = onmt.Constants.UNK_WORD
-        self.BOS_TOKEN = onmt.Constants.BOS_WORD
-        self.EOS_TOKEN = onmt.Constants.EOS_WORD
+        self.PAD_TOKEN = Constants.PAD_WORD
+        self.UNK_TOKEN = Constants.UNK_WORD
+        self.BOS_TOKEN = Constants.SOS_WORD
+        self.EOS_TOKEN = Constants.EOS_WORD
         self.mt = MosesTokenizer(lang="en")
         self.md = MosesDetokenizer(lang="en")
 

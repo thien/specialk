@@ -14,7 +14,7 @@ import pandas as pd
 import spacy
 import torch
 from gensim.corpora.dictionary import Dictionary
-from specialk.metrics.legacy_meteor.meteor import Meteor
+# from specialk.metrics.legacy_meteor.meteor import Meteor
 from nltk import RegexpParser, pos_tag, word_tokenize
 from nltk.corpus import cmudict, stopwords
 from nltk.sentiment.vader import SentimentIntensityAnalyzer

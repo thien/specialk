@@ -6,14 +6,6 @@ import sys
 import torch
 from tqdm import tqdm
 
-# # import CNN classifier code.
-# if __name__ == "__main__":
-#     sys.path.append("../../classifier")
-#     CNN_MODELS_DIR = "../cnn_models"
-#     import onmt
-# else:
-#     sys.path.append("classifier")
-#     CNN_MODELS_DIR = "metrics/cnn_models"
 import specialk.classifier.onmt as onmt
 CNN_MODELS_DIR = "metrics/cnn_models"
 

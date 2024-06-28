@@ -2,24 +2,20 @@
 Various Wrapper functions for evaluation metrics, regarding text datasets.
 """
 
-import hashlib
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 import evaluate
-import gensim
 import gensim.downloader as api
 import numpy as np
 from gensim.corpora.dictionary import Dictionary
-from gensim.models.word2vec import Word2Vec
 from gensim.models.keyedvectors import KeyedVectors
 from nltk import pos_tag, word_tokenize
 from nltk.corpus import cmudict, stopwords
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from nltk.translate.bleu_score import sentence_bleu
 from pyemd import emd
-from tqdm import tqdm
 
 from specialk.core.sentenciser import find_sentences
 from specialk.core.utils import log
@@ -411,26 +407,26 @@ class EarthMoverDistance(AlignmentMetric):
         Note that gensim.api.downloader downloads a text form of the
         embeddings, which takes a minute to load every time.
 
-        We save a binary form of this model, which is an 
+        We save a binary form of this model, which is an
         order of magnitude quicker to load than the text form.
 
         Returns:
             KeyedVectors: GloVe Embeddings.
         """
-        cache_dir = PROJECT_DIR / "cache" / "embeddings"
-        path_w2v = cache_dir / "w2v.bin"
+        cache_dir: Path = PROJECT_DIR / "cache" / "embeddings"
+        path_w2v: Path = cache_dir / "w2v.bin"
 
         log.info("Loading GloVe Vectors")
         if path_w2v.exists():
             model = KeyedVectors.load_word2vec_format(path_w2v, binary=True)
             log.info("Loaded GloVe Vectors from cache.", path=str(path_w2v))
-            return model 
         else:
             # download glove from the internet, cache it as a binary.
             model: KeyedVectors = api.load("glove-twitter-200")
             cache_dir.mkdir(exist_ok=True)
             model.save(path_w2v, binary=True)
             log.info("Created GloVe cache.", path=str(path_w2v))
+        return model
 
     @lru_cache
     def tokenize(self, text: str) -> List[str]:
@@ -481,9 +477,7 @@ class EarthMoverDistance(AlignmentMetric):
             d[idx] = freq / float(doc_len)
         return d
 
-    def compute(
-        self, prediction: str, references: Union[str, List[str]]
-    ) -> float:
+    def compute(self, prediction: str, references: Union[str, List[str]]) -> float:
         """Calculates earth mover distances between two strings.
 
         based on https://github.com/RaRe-Technologies/gensim/blob/

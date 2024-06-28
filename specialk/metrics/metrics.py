@@ -482,7 +482,7 @@ class EarthMoverDistance(AlignmentMetric):
         return d
 
     def compute(
-        self, predictions: List[str], references: Union[List[str], List[List[str]]]
+        self, prediction: str, references: Union[str, List[str]]
     ) -> float:
         """Calculates earth mover distances between two strings.
 
@@ -501,15 +501,15 @@ class EarthMoverDistance(AlignmentMetric):
         """
         references = self.use_first_references(references)
 
-        predictions = self.preprocess(self.tokenize(predictions))
+        prediction = self.preprocess(self.tokenize(prediction))
         references = self.preprocess(self.tokenize(references))
 
-        if not predictions or not references:
+        if not prediction or not references:
             # at least one of the documents had no tokens that
             # were in the vocabulary.
             return float("inf")
 
-        dictionary = Dictionary(documents=[predictions, references])
+        dictionary = Dictionary(documents=[prediction, references])
         vocab_len = len(dictionary)
 
         if vocab_len == 1:
@@ -517,7 +517,7 @@ class EarthMoverDistance(AlignmentMetric):
             return 0.0
 
         # Sets for faster look-up.
-        set_pred, set_refs = set(predictions), set(references)
+        set_pred, set_refs = set(prediction), set(references)
 
         # Compute distance matrix.
         distance_matrix = np.zeros((vocab_len, vocab_len), dtype=np.double)
@@ -537,7 +537,7 @@ class EarthMoverDistance(AlignmentMetric):
             return float("inf")
 
         # Compute nBOW representation of documents.
-        d1, d2 = self.nbow(predictions, dictionary), self.nbow(references, dictionary)
+        d1, d2 = self.nbow(prediction, dictionary), self.nbow(references, dictionary)
 
         # Compute WMD.
         return emd(d1, d2, distance_matrix)

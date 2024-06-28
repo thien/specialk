@@ -7,11 +7,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data
-from lib.nmtModel import NMTModel
-from lib.recurrent.Models import Decoder, Encoder
-from lib.recurrent.Models import NMTModel as Seq2Seq
-from lib.recurrent.Optim import Optim
-from lib.recurrent.Translator import Translator
+from specialk.lib.nmt_model import NMTModel
+from specialk.lib.recurrent.Models import Decoder, Encoder
+from specialk.lib.recurrent.Models import NMTModel as Seq2Seq
+from specialk.lib.recurrent.Optim import Optim
+from specialk.lib.recurrent.Translator import Translator
 from torch.autograd import Variable
 from tqdm import tqdm
 

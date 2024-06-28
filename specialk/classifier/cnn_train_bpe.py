@@ -22,7 +22,7 @@ import specialk.classifier.onmt as onmt
 from specialk.classifier.onmt.CNNModels import ConvNet
 from torch.nn.modules.loss import _Loss as Loss
 from specialk.core.utils import log, check_torch_device
-from specialk.lib.dataloaders import init_classification_dataloaders as init_dataloaders
+from specialk.core.dataloaders import init_classification_dataloaders as init_dataloaders
 
 DEVICE: str = check_torch_device()
 

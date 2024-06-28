@@ -4,16 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-# import os
-# import sys
-# import transformer.Constants as Constants
 import specialk.core.constants as Constants
-
-# if os.getcwd().split("/")[-1] == "transformer":
-#     import specialk.core.constants as Constants
-# else:
-#     import specialk.core.constants as Constants
-# print(sys.path)
 from .Layers import DecoderLayer, EncoderLayer
 
 __author__ = "Yu-Hsiang Huang"

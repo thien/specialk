@@ -5,12 +5,14 @@ import sys
 import numpy as np
 import torch
 import torch.nn as nn
-from specialk.lib.RecurrentModel import RecurrentModel as recurrent
-from lib.TransformerModel import TransformerModel as transformer
+from specialk.lib.nmt_model import NMTModel
+from torch.utils.data import DataLoader
+# from specialk.lib.recurrent_model import RecurrentModel as recurrent
+from specialk.lib.transformer_model import TransformerModel as transformer
 from torch.autograd import Variable
 from tqdm import tqdm
 
-sys.path.append("classifier")
+from typing import Tuple, Dict
 import specialk.classifier.onmt as onmt
 import specialk.classifier.onmt.CNNModels as CNNModels
 
@@ -19,6 +21,189 @@ train_decoder.py
 
 Trains the transformer decoder for style-transfer specific purposes.
 """
+
+
+class StyleBackTranslationModel(nn.Module):
+    # TODO: test if this works with pl.module
+    def __init__(
+        self, mt_model: NMTModel, cnn_model: CNNModels, smoothing: bool = True
+    ):
+        """
+        Args:
+            mt_model (NMTModel): Machine Translation model (with target language to english).
+            cnn_model (CNNModels): Style classifier model.
+            smoothing (bool, optional): If set, adds smothing to reconstruction loss function. Defaults to True.
+        """
+        self.nmt_model: NMTModel = mt_model
+        self.cnn_model: CNNModels = cnn_model
+        self.target_label: int = self.cnn_model.refs.tgt_label
+
+        # learn NN that feeds the decoder output into the classifier
+        self.class_input = nn.Linear(
+            self.nmt_model.decoder.layer_stack[0].slf_attn.w_qs.out_features,
+            self.cnn_model.classifier.word_lut.weight.shape[0],
+        )
+
+        # encoder will always be in eval mode. We're only updating the decoder weights.
+        self.nmt_model.encoder.eval()
+
+        # loss functions.
+        self.criterion_classifier = nn.BCELoss()
+        self.smoothing = smoothing
+
+    def training_step(self, batch: DataLoader, batch_idx: int) -> torch.Tensor:
+        """
+        Forward pass of the transformer.
+        """
+
+        src_seq, src_pos, tgt_seq, tgt_pos = batch
+
+        references = tgt_seq[:, 1:]
+        tgt_seq = tgt_seq[:, :-1]
+        tgt_pos = tgt_pos[:, :-1]
+
+        # compute encoder output
+        encoder_outputs, _ = self.nmt_model.encoder(src_seq, src_pos, True)
+        # feed into decoder
+        predictions, _, _ = self.nmt_model.decoder(
+            tgt_seq, tgt_pos, src_seq, encoder_outputs.detach(), True
+        )
+
+        # compute performance
+        l_recon, l_class, _ = self.joint_loss(self, predictions, references)
+        net_loss = l_recon * l_class
+
+        return net_loss
+
+    def _shared_eval_step(self, batch: DataLoader, batch_idx: int):
+        """Evaluation step used for both eval/test runs on a given dataset.
+
+        Args:
+            batch (DataLoader): _description_
+            batch_idx (int): _description_
+
+        Returns:
+            _type_: _description_
+        """
+        src_seq, src_pos, tgt_seq, tgt_pos = batch
+
+        references = tgt_seq[:, 1:]
+        tgt_seq = tgt_seq[:, :-1]
+        tgt_pos = tgt_pos[:, :-1]
+
+        # compute encoder output
+        encoder_outputs, _ = self.nmt_model.encoder(src_seq, src_pos, True)
+
+        # feed into decoder
+        predictions, _, _ = self.nmt_model.decoder(
+            tgt_seq, tgt_pos, src_seq, encoder_outputs, True
+        )
+
+        # compute performance
+        l_recon, l_class, n_correct = self.joint_loss(self, predictions, references)
+        l_net = l_recon * l_class
+
+        return l_recon, l_class, l_net, n_correct
+
+    def validation_step(
+        self, batch: DataLoader, batch_idx: int
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Forward pass of the transformer.
+        """
+        l_recon, l_class, l_net, n_correct = self._shared_eval_step(batch, batch_idx)
+        metrics: Dict[str, torch.Tensor] = {
+            "val_n_correct": n_correct,
+            "val_loss_net": l_net,
+            "val_loss_class": l_class,
+            "val_loss_reconstruction": l_recon,
+        }
+        self.log_dict(metrics)
+        return metrics
+
+    def test_step(self, batch: DataLoader, batch_idx: int) -> Dict[str, torch.Tensor]:
+        l_recon, l_class, l_net, n_correct = self._shared_eval_step(batch, batch_idx)
+        metrics: Dict[str, torch.Tensor] = {
+            "test_n_correct": n_correct,
+            "test_loss_net": l_net,
+            "test_loss_class": l_class,
+            "test_loss_reconstruction": l_recon,
+        }
+        self.log_dict(metrics)
+        return metrics
+
+    def classifier_loss(self, pred: torch.Tensor):
+        """
+        Computes classifier loss.
+        """
+
+        # need to fix is_cuda
+        dim_batch: int
+        dim_length: int
+        dim_vocab: int
+
+        softmax = nn.Softmax(dim=1)
+        seq_length = self.cnn_model.opt.sequence_length
+        target_label = self.cnn_model.refs.tgt_label
+
+        # translate generator outputs to class inputs
+        exp = Variable(pred.data, requires_grad=True, volatile=False)
+        linear: torch.FloatTensor = self.class_input(exp)
+        dim_batch, dim_length, dim_vocab = linear.size()
+
+        # reshape it for softmax, and shape it back.
+        out: torch.FloatTensor = softmax(linear.view(-1, dim_vocab)).view(
+            dim_batch, dim_length, dim_vocab
+        )
+
+        out = out.transpose(0, 1)
+        dim_length, dim_batch, dim_vocab = out.size()
+
+        # setup padding because the CNN only accepts inputs of certain dimension
+        if dim_length < seq_length:
+            # pad sequences
+            cnn_padding = torch.FloatTensor(
+                abs(seq_length - dim_length), dim_batch, dim_vocab
+            ).zero_()
+            cat = torch.cat((out, cnn_padding), dim=0)
+        else:
+            # trim sequences
+            cat = out[:seq_length]
+
+        # get class prediction with cnn
+        class_outputs = self.cnn_model(cat).squeeze()
+
+        # return loss between predicted class outputs and a vector of class_targets
+        return self.criterion_classifier(
+            class_outputs, torch.FloatTensor(dim_batch).fill_(target_label)
+        )
+
+    def joint_loss(
+        self, predicted: torch.FloatTensor, reference: torch.FloatTensor
+    ) -> Tuple[torch.Tensor, torch.Tensor, int]:
+        """
+        Calculates token level accuracy.
+        Smoothing can be applied if needed.
+        """
+        pred = self.model.generator(predicted) * self.model.x_logit_scale
+
+        # compute adversarial loss
+        loss_classifier = self.classifier_loss(predicted)
+
+        # compute reconstruction loss
+        pred = pred.view(-1, pred.size(2))
+        loss_reconstruction = self.nmt_model.calculate_loss(
+            pred, reference, self.smoothing
+        )
+
+        # count number of correct tokens (for stats)
+        n_correct = n_tokens_correct(pred, reference, pad_token=self.constants.PAD)
+
+        return loss_reconstruction, loss_classifier, n_correct
+
+    def configure_optimizers(self):
+        # return torch.optim.Adam(self.model.parameters(), lr=0.02)
+        return None
 
 
 def load_args():
@@ -35,69 +220,52 @@ def load_args():
         "-checkpoint_encoder",
         default="",
         type=str,
-        help="""
-                        If training from a checkpoint, then this is the path to the pretrained encoder.
-                        """,
+        help="""If training from a checkpoint, then this is the path to the pretrained encoder.""",
     )
 
     parser.add_argument(
         "-checkpoint_decoder",
         default="",
         type=str,
-        help="""
-                        If training from a checkpoint, then this is the path to the pretrained model.
-                        """,
+        help="""If training from a checkpoint, then this is the path to the pretrained model.""",
     )
 
     parser.add_argument(
         "-new_directory",
         action="store_true",
-        help="""
-                        If enabled, creates a new directory instead of using the directory where the encoder is loaded. (Assumes that the checkpoint_encoder flag is activated.)
-                        """,
+        help="""If enabled, creates a new directory instead of using the directory where the encoder is loaded. (Assumes that the checkpoint_encoder flag is activated.)""",
     )
 
     parser.add_argument(
         "-log",
         action="store_true",
-        help="""
-                        Determines whether to enable logs, which will save status into text files.
-                        """,
+        help="""Determines whether to enable logs, which will save status into text files.""",
     )
 
     parser.add_argument(
         "-directory_name",
         type=str,
         default="",
-        help="""
-                        Name of directory. If set, then it'll use that name instead.
-                        Otherwise it'll generate one based on the timestamp.
-                        """,
+        help="""Name of directory. If set, then it'll use that name instead. Otherwise it'll generate one based on the timestamp.""",
     )
 
     parser.add_argument(
         "-save_model",
         action="store_true",
-        help="""
-                        Determines whether to save the model or not.
-                        """,
+        help="""Determines whether to save the model or not.""",
     )
 
     parser.add_argument(
         "-save_mode",
         default="all",
         choices=["all", "best"],
-        help="""
-                        Determines whether to save all versions of the model or keep the best version.
-                        """,
+        help=""" Determines whether to save all versions of the model or keep the best version.""",
     )
 
     parser.add_argument(
         "-verbose",
         action="store_true",
-        help="""
-                        If enabled, prints messages to terminal.
-                        """,
+        help="""If enabled, prints messages to terminal.""",
     )
 
     # model options.
@@ -105,52 +273,40 @@ def load_args():
     parser.add_argument(
         "-cuda",
         action="store_true",
-        help="""
-                        Determines whether to use CUDA or not. (You should.)
-                        """,
+        help="""Determines whether to use CUDA or not. (You should.)""",
     )
 
     parser.add_argument(
         "-multi_gpu",
         action="store_true",
-        help="""
-                        Determines whether to use multiple GPUs.
-                        """,
+        help="""Determines whether to use multiple GPUs.""",
     )
 
     parser.add_argument(
         "-cuda_device",
         type=int,
-        help="""
-                        Determines which GPU to use for computation.
-                        """,
+        help="""Determines which GPU to use for computation.""",
     )
 
     parser.add_argument(
         "-batch_size",
         type=int,
         default=64,
-        help="""
-                        Determines batch size of input data, for feeding into the models.
-                        """,
+        help="""Determines batch size of input data, for feeding into the models.""",
     )
 
     parser.add_argument(
         "-layers",
         type=int,
         default=6,
-        help="""
-                        Number of layers for the model. (Recommended to have 6 for Transformer, 2 for recurrent.)
-                        """,
+        help="""Number of layers for the model. (Recommended to have 6 for Transformer, 2 for recurrent.)""",
     )
 
     parser.add_argument(
         "-d_word_vec",
         type=int,
         default=300,
-        help="""
-                        Dimension size of the token vectors representing words (or characters, or bytes).
-                        """,
+        help="""Dimension size of the token vectors representing words (or characters, or bytes).""",
     )
 
     # training options
@@ -159,21 +315,14 @@ def load_args():
         type=int,
         required=True,
         default=10,
-        help="""
-                        Number of epochs for training. (Note
-                        that for transformers, the number of
-                        sequences become considerably longer.)
-                        """,
+        help="""Number of epochs for training. (Note that for transformers, the number of sequences become considerably longer.)""",
     )
 
     parser.add_argument(
         "-dropout",
         type=float,
         default=0.1,
-        help="""
-                        Dropout probability' applied between
-                        self-attention layers/RNN Stacks.
-                        """,
+        help="""Dropout probability' applied between self-attention layers/RNN Stacks.""",
     )
 
     # debugging options
@@ -181,10 +330,7 @@ def load_args():
         "-telegram",
         type=str,
         default="",
-        help="""
-                        filepath to telegram API private key
-                        and chatID to send messages to.
-                        """,
+        help="""Filepath to telegram API private key and chatID to send messages to. """,
     )
 
     # transformer specific options
@@ -192,9 +338,7 @@ def load_args():
         "-d_model",
         type=int,
         default=512,
-        help="""
-                        Dimension size of the model.
-                        """,
+        help="""Dimension size of the model.""",
     )
     parser.add_argument(
         "-d_inner_hid",
@@ -265,25 +409,19 @@ def load_args():
         "-learning_rate",
         type=float,
         default=0.001,
-        help="""Starting learning rate. If adagrad/adadelta/adam is
-                        used, then this is the global learning rate. Recommended
-                        settings: sgd = 1, adagrad = 0.1, adadelta = 1, adam = 0.001""",
+        help="""Starting learning rate. If adagrad/adadelta/adam is used, then this is the global learning rate. Recommended settings: sgd = 1, adagrad = 0.1, adadelta = 1, adam = 0.001""",
     )
     parser.add_argument(
         "-learning_rate_decay",
         type=float,
         default=0.5,
-        help="""If update_learning_rate, decay learning rate by
-                        this much if (i) perplexity does not decrease on the
-                        validation set or (ii) epoch has gone past
-                        start_decay_at""",
+        help="""If update_learning_rate, decay learning rate by this much if (i) perplexity does not decrease on the validation set or (ii) epoch has gone past start_decay_at""",
     )
     parser.add_argument(
         "-start_decay_at",
         type=int,
         default=8,
-        help="""Start decaying every epoch after and including this
-                        epoch""",
+        help="""Start decaying every epoch after and including this epoch.""",
     )
     parser.add_argument(
         "-optim",
@@ -297,39 +435,31 @@ def load_args():
         "-classifier_model",
         required=True,
         type=str,
-        help="""
-                        path for classifier model.
-                        """,
+        help="""path for classifier model.""",
     )
     parser.add_argument(
         "-label0",
         required=True,
         type=str,
-        help="""
-                        Label 0 for CNN classifier.
-                        """,
+        help="""Label 0 for CNN classifier.""",
     )
     parser.add_argument(
         "-label1",
         required=True,
         type=str,
-        help="""
-                        Label 1 for CNN classifier.
-                        """,
+        help="""Label 1 for CNN classifier.""",
     )
     parser.add_argument(
         "-label_target",
         required=True,
         type=str,
-        help="""
-                        Label target for CNN classifier.
-                        """,
+        help="""Label target for CNN classifier.""",
     )
 
     return parser
 
 
-def load_classifier(opt):
+def load_classifier(opt) -> CNNModels.ConvNet:
     # load model classifier
     cnn_opt = argparse.Namespace()
     cnn_opt.model = opt.classifier_model
@@ -370,7 +500,7 @@ def tf_forward(self, src_seq, src_pos, tgt_seq, tgt_pos):
     return dec_output
 
 
-def n_tokens_correct(pred, gold, pad_token):
+def n_tokens_correct(pred, gold, pad_token) -> int:
     """
     Calculates number of correct tokens.
     """
@@ -444,7 +574,13 @@ def performance(self, pred_before, gold, class_input, class_model, smoothing=Fal
     return l_reconstruction, l_classifier, n_correct
 
 
-def compute_epoch(self, class_input, class_model, dataset, validation=False):
+def compute_epoch(
+    self,
+    class_input: nn.Sequential,
+    class_model: onmt.CNNModels,
+    dataset,
+    validation=False,
+):
     if validation:
         self.model.decoder.eval()
         self.model.generator.eval()
@@ -539,7 +675,7 @@ if __name__ == "__main__":
     model.model.encoder.eval()
 
     # load model classifier
-    classifier = load_classifier(opt)
+    classifier: CNNModels.ConvNet = load_classifier(opt)
     criterion2 = BCELoss()
 
     # initiate a new generator for style specific purposes
@@ -549,8 +685,6 @@ if __name__ == "__main__":
     class_input = nn.Sequential(
         nn.Linear(model_dim, classifier.word_lut.weight.shape[0])
     ).cuda()
-
-    criterion_2 = BCELoss()
 
     torch.cuda.empty_cache()
 

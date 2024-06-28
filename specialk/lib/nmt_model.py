@@ -20,7 +20,6 @@ from specialk.core.bpe import Encoder as BPE
 from specialk.core.dataset import TranslationDataset, collate_fn, paired_collate_fn
 from specialk.preprocess import load_file, reclip, seq2idx
 
-
 class NMTModel:
     def __init__(self, opt, models_folder="models"):
         self.opt = opt
@@ -454,3 +453,27 @@ class NMTModel:
     @staticmethod
     def parse(x):
         return x.split()
+
+    def calculate_loss(self, pred, gold, smoothing=False):
+        """
+        Computes cross entropy loss,
+        apply label smoothing if needed.
+        """
+        gold = gold.contiguous().view(-1)
+        if smoothing:
+            epsilon = 0.1
+            n_class = pred.size(1)
+            one_hot = torch.zeros_like(pred).scatter(1, gold.view(-1, 1), 1)
+            one_hot = one_hot * (1 - epsilon) + (1 - one_hot) * epsilon / (n_class - 1)
+
+            log_prb = F.log_softmax(pred, dim=1)
+            # create non-padding mask with torch.ne()
+            non_pad_mask = gold.ne(self.constants.PAD)
+            loss = -(one_hot * log_prb).sum(dim=1)
+            # losses are averaged later
+            loss = loss.masked_select(non_pad_mask).sum()
+        else:
+            loss = F.cross_entropy(
+                pred, gold, ignore_index=self.constants.PAD, reduction="sum"
+            )
+        return loss

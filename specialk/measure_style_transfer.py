@@ -28,6 +28,7 @@ from specialk.core.utils import log
 from specialk.core.sentenciser import *
 from specialk.core.utils import batch_compute, get_len, log
 from specialk.metrics import Preservation, Naturalness, Intensity
+
 cachedir = "/home/t/Data/Datasets/msc_proj_cache/"
 
 
@@ -86,7 +87,6 @@ def load_args():
 
     opt = parser.parse_args()
     return opt
-
 
 
 class Measurements:

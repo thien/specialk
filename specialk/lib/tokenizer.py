@@ -1,3 +1,5 @@
+"""Tokenizer/Vocabulary library."""
+
 import codecs
 from pathlib import Path
 from typing import Iterable, List, Optional, Union

@@ -13,6 +13,7 @@ import gensim.downloader as api
 import numpy as np
 from gensim.corpora.dictionary import Dictionary
 from gensim.models.word2vec import Word2Vec
+from gensim.models.keyedvectors import KeyedVectors
 from nltk import pos_tag, word_tokenize
 from nltk.corpus import cmudict, stopwords
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
@@ -22,6 +23,7 @@ from tqdm import tqdm
 
 from specialk.core.sentenciser import find_sentences
 from specialk.core.utils import log
+from specialk.core.constants import PROJECT_DIR
 
 
 class Metric:
@@ -359,7 +361,7 @@ class Meteor(AlignmentMetric):
             alpha=alpha,
             beta=beta,
             gamma=gamma,
-        )['meteor']
+        )["meteor"]
 
 
 class BLEU(AlignmentMetric):
@@ -399,11 +401,36 @@ class ROUGE(AlignmentMetric):
 class EarthMoverDistance(AlignmentMetric):
     def __init__(self):
         self.stopwords = set(stopwords.words("english"))
+        self.glove: KeyedVectors = self.load_glove()
+
+    def load_glove(self) -> KeyedVectors:
+        """Load GloVe Word2Vec.
+
+        Checks if the embeddings are already present in the cache_dir.
+
+        Note that gensim.api.downloader downloads a text form of the
+        embeddings, which takes a minute to load every time.
+
+        We save a binary form of this model, which is an 
+        order of magnitude quicker to load than the text form.
+
+        Returns:
+            KeyedVectors: GloVe Embeddings.
+        """
+        cache_dir = PROJECT_DIR / "cache" / "embeddings"
+        path_w2v = cache_dir / "w2v.bin"
+
         log.info("Loading GloVe Vectors")
-        self.glove: gensim.models.keyedvectors.KeyedVectors = api.load(
-            "glove-twitter-200"
-        )  # TODO: this takes a whole minute to load. We an definitely optimise this.
-        log.info("Loaded GloVe Vectors")
+        if path_w2v.exists():
+            model = KeyedVectors.load_word2vec_format(path_w2v, binary=True)
+            log.info("Loaded GloVe Vectors from cache.", path=str(path_w2v))
+            return model 
+        else:
+            # download glove from the internet, cache it as a binary.
+            model: KeyedVectors = api.load("glove-twitter-200")
+            cache_dir.mkdir(exist_ok=True)
+            model.save(path_w2v, binary=True)
+            log.info("Created GloVe cache.", path=str(path_w2v))
 
     @lru_cache
     def tokenize(self, text: str) -> List[str]:

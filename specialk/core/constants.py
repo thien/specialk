@@ -2,6 +2,8 @@
 ENSURE THAT THE CONSTANTS ARE
 CAPITALISED.
 """
+from pathlib import Path
+import specialk
 
 PAD = 0
 UNK = 1
@@ -29,3 +31,5 @@ def get_tokens():
 
 if __name__ == "__main__":
     print(get_tokens())
+
+PROJECT_DIR = Path(specialk.__file__).parent.parent

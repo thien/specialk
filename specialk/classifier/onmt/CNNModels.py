@@ -6,7 +6,7 @@ from torch.autograd import Variable
 from torch.nn.utils.rnn import pack_padded_sequence as pack
 from torch.nn.utils.rnn import pad_packed_sequence as unpack
 
-import specialk.classifier.onmt as onmt
+from specialk.core.constants import PAD
 
 
 class ConvNet(nn.Module):
@@ -22,7 +22,7 @@ class ConvNet(nn.Module):
         self.word_vec_size = opt.word_vec_size
 
         self.word_lut = nn.Embedding(
-            self.vocab_size, opt.word_vec_size, padding_idx=onmt.Constants.PAD
+            self.vocab_size, opt.word_vec_size, padding_idx=PAD
         )
 
         self.conv1 = nn.Conv2d(

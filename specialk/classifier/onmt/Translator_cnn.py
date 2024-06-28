@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 
 import specialk.classifier.onmt as onmt
+from specialk.core.constants import UNK_WORD
 
 
 class Translator(object):
@@ -40,7 +41,7 @@ class Translator(object):
 
     def buildData(self, srcBatch, goldBatch):
         srcData = [
-            self.src_dict.convertToIdx(b, onmt.Constants.UNK_WORD, padding=True)
+            self.src_dict.convertToIdx(b, UNK_WORD, padding=True)
             for b in srcBatch
         ]
         tgtData = []

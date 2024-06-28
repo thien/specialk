@@ -4,6 +4,9 @@ CNN Training Runner.
 Trains classifier used for style transfer.
 Modified version of the following code:
 https://github.com/shrimai/Style-Transfer-Through-Back-Translation/blob/master/classifier/cnn_train.py.
+
+
+TODO: Check this works on both BPE and word-separated tokenized datasets from the huggingface datasets.
 """
 
 from __future__ import division
@@ -440,9 +443,6 @@ def main():
         log.info(optim)
 
     model = model.to(DEVICE)
-
-    if len(opt.gpus) > 1:
-        model = nn.DataParallel(model, device_ids=opt.gpus, dim=1)
 
     optim.set_parameters(model.parameters())
 

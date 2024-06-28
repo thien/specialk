@@ -1,4 +1,5 @@
 """
+DEPRECATED, DO NOT USE
 
 preprocess_bpe is retrofitted to use BPE encodings for the
 dataset.

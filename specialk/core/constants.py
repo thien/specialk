@@ -2,8 +2,10 @@
 ENSURE THAT THE CONSTANTS ARE
 CAPITALISED.
 """
+
 from pathlib import Path
 import specialk
+from typing import List
 
 PAD = 0
 UNK = 1
@@ -21,7 +23,7 @@ SEP_WORD = "<sep>"
 CLS_TOKEN = "<cls>"
 
 
-def get_tokens():
+def get_tokens() -> List[str]:
     g = globals()
     k = list({i for i in g if i[-5:] == "_WORD"})
     kc = [i[:-5] for i in k]
@@ -29,7 +31,4 @@ def get_tokens():
     return [g[i + "_WORD"] for i in k]
 
 
-if __name__ == "__main__":
-    print(get_tokens())
-
-PROJECT_DIR = Path(specialk.__file__).parent.parent
+PROJECT_DIR: Path = Path(specialk.__file__).parent.parent

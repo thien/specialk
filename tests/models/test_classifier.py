@@ -68,7 +68,6 @@ def test_model_inference(bpe_dataloader):
     )
     model.eval()
 
-    log.info("model pooling size", maxpool=model.maxpool)
     batch = next(iter(bpe_dataloader))
     x, y = batch["text"], batch["label"]
 
@@ -96,12 +95,5 @@ def test_model_inference(bpe_dataloader):
 
     assert y_hat.shape == (BATCH_SIZE, 1)
     assert y.shape == (1, BATCH_SIZE, 1)
-
-    log.info(
-        "shapes",
-        x=x.shape,
-        one_hot=one_hot.shape,
-    )
-    log.info("shapes", y_hat=y_hat.shape, y=y.shape)
 
     _, _ = memory_efficient_loss(y_hat, y, nn.BCELoss())

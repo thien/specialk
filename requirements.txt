@@ -91,6 +91,8 @@ fsspec==2024.2.0
     #   datasets
     #   evaluate
     #   huggingface-hub
+    #   lightning
+    #   pytorch-lightning
     #   torch
 gensim==4.3.2
 huggingface-hub==0.23.4
@@ -136,6 +138,12 @@ jupyter-core==5.7.2
     #   jupyter-client
 keyring==24.3.1
     # via poetry
+lightning==2.3.1
+lightning-utilities==0.11.3.post0
+    # via
+    #   lightning
+    #   pytorch-lightning
+    #   torchmetrics
 lxml==5.2.2
     # via sacrebleu
 markupsafe==2.1.5
@@ -170,14 +178,17 @@ numpy==1.26.4
     #   evaluate
     #   fairseq
     #   gensim
+    #   lightning
     #   pandas
     #   pot
     #   pyarrow
     #   pyemd
+    #   pytorch-lightning
     #   sacrebleu
     #   scikit-learn
     #   scipy
     #   tensorboardx
+    #   torchmetrics
     #   torchvision
 omegaconf==2.0.6
     # via
@@ -190,9 +201,13 @@ packaging==24.1
     #   evaluate
     #   huggingface-hub
     #   ipykernel
+    #   lightning
+    #   lightning-utilities
     #   poetry
     #   pytest
+    #   pytorch-lightning
     #   tensorboardx
+    #   torchmetrics
 pandas==2.2.2
     # via
     #   datasets
@@ -255,13 +270,17 @@ python-dateutil==2.9.0.post0
     # via
     #   jupyter-client
     #   pandas
+pytorch-lightning==2.3.1
+    # via lightning
 pytz==2024.1
     # via pandas
 pyyaml==6.0.1
     # via
     #   datasets
     #   huggingface-hub
+    #   lightning
     #   omegaconf
+    #   pytorch-lightning
 pyzmq==26.0.3
     # via
     #   ipykernel
@@ -298,6 +317,7 @@ scipy==1.12.0
     #   pot
     #   scikit-learn
 setuptools==70.1.1
+    # via lightning-utilities
 shellingham==1.5.4
     # via poetry
 six==1.16.0
@@ -331,10 +351,17 @@ toolz==0.12.1
 torch==2.3.1
     # via
     #   fairseq
+    #   lightning
+    #   pytorch-lightning
     #   torchaudio
+    #   torchmetrics
     #   torchvision
 torchaudio==2.3.1
     # via fairseq
+torchmetrics==1.4.0.post0
+    # via
+    #   lightning
+    #   pytorch-lightning
 torchvision==0.18.1
 tornado==6.4.1
     # via
@@ -346,7 +373,9 @@ tqdm==4.66.4
     #   evaluate
     #   fairseq
     #   huggingface-hub
+    #   lightning
     #   nltk
+    #   pytorch-lightning
     #   sacremoses
 traitlets==5.14.3
     # via
@@ -362,7 +391,10 @@ typing-extensions==4.12.2
     # via
     #   huggingface-hub
     #   ipython
+    #   lightning
+    #   lightning-utilities
     #   omegaconf
+    #   pytorch-lightning
     #   torch
 tzdata==2024.1
     # via pandas

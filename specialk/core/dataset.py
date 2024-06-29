@@ -10,6 +10,7 @@ if os.getcwd().split("/")[-1] == "core":
 else:
     import specialk.core.constants as Constants
 
+# THIS IS ONLY FOR WORD DATASETS
 
 def paired_collate_fn(insts):
     src_insts, tgt_insts = list(zip(*insts))

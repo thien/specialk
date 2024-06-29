@@ -22,10 +22,7 @@ import toolz
 from nltk.tokenize import wordpunct_tokenize
 from tqdm import tqdm
 
-if os.getcwd().split("/")[-1] == "core":
-    import constants as Constants
-else:
-    import specialk.core.constants as Constants
+import specialk.core.constants as Constants
 
 DEFAULT_EOW = "__eow"
 DEFAULT_SOW = "__sow"

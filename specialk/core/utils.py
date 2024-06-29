@@ -1,8 +1,9 @@
 import logging
 import subprocess
 from multiprocessing import Pool, cpu_count
-from typing import List
+from typing import List, Dict, Any
 import torch
+from argparse import Namespace
 
 import structlog
 from tqdm import tqdm
@@ -58,3 +59,13 @@ def batch_compute(func, args, n_processes=cpu_count() - 1):
     p.close()
     p.join()
     return res_list
+
+def namespace_to_dict(ns: Namespace) -> Dict[str, Any]:
+    # d = {}
+    # for key in ns._get_kwargs():
+    #     try:
+    #         d[key] = getattr(ns, key)
+    #     except TypeError:
+    #         log.error(f"key {key} is not a string in namespace")
+    # return d 
+    return {k: v for k,v in ns._get_kwargs()}

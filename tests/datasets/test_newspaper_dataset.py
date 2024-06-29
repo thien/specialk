@@ -18,7 +18,7 @@ torch.manual_seed(1337)
 
 @pytest.fixture(scope="session", autouse=True)
 def dataset() -> Dataset:
-    dataset = load_dataset("thien/political", split="eval")
+    dataset = load_dataset("thien/newspaper", split="eval")
     dataset = dataset.class_encode_column("label")
     return dataset
 

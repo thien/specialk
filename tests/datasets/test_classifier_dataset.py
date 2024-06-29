@@ -5,11 +5,13 @@ import torch
 from torch.utils.data import DataLoader
 
 from datasets import Dataset, load_dataset
+from datasets.exceptions import DatasetGenerationError
 from specialk.core.utils import log
 from specialk.lib.tokenizer import BPEVocabulary, WordVocabulary
 from tests.tokenizer.test_tokenizer import PCT_BPE, SEQUENCE_LENGTH, VOCABULARY_SIZE
 
 dirpath = "tests/tokenizer/test_files"
+dev_path = "/Users/t/Projects/datasets/political/political_data/*"
 
 BATCH_SIZE = 2
 
@@ -18,32 +20,53 @@ torch.manual_seed(1337)
 
 @pytest.fixture(scope="session", autouse=True)
 def dataset() -> Dataset:
-    dataset = load_dataset("thien/political", split="eval")
+    try:
+        dataset = load_dataset("thien/political", split="eval")
+    except DatasetGenerationError:
+        dataset = Dataset.from_parquet(dev_path)
     dataset = dataset.class_encode_column("label")
     return dataset
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def bpe_tokenizer() -> BPEVocabulary:
     tokenizer_filepath = Path(dirpath) / "bpe_tokenizer"
 
     bpe_tokenizer = BPEVocabulary(
-        "source", tokenizer_filepath, VOCABULARY_SIZE, 60, PCT_BPE
+        "source",
+        filename=tokenizer_filepath,
+        vocab_size=VOCABULARY_SIZE,
+        max_length=60,
+        pct_bpe=PCT_BPE,
     )
     bpe_tokenizer.load()
     return bpe_tokenizer
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def word_tokenizer() -> WordVocabulary:
     tokenizer_filepath = Path(dirpath) / "word_tokenizer"
 
     word_tokenizer = WordVocabulary(
-        "source", tokenizer_filepath, VOCABULARY_SIZE, 60, True
+        name="source",
+        filename=tokenizer_filepath,
+        vocab_size=VOCABULARY_SIZE,
+        max_length=60,
+        lower=True,
     )
     word_tokenizer.load()
     return word_tokenizer
 
+@pytest.fixture(scope="session")
+def bpe_dataloader(dataset: Dataset, bpe_tokenizer: BPEVocabulary):
+    def tokenize(example):
+        # perform tokenization at this stage.
+        example["text"] = bpe_tokenizer.to_tensor(example["text"])
+        return example
+
+    tokenized_dataset = dataset.with_format("torch").map(tokenize)
+    dataloader = DataLoader(tokenized_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    return dataloader
 
 def test_make_dataloader(dataset):
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE)

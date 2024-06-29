@@ -11,7 +11,6 @@ from specialk.core.utils import log
 from specialk.classifier.onmt.CNNModels import ConvNet
 from specialk.lib.tokenizer import BPEVocabulary, WordVocabulary
 from tests.tokenizer.test_tokenizer import PCT_BPE, VOCABULARY_SIZE
-from torch.autograd import Variable
 from specialk.classifier.trainer import memory_efficient_loss
 
 dirpath = "tests/tokenizer/test_files"

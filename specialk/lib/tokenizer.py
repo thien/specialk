@@ -14,6 +14,7 @@ from specialk.core.bpe import Encoder as BPEEncoder
 from specialk.core.utils import load_dataset, log
 from specialk.preprocess import parse as bpe_parse
 
+# TODO: make padding optional. This can be done by the dataloader.
 
 class Vocabulary:
     def __init__(
@@ -81,9 +82,16 @@ class Vocabulary:
 
 class BPEVocabulary(Vocabulary):
     def __init__(
-        self, name: str, filename: str, vocab_size: int, max_length: int, pct_bpe: float
+        self,
+        name: str,
+        filename: str,
+        vocab_size: int,
+        max_length: int,
+        pct_bpe: float,
+        lower: bool = True,
     ):
         super().__init__(name, filename, vocab_size, max_length=max_length)
+        self.lower = lower
         self.pct_bpe = pct_bpe
         self.vocab: BPEEncoder
 
@@ -99,9 +107,12 @@ class BPEVocabulary(Vocabulary):
         )
         # loading data path
         dataset: List[str] = load_dataset(data_path)
+        if self.lower:
+            dataset = [i.lower() for i in dataset]
+
         src_bpe.fit(dataset)
         self.vocab = src_bpe
-        log.info("Finished creating BPEEncoder")
+        log.info("Finished training BPEEncoder.")
 
     def to_tensor(self, text: Union[str, List[str]]) -> Iterable[List[int]]:
         """_summary_
@@ -129,7 +140,7 @@ class BPEVocabulary(Vocabulary):
         self.vocab.save(filepath)
 
     def detokenize(self, tokens: List[int]) -> List[str]:
-        raise NotImplementedError
+        return list(self.vocab.inverse_transform(tokens))
 
     def tokenize(self, text: str) -> List[str]:
         return self.vocab.tokenize(text)
@@ -203,11 +214,11 @@ class WordVocabulary(Vocabulary):
             log.info(f"Reading {self.name} vocabulary from {self.filename}..")
             self.vocab.loadFile(self.filename)
             self.vocab_size = self.vocab.size()
-            self.vocab.seq_length = self.max_length
+            self.vocab.max_length = self.max_length
             self.lower = self.lower
             log.info(
                 f"Loaded {self.vocab.size()} {self.name} tokens.",
-                max_len=self.vocab.seq_length,
+                max_len=self.vocab.max_length,
             )
         else:
             raise FileNotFoundError(f"{self.filename} doesn't exist.")

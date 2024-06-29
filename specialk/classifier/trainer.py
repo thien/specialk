@@ -19,13 +19,15 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
+from specialk.core.utils import namespace_to_dict
 from tqdm import tqdm
 
 import specialk.classifier.onmt as onmt
 from specialk.classifier.onmt.CNNModels import ConvNet
 from torch.nn.modules.loss import _Loss as Loss
 from specialk.core.utils import log, check_torch_device
-from specialk.core.dataloaders import init_classification_dataloaders as init_dataloaders
+from specialk.datasets.dataloaders import init_classification_dataloaders as init_dataloaders
+
 
 DEVICE: str = check_torch_device()
 
@@ -388,7 +390,8 @@ def main():
         dataset["dicts"] = checkpoint["dicts"]
 
     vocabulary_size: int
-    if "settings" in dataset:
+    if "kwargs" in dataset['dicts']['src']:
+        # we're using BPE.
         vocabulary_size = dataset["dicts"]["src"]["kwargs"]["vocab_size"]
     else:
         vocabulary_size = dataset["dicts"]["src"].size()
@@ -407,7 +410,9 @@ def main():
 
     log.info("Building model...")
 
-    model: ConvNet = ConvNet(opt, vocabulary_size)
+    args = namespace_to_dict(opt)
+    args['args'] = args # redundancy option when saving object.
+    model: ConvNet = ConvNet(vocab_size=vocabulary_size, **args)
 
     if opt.train_from:
         log.info("Loading model from checkpoint at %s" % opt.train_from)

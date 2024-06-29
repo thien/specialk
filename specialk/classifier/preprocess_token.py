@@ -1,3 +1,8 @@
+"""
+THIS SHOULD BE DEPRECATED BECAUSE WE CAN TOKENISE 
+DIRECTLY @ THE DATA LOADER.
+YOU SHOULD ONLY LOAD THIS TO CREATE THE TOKENIZER DATASET.
+"""
 import argparse
 import codecs
 from pathlib import Path
@@ -105,6 +110,7 @@ def make_data(
             log.info("WARNING: ignoring an empty line (" + str(count + 1) + ")")
             continue
 
+        # split source_tokens and target_token (the label).
         src_tokens = sequence_line.split()
         src_tokens, tgt_tokens = " ".join(src_tokens[1:]), src_tokens[0]
 
@@ -116,7 +122,7 @@ def make_data(
                 raw_line=sequence_line,
             )
 
-        if len(src_tokens) <= vocab.seq_length and len(tgt_tokens) <= vocab.seq_length:
+        if len(src_tokens) <= vocab.max_length and len(tgt_tokens) <= vocab.max_length:
             src += [vocab.to_tensor(src_tokens)]
             if not PRINT_FIRST_LINE:
                 sample_tokens = list(src[-1])
@@ -154,7 +160,7 @@ def make_data(
 
     log.info(
         "Prepared %d sentences (%d ignored due to length == 0 or > %d)"
-        % (len(src), ignored, vocab.seq_length)
+        % (len(src), ignored, vocab.max_length)
     )
 
     return src, tgt
@@ -200,7 +206,10 @@ def main():
         )
         tokenizer.make(opt.train_src)
 
-    dicts["src"] = tokenizer.vocab
+    if opt.bpe:
+        dicts['src'] = tokenizer.vocab.vocabs_to_dict(False)
+    else:
+        dicts["src"] = tokenizer.vocab
 
     log.info("Preparing training ...")
     train = {}

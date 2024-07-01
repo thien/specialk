@@ -33,6 +33,8 @@ from specialk.datasets.dataloaders import (
 from specialk.core.constants import PROJECT_DIR
 
 import lightning.pytorch as pl
+from lightning.pytorch.loggers import TensorBoardLogger
+
 
 DEVICE: str = check_torch_device()
 
@@ -117,7 +119,7 @@ class CNNClassifier(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         loss, acc = self._shared_eval_step(batch, batch_idx)
         metrics = {"val_acc": acc, "val_loss": loss}
-        self.log_dict(metrics, batch_size=batch['text'].size(0))
+        self.log_dict(metrics, batch_size=batch["text"].size(0))
         return metrics
 
     def test_step(self, batch, batch_idx):
@@ -614,7 +616,7 @@ def bpe_dataloader(
         persistent_workers=True,
     )
 
-    # dataloader.collate_fn = 
+    # dataloader.collate_fn =
     return dataloader
 
 
@@ -631,8 +633,7 @@ def bpe_tokenizer() -> BPEVocabulary:
 
 
 def main_new():
-    BATCH_SIZE = 128
-    BATCH_SIZE = 128 if DEVICE == "mps" else 768
+    BATCH_SIZE = 128 if DEVICE == "mps" else 680
     tokenizer = bpe_tokenizer()
     dataset: Dataset = load_dataset("thien/political", keep_in_memory=True)
     dataset = dataset.class_encode_column("label")
@@ -648,7 +649,9 @@ def main_new():
         sequence_length=tokenizer.max_length,
     )
 
-    trainer = pl.Trainer(accelerator=DEVICE, max_epochs=2)
+    logger = TensorBoardLogger("tb_logs", name="pol_classifier")
+    trainer = pl.Trainer(accelerator=DEVICE, max_epochs=2, logger=logger)
+
     trainer.fit(
         task, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader
     )

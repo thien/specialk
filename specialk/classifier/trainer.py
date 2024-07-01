@@ -26,10 +26,132 @@ import specialk.classifier.onmt as onmt
 from specialk.classifier.onmt.CNNModels import ConvNet
 from torch.nn.modules.loss import _Loss as Loss
 from specialk.core.utils import log, check_torch_device
-from specialk.datasets.dataloaders import init_classification_dataloaders as init_dataloaders
+from specialk.datasets.dataloaders import (
+    init_classification_dataloaders as init_dataloaders,
+)
 
+from specialk.core.constants import PROJECT_DIR
+
+import lightning.pytorch as pl
 
 DEVICE: str = check_torch_device()
+
+
+class CNNClassifier(pl.LightningModule):
+    """CNN Classifier in lightning wrapper."""
+
+    def __init__(self, name: str, vocabulary_size: int, sequence_length: int):
+        super().__init__()
+        self.name = name
+        self.vocabulary_size = vocabulary_size
+        self.sequence_length = sequence_length
+        self.model = ConvNet(
+            vocab_size=self.vocabulary_size, sequence_length=self.sequence_length
+        )
+        self.criterion = nn.BCELoss()
+
+    def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
+        """Run Training step.
+
+        Args:
+            batch (dict): individual batch generated from the DataLoader.
+            batch_idx (int): ID corresponding to the batch.
+
+        Returns:
+            torch.Tensor: Returns loss.
+        """
+        x, y = batch["text"], batch["label"]
+
+        x = x.squeeze(2, 1)
+
+        seq_len: int = x.size(1)
+        batch_size: int = x.size(0)
+
+        if batch_size < 50:
+            log.error("batch size should be greater than 50.")
+
+        # wrap into one-hot encoding of tokens for activation.
+        one_hot = (
+            torch.zeros(seq_len, batch_size, self.vocabulary_size)
+            .to(self.device)
+            .scatter_(2, torch.unsqueeze(x.T, 2), 1)
+        )
+
+        y_hat = self.model(one_hot).squeeze(-1)
+        loss = self.criterion(y_hat, y.float())
+        # loss = self.criterion(batch_size)  # scale down w.r.t batch size.
+        return loss
+
+    def _shared_eval_step(
+        self, batch: dict, batch_idx: int
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Run shared eval step.
+
+        Args:
+            batch (dict): individual batch generated from the DataLoader.
+            batch_idx (int): ID corresponding to the batch.
+
+        Returns:
+            torch.Tensor: Returns loss.
+        """
+        x, y = batch["text"], batch["label"]
+
+        x = x.squeeze(2, 1)
+
+        seq_len: int = x.size(1)
+        batch_size: int = x.size(0)
+
+        # wrap into one-hot encoding of tokens for activation.
+        one_hot = (
+            torch.zeros(seq_len, batch_size, self.vocabulary_size)
+            .to(self.device)
+            .scatter_(2, torch.unsqueeze(x.T, 2), 1)
+        )
+
+        y_hat = self.model(one_hot).squeeze(-1)
+        loss = self.criterion(y_hat, y.float())
+
+        accuracy = self.calculate_classification_metrics(y_hat, y)
+        return loss, accuracy
+
+    def validation_step(self, batch, batch_idx):
+        loss, acc = self._shared_eval_step(batch, batch_idx)
+        metrics = {"val_acc": acc, "val_loss": loss}
+        self.log_dict(metrics)
+        return metrics
+
+    def test_step(self, batch, batch_idx):
+        loss, acc = self._shared_eval_step(batch, batch_idx)
+        metrics = {"test_acc": acc, "test_loss": loss}
+        self.log_dict(metrics)
+        return metrics
+
+    def predict_step(self, batch, batch_idx, dataloader_idx=0) -> torch.Tensor:
+        x, y = batch
+        y_hat = self.model(x)
+        return y_hat
+
+    def configure_optimizers(self) -> torch.optim.Optimizer:
+        return torch.optim.Adam(self.model.parameters(), lr=0.02)
+
+    @staticmethod
+    def calculate_classification_metrics(
+        output: torch.Tensor,
+        target: torch.Tensor,
+    ) -> int:
+        """Calculate downstream metrics.
+
+        Args:
+            output (torch.Tensor): Predicted values generated from the model.
+            target (torch.Tensor): Values we want to predict.
+
+        Returns:
+            int: Accuracy.
+        """
+
+        outputs = (output > 0.5).long()
+        n_correct: int = outputs.eq(target).sum().item()
+        return n_correct
 
 
 def get_args() -> argparse.Namespace:
@@ -185,6 +307,8 @@ def memory_efficient_loss(
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Calculates loss between output and target against the given criterion.
 
+    TODO: you don't need Variable anymore.
+
     Args:
         outputs (torch.Tensor): Output generated from a model.
             dimensions: [batch_size, 1]
@@ -225,9 +349,13 @@ def calculate_classification_metrics(
     Returns:
         int: Accuracy.
     """
-    outputs = (output > 0.5).transpose(0, 1).long()
-    n_correct: int = outputs.eq(target.squeeze(-1)).sum().item()
-    return n_correct
+    try:
+        outputs = (output > 0.5).transpose(0, 1).long()
+        n_correct: int = outputs.eq(target.squeeze(-1)).sum().item()
+        return n_correct
+    except IndexError as e:
+        log.error("error dim", output_shape=output.shape, output=output)
+        raise e
 
 
 def eval(model: ConvNet, criterion: Loss, data: DataLoader):
@@ -376,7 +504,7 @@ def save_checkpoint(
     log.info("Checkpoint successfully saved.")
 
 
-def main():
+def main_legacy():
     opt: argparse.Namespace = get_args()
     log.info("Loaded args", args=opt)
 
@@ -390,7 +518,7 @@ def main():
         dataset["dicts"] = checkpoint["dicts"]
 
     vocabulary_size: int
-    if "kwargs" in dataset['dicts']['src']:
+    if "kwargs" in dataset["dicts"]["src"]:
         # we're using BPE.
         vocabulary_size = dataset["dicts"]["src"]["kwargs"]["vocab_size"]
     else:
@@ -411,7 +539,7 @@ def main():
     log.info("Building model...")
 
     args = namespace_to_dict(opt)
-    args['args'] = args # redundancy option when saving object.
+    args["args"] = args  # redundancy option when saving object.
     model: ConvNet = ConvNet(vocab_size=vocabulary_size, **args)
 
     if opt.train_from:
@@ -462,5 +590,65 @@ def main():
     train_model(model, data_train, data_validation, dataset, optim, opt, criterion)
 
 
+from datasets import Dataset, load_dataset
+from specialk.lib.tokenizer import BPEVocabulary, WordVocabulary
+
+
+def bpe_dataloader(
+    dataset: Dataset, bpe_tokenizer: BPEVocabulary, batch_size: int, shuffle=False
+) -> DataLoader:
+    def tokenize(example):
+        # perform tokenization at this stage.
+        example["text"] = bpe_tokenizer.to_tensor(example["text"])
+        return example
+
+    tokenized_dataset = dataset.with_format("torch").map(tokenize, desc="Tokenisation")
+    dataloader = DataLoader(
+        tokenized_dataset,
+        num_workers=8,
+        pin_memory=True,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        persistent_workers=True,
+    )
+    return dataloader
+
+
+def bpe_tokenizer() -> BPEVocabulary:
+    tokenizer_filepath = PROJECT_DIR / "assets" / "tokenizer" / "fr_en_bpe"
+    tok = BPEVocabulary.from_file(tokenizer_filepath)
+    tok.vocab._progress_bar = iter
+    return tok
+
+
+# def word_tokenizer() -> WordVocabulary:
+#     tokenizer_filepath = Path(dirpath) / "word_tokenizer"
+#     return WordVocabulary.from_file(tokenizer_filepath)
+
+
+def main_new():
+    BATCH_SIZE = 128
+    tokenizer = bpe_tokenizer()
+    dataset: Dataset = load_dataset("thien/political")
+    dataset = dataset.class_encode_column("label")
+
+    train_dataloader = bpe_dataloader(
+        dataset["train"], tokenizer, BATCH_SIZE, shuffle=True
+    )
+    val_dataloader = bpe_dataloader(dataset["eval"], tokenizer, BATCH_SIZE)
+
+    task = CNNClassifier(
+        "political",
+        vocabulary_size=tokenizer.vocab_size,
+        sequence_length=tokenizer.max_length,
+    )
+
+    trainer = pl.Trainer(accelerator="mps", max_epochs=2)
+    trainer.fit(
+        task, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader
+    )
+
+
 if __name__ == "__main__":
-    main()
+    # main_legacy()
+    main_new()

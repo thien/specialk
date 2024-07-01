@@ -67,7 +67,17 @@ class Vocabulary:
         self.CLS_TOKEN = CLS_TOKEN
         self.BLO_TOKEN = BLO_TOKEN
 
+    @deprecated
     def make(self, data_path: Union[Path, str]):
+        raise NotImplementedError
+
+    def fit(self, texts: Iterable[str]):
+        """Trains tokenizer on dataset.
+
+        Args:
+            texts (Iterable[str]): Iterable of texts,
+                e.g. ["hello world", "how are you?"]
+        """
         raise NotImplementedError
 
     @deprecated
@@ -137,6 +147,7 @@ class BPEVocabulary(Vocabulary):
         self.pct_bpe = pct_bpe
         self.vocab: BPEEncoder
 
+    @deprecated
     def make(self, data_path: Union[Path, str]) -> BPEEncoder:
         log.info("Creating BPEEncoder.")
         src_bpe = BPEEncoder(
@@ -155,6 +166,24 @@ class BPEVocabulary(Vocabulary):
         src_bpe.fit(dataset)
         self.vocab = src_bpe
         log.info("Finished training BPEEncoder.")
+
+    
+    def fit(self, texts: Iterable[str]):
+        src_bpe = BPEEncoder(
+            vocab_size=self.vocab_size,
+            pct_bpe=self.pct_bpe,
+            ngram_min=1,
+            UNK=self.UNK_TOKEN,
+            PAD=self.PAD_TOKEN,
+            word_tokenizer=bpe_parse,
+        )
+        if self.lower:
+            texts = [i.lower() for i in texts]
+
+        src_bpe.fit(texts)
+        self.vocab = src_bpe
+        log.info("Finished training BPEEncoder.")
+
 
     def to_tensor(self, text: Union[str, List[str]]) -> Iterable[List[int]]:
         """_summary_
@@ -217,6 +246,44 @@ class WordVocabulary(Vocabulary):
         self.mt = MosesTokenizer(lang="en")
         self.md = MosesDetokenizer(lang="en")
 
+
+    def fit(self, texts: Iterable[str]):
+        vocab = onmt.Dict(
+            [
+                self.PAD_TOKEN,
+                self.UNK_TOKEN,
+                self.BOS_TOKEN,
+                self.EOS_TOKEN,
+            ],
+            lower=self.lower,
+            seq_len=self.max_length,
+        )
+        for sentence in texts:
+            for word in self.tokenize(sentence):
+                vocab.add(word)
+
+        original_size = vocab.size()
+
+        # for debugging purposes, show the head distribution of the
+        # token freuqencies.
+        top_n = 10
+        head_freq = sorted(
+            vocab.labelToIdx.keys(),
+            key=lambda label: vocab.frequencies[vocab.labelToIdx[label]],
+            reverse=True,
+        )[:top_n]
+        log.debug(
+            "Most frequent tokens found",
+            tokens={k: vocab.frequencies[vocab.labelToIdx[k]] for k in head_freq}
+        )
+
+        self.vocab = vocab.prune(self.vocab_size)
+        log.info(
+            "Created space-separated token dictionary of size %d (pruned from %d)"
+            % (self.vocab.size(), original_size)
+        )
+
+    @deprecated
     def make(self, data_path: Union[Path, str]):
         """
         Creates onmt dictionary of vocabulary.

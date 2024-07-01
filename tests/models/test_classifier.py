@@ -39,15 +39,7 @@ def dataset() -> Dataset:
 def bpe_tokenizer() -> BPEVocabulary:
     tokenizer_filepath = Path(dirpath) / "bpe_tokenizer"
 
-    bpe_tokenizer = BPEVocabulary(
-        "source",
-        filename=tokenizer_filepath,
-        vocab_size=VOCABULARY_SIZE,
-        max_length=SEQUENCE_LENGTH,
-        pct_bpe=PCT_BPE,
-    )
-    bpe_tokenizer.load()
-    return bpe_tokenizer
+    return BPEVocabulary.from_file(tokenizer_filepath)
 
 
 @pytest.fixture(scope="session")
@@ -101,7 +93,6 @@ def test_model_inference(bpe_dataloader):
     log.info("shapes", y=y.shape, y_hat=y_hat.shape)
 
     _ = criterion(y_hat, y.float())
-
 
 def test_accuracy():
     y = torch.LongTensor([0, 0, 1, 1, 1, 1]).float()

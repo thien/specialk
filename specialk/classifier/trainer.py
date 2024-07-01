@@ -632,6 +632,7 @@ def bpe_tokenizer() -> BPEVocabulary:
 
 def main_new():
     BATCH_SIZE = 128
+    BATCH_SIZE = 128 if DEVICE == "mps" else 1024
     tokenizer = bpe_tokenizer()
     dataset: Dataset = load_dataset("thien/political", keep_in_memory=True)
     dataset = dataset.class_encode_column("label")
@@ -647,7 +648,7 @@ def main_new():
         sequence_length=tokenizer.max_length,
     )
 
-    trainer = pl.Trainer(accelerator="mps", max_epochs=2)
+    trainer = pl.Trainer(accelerator=DEVICE, max_epochs=2)
     trainer.fit(
         task, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader
     )

@@ -84,7 +84,8 @@ class CNNClassifier(pl.LightningModule):
 
         accuracy = self.calculate_classification_metrics(y_hat, y)
         self.log_dict(
-            {"train_acc": accuracy, "batch_id": batch_idx, "train_loss": loss}, batch_size=batch_size
+            {"train_acc": accuracy, "batch_id": batch_idx, "train_loss": loss},
+            batch_size=batch_size,
         )
         return loss
 
@@ -654,7 +655,9 @@ def main_new():
     )
 
     logger = TensorBoardLogger("tb_logs", name="pol_classifier")
-    trainer = pl.Trainer(accelerator=DEVICE, max_epochs=2, logger=logger)
+    trainer = pl.Trainer(
+        accelerator=DEVICE, max_epochs=2, log_every_n_steps=20, logger=logger
+    )
 
     trainer.fit(
         task, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader

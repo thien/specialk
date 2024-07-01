@@ -82,6 +82,11 @@ class CNNClassifier(pl.LightningModule):
         y_hat = self.model(one_hot).squeeze(-1)
         loss = self.criterion(y_hat, y.float())
         # loss = self.criterion(batch_size)  # scale down w.r.t batch size.
+
+        accuracy = self.calculate_classification_metrics(y_hat, y)
+        self.log_dict(
+            {"train_acc": accuracy, "train_loss": loss}, batch_size=batch_size
+        )
         return loss
 
     def _shared_eval_step(

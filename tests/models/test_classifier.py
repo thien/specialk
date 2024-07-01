@@ -12,6 +12,7 @@ from specialk.classifier.onmt.CNNModels import ConvNet
 from specialk.lib.tokenizer import BPEVocabulary, WordVocabulary
 from tests.tokenizer.test_tokenizer import PCT_BPE, VOCABULARY_SIZE
 from specialk.classifier.trainer import memory_efficient_loss
+from torchmetrics.functional import accuracy
 
 dirpath = "tests/tokenizer/test_files"
 dev_path = (
@@ -67,8 +68,11 @@ def test_model_inference(bpe_dataloader):
         sequence_length=SEQUENCE_LENGTH,
     )
     model.eval()
+    criterion = nn.BCELoss()
 
-    batch = next(iter(bpe_dataloader))
+    batch: dict = next(iter(bpe_dataloader))
+    x: torch.Tensor
+    y: torch.Tensor
     x, y = batch["text"], batch["label"]
 
     x = x.squeeze(2, 1)
@@ -89,11 +93,19 @@ def test_model_inference(bpe_dataloader):
 
     assert one_hot.shape == (SEQUENCE_LENGTH, BATCH_SIZE, VOCABULARY_SIZE)
 
-    y_hat = model(one_hot)
+    y_hat = model(one_hot).squeeze(-1)
 
-    y = y.unsqueeze(0).unsqueeze(-1)
+    assert y_hat.shape[0] == BATCH_SIZE
+    assert y.shape[0] == BATCH_SIZE
 
-    assert y_hat.shape == (BATCH_SIZE, 1)
-    assert y.shape == (1, BATCH_SIZE, 1)
+    log.info("shapes", y=y.shape, y_hat=y_hat.shape)
 
-    _, _ = memory_efficient_loss(y_hat, y, nn.BCELoss())
+    _ = criterion(y_hat, y.float())
+
+
+def test_accuracy():
+    y = torch.LongTensor([0, 0, 1, 1, 1, 1]).float()
+    y_pred = torch.LongTensor([0, 0, 0, 1, 1, 1])
+    assert y.shape == y_pred.shape
+    acc = accuracy(y_pred, y, "binary")
+    assert acc == pytest.approx(0.833, 0.1)

@@ -1,8 +1,10 @@
 """Tokenizer/Vocabulary library."""
 
+from __future__ import annotations
 import codecs
 from pathlib import Path
-from typing import Iterable, List, Optional, Union
+from typing import Iterable, List, Optional, Union, Any
+import json
 
 import torch
 from sacremoses import MosesDetokenizer, MosesTokenizer
@@ -11,25 +13,27 @@ from tqdm import tqdm
 import specialk.classifier.onmt as onmt
 import specialk.core.constants as Constants
 from specialk.core.bpe import Encoder as BPEEncoder
-from specialk.core.utils import load_dataset, log
+from specialk.core.utils import load_dataset, log, deprecated
 from specialk.preprocess import parse as bpe_parse
 
 # TODO: make padding optional. This can be done by the dataloader.
+
 
 class Vocabulary:
     def __init__(
         self,
         name: str,
-        filename: str,
         vocab_size: int,
         max_length: int,
+        filename: str = "",
         BOS_TOKEN: Optional[str] = Constants.SOS_WORD,
         EOS_TOKEN: Optional[str] = Constants.EOS_WORD,
         UNK_TOKEN: Optional[str] = Constants.UNK_WORD,
-        SEP_TOKEN: Optional[str] = Constants.UNK_WORD,
-        PAD_TOKEN: Optional[str] = Constants.SEP_WORD,
+        SEP_TOKEN: Optional[str] = Constants.SEP_WORD,
+        PAD_TOKEN: Optional[str] = Constants.PAD_WORD,
         CLS_TOKEN: Optional[str] = Constants.CLS_TOKEN,
         BLO_TOKEN: Optional[str] = Constants.BLO_WORD,
+        lower: bool = True,
     ):
         """
         Args:
@@ -37,7 +41,7 @@ class Vocabulary:
             data_file (Union[Path,str]): path of file containing training data to use for the vocabulary.
             vocabulary_file (Union[Path,str]): path of vocabulary file to either load from, or save to.
             vocab_size (int, Optional): If set, sets cap on vocabulary size.
-            fixed_length (int): maxiumum token length of a sequence.
+            max_length (int): maxiumum token length of a sequence.
             BOS_TOKEN (Optional[str], optional): A special token representing the beginning of a sentence. Defaults to Constants.SOS_WORD.
             EOS_TOKEN (Optional[str], optional): A special token representing the end of a sentence. Defaults to Constants.EOS_WORD.
             UNK_TOKEN (Optional[str], optional):  A special token representing an out-of-vocabulary token. Defaults to Constants.UNK_WORD.
@@ -52,7 +56,8 @@ class Vocabulary:
         self.filename = filename
         self.vocab_size = vocab_size
         self.max_length = max_length
-        self.vocab: onmt.Dict = onmt.Dict()
+        self.vocab: Any
+        self.lower = lower
 
         self.BOS_TOKEN = BOS_TOKEN
         self.EOS_TOKEN = EOS_TOKEN
@@ -65,9 +70,11 @@ class Vocabulary:
     def make(self, data_path: Union[Path, str]):
         raise NotImplementedError
 
+    @deprecated
     def load(self):
         raise NotImplementedError
 
+    @deprecated
     def save(self, filepath: Optional[Union[Path, str]] = None):
         if not filepath:
             filepath = self.filename
@@ -79,19 +86,54 @@ class Vocabulary:
     def tokenize(text: str) -> List[str]:
         raise NotImplementedError
 
+    def to_dict(self) -> dict:
+        return {
+            "kwargs": {
+                "name": self.name,
+                "filename": self.filename,
+                "vocab_size": self.vocab_size,
+                "max_length": self.max_length,
+                "vocab": self.vocab,
+                "lower": self.lower,
+                "BOS_TOKEN": self.BOS_TOKEN,
+                "EOS_TOKEN": self.EOS_TOKEN,
+                "UNK_TOKEN": self.UNK_TOKEN,
+                "SEP_TOKEN": self.SEP_TOKEN,
+                "PAD_TOKEN": self.PAD_TOKEN,
+                "CLS_TOKEN": self.CLS_TOKEN,
+                "BLO_TOKEN": self.BLO_TOKEN,
+            }
+        }
+
+    def to_file(self, filepath: Path | str) -> None:
+        """save vocabulary file.
+
+        Args:
+            filepath (Path | str): filepath to dump the JSON to.
+        """
+        if isinstance(filepath, str):
+            filepath: Path = Path(filepath)
+        dump = self.to_dict()
+        with open(filepath, "w") as f:
+            json.dump(dump, f)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> Vocabulary:
+        return Vocabulary(**d["kwargs"])
+
+    @classmethod
+    def from_file(cls, filepath: Path | str) -> Vocabulary:
+        """Loads an encoder from path saved with save"""
+        if isinstance(filepath, str):
+            filepath: Path = Path(filepath)
+        with open(filepath) as infile:
+            obj = json.load(infile)
+        return cls.from_dict(obj)
+
 
 class BPEVocabulary(Vocabulary):
-    def __init__(
-        self,
-        name: str,
-        filename: str,
-        vocab_size: int,
-        max_length: int,
-        pct_bpe: float,
-        lower: bool = True,
-    ):
-        super().__init__(name, filename, vocab_size, max_length=max_length)
-        self.lower = lower
+    def __init__(self, name: str, pct_bpe: float, **kwargs):
+        super().__init__(name, **kwargs)
         self.pct_bpe = pct_bpe
         self.vocab: BPEEncoder
 
@@ -129,15 +171,35 @@ class BPEVocabulary(Vocabulary):
             # it's a list
             return list(self.vocab.transform(text, fixed_length=self.max_length))
 
+    @deprecated
     def load(self):
         self.vocab = BPEEncoder.load(self.filename)
 
+    @deprecated
     def save(self, filepath: Optional[Union[Path, str]] = None):
         if not filepath:
             filepath = self.filename
         log.info(f"Saving vocabulary '{self.name}' to '{filepath}'...")
-
         self.vocab.save(filepath)
+
+    @classmethod
+    def from_file(cls, filepath: Path | str) -> BPEVocabulary:
+        return super().from_file(filepath)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> BPEVocabulary:
+        this = cls(**d["kwargs"])
+        this.vocab = BPEEncoder.from_dict(d["vocab"])
+        return this
+
+    def to_dict(self) -> dict:
+        d = super().to_dict()
+        del d["kwargs"]["vocab"]
+        d["vocab"] = self.vocab.vocabs_to_dict()
+        d["kwargs"]["pct_bpe"] = self.pct_bpe
+        d["class"] = "BPEVocabulary"
+        # log.info("dict", dict=d)
+        return d
 
     def detokenize(self, tokens: List[int]) -> List[str]:
         return list(self.vocab.inverse_transform(tokens))
@@ -147,18 +209,11 @@ class BPEVocabulary(Vocabulary):
 
 
 class WordVocabulary(Vocabulary):
-    """White-space level tokenization."""
+    """White-space level tokenization, leveraging Moses."""
 
-    def __init__(
-        self, name: str, filename: str, vocab_size: int, max_length: int, lower: bool
-    ):
-        super().__init__(name, filename, vocab_size, max_length=max_length)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.vocab: onmt.Dict
-        self.lower = lower
-        self.PAD_TOKEN = Constants.PAD_WORD
-        self.UNK_TOKEN = Constants.UNK_WORD
-        self.BOS_TOKEN = Constants.SOS_WORD
-        self.EOS_TOKEN = Constants.EOS_WORD
         self.mt = MosesTokenizer(lang="en")
         self.md = MosesDetokenizer(lang="en")
 
@@ -208,6 +263,7 @@ class WordVocabulary(Vocabulary):
             % (self.vocab.size(), originalSize)
         )
 
+    @deprecated
     def load(self):
         if Path(self.filename).exists():
             # If given, load existing word dictionary.
@@ -223,13 +279,45 @@ class WordVocabulary(Vocabulary):
         else:
             raise FileNotFoundError(f"{self.filename} doesn't exist.")
 
+    @deprecated
     def save(self, filepath: Optional[Union[Path, str]] = None):
         if not filepath:
             filepath = self.filename
         """Save vocabulary to file"""
         log.info(f"Saving vocabulary '{self.name}' to '{filepath}'...")
-
         self.vocab.writeFile(filepath)
+
+    @classmethod
+    def from_file(cls, filepath: Path | str) -> Vocabulary:
+        return super().from_file(filepath)
+
+    def to_dict(self) -> dict:
+        d = super().to_dict()
+        del d["kwargs"]["vocab"]
+        d["vocab"] = {
+            "idxToLabel": self.vocab.idxToLabel,
+            "labelToIdx": self.vocab.labelToIdx,
+            "frequencies": self.vocab.frequencies,
+            "special": self.vocab.special,
+        }
+        d["class"] = "WordVocabulary"
+        return d
+
+    @classmethod
+    def from_dict(cls, d: dict) -> WordVocabulary:
+        this = cls(**d["kwargs"])
+        this.vocab = onmt.Dict(
+            None, lower=d["kwargs"]["lower"], seq_len=d["kwargs"]["max_length"]
+        )
+        # loading ints from json
+        idx2label = d["vocab"]["idxToLabel"]
+        idx2label = {int(k): v for k, v in idx2label.items()}
+        this.vocab.idxToLabel = idx2label
+
+        this.vocab.labelToIdx = d["vocab"]["labelToIdx"]
+        this.vocab.frequencies = d["vocab"]["frequencies"]
+        this.vocab.special = d["vocab"]["special"]
+        return this
 
     def to_tensor(self, text: str) -> torch.LongTensor:
         """Converts string to text to tensor of input.

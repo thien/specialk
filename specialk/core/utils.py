@@ -7,12 +7,35 @@ from argparse import Namespace
 
 import structlog
 from tqdm import tqdm
+import warnings
+import functools
 
 """
 Misc. functions used by a variety of parts of the library.
 """
 
 log = structlog.get_logger()
+
+
+
+
+def deprecated(func):
+    """This is a decorator which can be used to mark functions
+    as deprecated. It will result in a warning being emitted
+    when the function is used."""
+
+    @functools.wraps(func)
+    def new_func(*args, **kwargs):
+        warnings.simplefilter("always", DeprecationWarning)  # turn off filter
+        warnings.warn(
+            "Call to deprecated function {}.".format(func.__name__),
+            category=DeprecationWarning,
+            stacklevel=2,
+        )
+        warnings.simplefilter("default", DeprecationWarning)  # reset filter
+        return func(*args, **kwargs)
+
+    return new_func
 
 
 def check_torch_device() -> str:
@@ -60,6 +83,7 @@ def batch_compute(func, args, n_processes=cpu_count() - 1):
     p.join()
     return res_list
 
+
 def namespace_to_dict(ns: Namespace) -> Dict[str, Any]:
     # d = {}
     # for key in ns._get_kwargs():
@@ -67,5 +91,5 @@ def namespace_to_dict(ns: Namespace) -> Dict[str, Any]:
     #         d[key] = getattr(ns, key)
     #     except TypeError:
     #         log.error(f"key {key} is not a string in namespace")
-    # return d 
-    return {k: v for k,v in ns._get_kwargs()}
+    # return d
+    return {k: v for k, v in ns._get_kwargs()}

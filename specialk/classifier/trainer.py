@@ -632,7 +632,7 @@ def bpe_tokenizer() -> BPEVocabulary:
 
 def main_new():
     BATCH_SIZE = 128
-    BATCH_SIZE = 128 if DEVICE == "mps" else 1024
+    BATCH_SIZE = 128 if DEVICE == "mps" else 768
     tokenizer = bpe_tokenizer()
     dataset: Dataset = load_dataset("thien/political", keep_in_memory=True)
     dataset = dataset.class_encode_column("label")

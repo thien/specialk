@@ -62,7 +62,7 @@ class CNNClassifier(pl.LightningModule):
         """
         x, y = batch["text"], batch["label"]
 
-        x = x.squeeze(2, 1)
+        # x = x.squeeze(2, 1)
 
         seq_len: int = x.size(1)
         batch_size: int = x.size(0)
@@ -95,8 +95,8 @@ class CNNClassifier(pl.LightningModule):
             torch.Tensor: Returns loss.
         """
         x, y = batch["text"], batch["label"]
-
-        x = x.squeeze(2, 1)
+        # log.info("x.shape", x=x.shape, y=y.shape)
+        # x = x.squeeze(2, 1)
 
         seq_len: int = x.size(1)
         batch_size: int = x.size(0)
@@ -117,7 +117,7 @@ class CNNClassifier(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         loss, acc = self._shared_eval_step(batch, batch_idx)
         metrics = {"val_acc": acc, "val_loss": loss}
-        self.log_dict(metrics)
+        self.log_dict(metrics, batch_size=batch['text'].size(0))
         return metrics
 
     def test_step(self, batch, batch_idx):
@@ -602,7 +602,9 @@ def bpe_dataloader(
         example["text"] = bpe_tokenizer.to_tensor(example["text"])
         return example
 
-    tokenized_dataset = dataset.with_format("torch").map(tokenize, desc="Tokenisation")
+    tokenized_dataset = dataset.with_format("torch").map(
+        tokenize, desc="Tokenisation", batched=True, keep_in_memory=True
+    )
     dataloader = DataLoader(
         tokenized_dataset,
         num_workers=8,
@@ -611,6 +613,8 @@ def bpe_dataloader(
         shuffle=shuffle,
         persistent_workers=True,
     )
+
+    # dataloader.collate_fn = 
     return dataloader
 
 
@@ -629,7 +633,7 @@ def bpe_tokenizer() -> BPEVocabulary:
 def main_new():
     BATCH_SIZE = 128
     tokenizer = bpe_tokenizer()
-    dataset: Dataset = load_dataset("thien/political")
+    dataset: Dataset = load_dataset("thien/political", keep_in_memory=True)
     dataset = dataset.class_encode_column("label")
 
     train_dataloader = bpe_dataloader(

@@ -107,10 +107,9 @@ class CNNClassifier(pl.LightningModule):
         batch_size: int = x.size(0)
 
         # wrap into one-hot encoding of tokens for activation.
-        one_hot = (
-            torch.zeros(seq_len, batch_size, self.vocabulary_size, device=self.device)
-            .scatter_(2, torch.unsqueeze(x.T, 2), 1)
-        )
+        one_hot = torch.zeros(
+            seq_len, batch_size, self.vocabulary_size, device=self.device
+        ).scatter_(2, torch.unsqueeze(x.T, 2), 1)
 
         y_hat = self.model(one_hot).squeeze(-1)
         loss = self.criterion(y_hat, y.float())
@@ -607,12 +606,12 @@ def bpe_dataloader(
         return example
 
     tokenized_dataset = dataset.with_format("torch").map(
-        tokenize, desc="Tokenisation", batched=True, keep_in_memory=True
+        tokenize, desc="Tokenisation", batched=True
     )
+
     dataloader = DataLoader(
         tokenized_dataset,
         num_workers=8,
-        pin_memory=True,
         batch_size=batch_size,
         shuffle=shuffle,
         persistent_workers=True,
@@ -647,7 +646,6 @@ def main_new():
     val_dataloader = bpe_dataloader(
         dataset["eval"], tokenizer, BATCH_SIZE, shuffle=False
     )
-    # TODO check if collate function is faster than the current implementation
 
     task = CNNClassifier(
         "political",
@@ -663,7 +661,7 @@ def main_new():
             "dataset": hf_dataset_name,
         }
     )
-    profiler = AdvancedProfiler(dirpath=".", filename="perf_logs")
+    profiler = AdvancedProfiler(dirpath=logger.log_dir, filename="perf_logs")
     trainer = pl.Trainer(
         accelerator=DEVICE,
         max_epochs=1,

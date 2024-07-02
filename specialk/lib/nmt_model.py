@@ -19,6 +19,7 @@ import specialk.core.constants as constants
 from specialk.core.bpe import Encoder as BPE
 from specialk.core.dataset import TranslationDataset, collate_fn, paired_collate_fn
 from specialk.preprocess import load_file, reclip, seq2idx
+import torch.nn.functional as F
 
 class NMTModel:
     def __init__(self, opt, models_folder="models"):
@@ -341,7 +342,6 @@ class NMTModel:
         is_bpe = False
         if "byte_pairs" in src_word2idx:
             if "__sow" in src_word2idx["byte_pairs"]:
-                is_bpe = True
                 # we have BPE
                 src_byte_pairs = {
                     x + "_": y for x, y in src_word2idx["byte_pairs"].items()

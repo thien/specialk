@@ -73,11 +73,9 @@ class CNNClassifier(pl.LightningModule):
             log.error("batch size should be greater than 50.")
 
         # wrap into one-hot encoding of tokens for activation.
-        one_hot = (
-            torch.zeros(seq_len, batch_size, self.vocabulary_size)
-            .to(self.device)
-            .scatter_(2, torch.unsqueeze(x.T, 2), 1)
-        )
+        one_hot = torch.zeros(
+            seq_len, batch_size, self.vocabulary_size, device=self.device
+        ).scatter_(2, torch.unsqueeze(x.T, 2), 1)
 
         y_hat = self.model(one_hot).squeeze(-1)
         loss = self.criterion(y_hat, y.float())
@@ -110,8 +108,7 @@ class CNNClassifier(pl.LightningModule):
 
         # wrap into one-hot encoding of tokens for activation.
         one_hot = (
-            torch.zeros(seq_len, batch_size, self.vocabulary_size)
-            .to(self.device)
+            torch.zeros(seq_len, batch_size, self.vocabulary_size, device=self.device)
             .scatter_(2, torch.unsqueeze(x.T, 2), 1)
         )
 

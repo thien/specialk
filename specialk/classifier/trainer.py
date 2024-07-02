@@ -34,7 +34,7 @@ from specialk.core.constants import PROJECT_DIR
 
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import TensorBoardLogger
-
+from lightning.pytorch.profilers import AdvancedProfiler
 
 DEVICE: str = check_torch_device()
 
@@ -666,8 +666,13 @@ def main_new():
             "dataset": hf_dataset_name,
         }
     )
+    profiler = AdvancedProfiler(dirpath=".", filename="perf_logs")
     trainer = pl.Trainer(
-        accelerator=DEVICE, max_epochs=1, log_every_n_steps=20, logger=logger
+        accelerator=DEVICE,
+        max_epochs=1,
+        log_every_n_steps=20,
+        logger=logger,
+        profiler=profiler,
     )
 
     trainer.fit(

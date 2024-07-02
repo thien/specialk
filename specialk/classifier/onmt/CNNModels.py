@@ -5,6 +5,7 @@ from specialk.core.constants import PAD
 from typing import Optional, Dict
 from specialk.core.utils import log
 
+
 class ConvNet(nn.Module):
     def __init__(
         self,
@@ -98,4 +99,3 @@ class ConvNet(nn.Module):
             log.debug("shape", out=out.shape)
             self.shown_shape = True
         return out
-

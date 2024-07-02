@@ -621,7 +621,6 @@ def bpe_dataloader(
         persistent_workers=True,
     )
 
-    # dataloader.collate_fn =
     return dataloader
 
 
@@ -639,14 +638,19 @@ def bpe_tokenizer() -> BPEVocabulary:
 
 def main_new():
     BATCH_SIZE = 128 if DEVICE == "mps" else 680
-    tokenizer = bpe_tokenizer()
-    dataset: Dataset = load_dataset("thien/political", keep_in_memory=True)
+    tokenizer: BPEVocabulary = bpe_tokenizer()
+    hf_dataset_name = "thien/political"
+
+    dataset: Dataset = load_dataset(hf_dataset_name, keep_in_memory=True)
     dataset = dataset.class_encode_column("label")
 
     train_dataloader = bpe_dataloader(
         dataset["train"], tokenizer, BATCH_SIZE, shuffle=True
     )
-    val_dataloader = bpe_dataloader(dataset["eval"], tokenizer, BATCH_SIZE)
+    val_dataloader = bpe_dataloader(
+        dataset["eval"], tokenizer, BATCH_SIZE, shuffle=False
+    )
+    # TODO check if collate function is faster than the current implementation
 
     task = CNNClassifier(
         "political",
@@ -655,8 +659,15 @@ def main_new():
     )
 
     logger = TensorBoardLogger("tb_logs", name="pol_classifier")
+    logger.log_hyperparams(
+        params={
+            "batch_size": BATCH_SIZE,
+            "tokenizer": tokenizer.to_dict()["class"],
+            "dataset": hf_dataset_name,
+        }
+    )
     trainer = pl.Trainer(
-        accelerator=DEVICE, max_epochs=2, log_every_n_steps=20, logger=logger
+        accelerator=DEVICE, max_epochs=1, log_every_n_steps=20, logger=logger
     )
 
     trainer.fit(

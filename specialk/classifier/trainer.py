@@ -117,22 +117,24 @@ class CNNClassifier(pl.LightningModule):
         accuracy = self.calculate_classification_metrics(y_hat, y)
         return loss, accuracy
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(self, batch: dict, batch_idx: int):
         loss, acc = self._shared_eval_step(batch, batch_idx)
         metrics = {"val_acc": acc, "val_loss": loss}
         self.log_dict(metrics, batch_size=batch["text"].size(0))
         return metrics
 
-    def test_step(self, batch, batch_idx):
+    def test_step(self, batch: dict, batch_idx: int):
         loss, acc = self._shared_eval_step(batch, batch_idx)
         metrics = {"test_acc": acc, "test_loss": loss}
         self.log_dict(metrics)
         return metrics
 
-    def predict_step(self, batch, batch_idx, dataloader_idx=0) -> torch.Tensor:
-        x, y = batch
+    def predict_step(
+        self, batch: dict, batch_idx: int, dataloader_idx=0
+    ) -> torch.Tensor:
+        x = batch["text"]
         y_hat = self.model(x)
-        return y_hat
+        return y_hat.squeeze(-1)
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
         return torch.optim.Adam(self.model.parameters(), lr=0.02)
@@ -620,13 +622,6 @@ def bpe_dataloader(
     return dataloader
 
 
-def bpe_tokenizer() -> BPEVocabulary:
-    tokenizer_filepath = PROJECT_DIR / "assets" / "tokenizer" / "fr_en_bpe"
-    tok = BPEVocabulary.from_file(tokenizer_filepath)
-    tok.vocab._progress_bar = iter
-    return tok
-
-
 # def word_tokenizer() -> WordVocabulary:
 #     tokenizer_filepath = Path(dirpath) / "word_tokenizer"
 #     return WordVocabulary.from_file(tokenizer_filepath)
@@ -634,10 +629,14 @@ def bpe_tokenizer() -> BPEVocabulary:
 
 def main_new():
     BATCH_SIZE = 128 if DEVICE == "mps" else 680
-    tokenizer: BPEVocabulary = bpe_tokenizer()
+
+    tokenizer_filepath = PROJECT_DIR / "assets" / "tokenizer" / "fr_en_bpe"
+    tokenizer = BPEVocabulary.from_file(tokenizer_filepath)
+    tokenizer.vocab._progress_bar = iter
+
     hf_dataset_name = "thien/political"
 
-    dataset: Dataset = load_dataset(hf_dataset_name, keep_in_memory=True)
+    dataset: Dataset = load_dataset(hf_dataset_name)
     dataset = dataset.class_encode_column("label")
 
     train_dataloader = bpe_dataloader(
@@ -659,6 +658,7 @@ def main_new():
             "batch_size": BATCH_SIZE,
             "tokenizer": tokenizer.to_dict()["class"],
             "dataset": hf_dataset_name,
+            "tokenizer_path": tokenizer_filepath,
         }
     )
     profiler = AdvancedProfiler(dirpath=logger.log_dir, filename="perf_logs")

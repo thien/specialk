@@ -15,26 +15,25 @@ import argparse
 from pathlib import Path
 from typing import Optional, Tuple, Union
 
+import lightning.pytorch as pl
 import torch
 import torch.nn as nn
+from lightning.pytorch.loggers import TensorBoardLogger
+from lightning.pytorch.profilers import AdvancedProfiler
 from torch.autograd import Variable
+from torch.nn.modules.loss import _Loss as Loss
 from torch.utils.data import DataLoader
-from specialk.core.utils import namespace_to_dict
 from tqdm import tqdm
 
 import specialk.classifier.onmt as onmt
+from datasets import Dataset, load_dataset
 from specialk.classifier.onmt.CNNModels import ConvNet
-from torch.nn.modules.loss import _Loss as Loss
-from specialk.core.utils import log, check_torch_device
+from specialk.core.constants import LOGGING_DIR, LOGGING_PERF_NAME, PROJECT_DIR
+from specialk.core.utils import check_torch_device, log, namespace_to_dict
 from specialk.datasets.dataloaders import (
     init_classification_dataloaders as init_dataloaders,
 )
-
-from specialk.core.constants import PROJECT_DIR
-
-import lightning.pytorch as pl
-from lightning.pytorch.loggers import TensorBoardLogger
-from lightning.pytorch.profilers import AdvancedProfiler
+from specialk.lib.tokenizer import BPEVocabulary, Vocabulary, WordVocabulary
 
 DEVICE: str = check_torch_device()
 
@@ -595,16 +594,12 @@ def main_legacy():
     train_model(model, data_train, data_validation, dataset, optim, opt, criterion)
 
 
-from datasets import Dataset, load_dataset
-from specialk.lib.tokenizer import BPEVocabulary, WordVocabulary
-
-
-def bpe_dataloader(
-    dataset: Dataset, bpe_tokenizer: BPEVocabulary, batch_size: int, shuffle=False
+def init_dataloader(
+    dataset: Dataset, tokenizer: Vocabulary, batch_size: int, shuffle=False
 ) -> DataLoader:
     def tokenize(example):
         # perform tokenization at this stage.
-        example["text"] = bpe_tokenizer.to_tensor(example["text"])
+        example["text"] = tokenizer.to_tensor(example["text"])
         return example
 
     tokenized_dataset = dataset.with_format("torch").map(
@@ -622,27 +617,34 @@ def bpe_dataloader(
     return dataloader
 
 
-# def word_tokenizer() -> WordVocabulary:
-#     tokenizer_filepath = Path(dirpath) / "word_tokenizer"
-#     return WordVocabulary.from_file(tokenizer_filepath)
-
-
 def main_new():
     BATCH_SIZE = 128 if DEVICE == "mps" else 680
 
-    tokenizer_filepath = PROJECT_DIR / "assets" / "tokenizer" / "fr_en_bpe"
-    tokenizer = BPEVocabulary.from_file(tokenizer_filepath)
-    tokenizer.vocab._progress_bar = iter
+    # tokenizer
+    tokenizer_option = "bpe"  # "word"
+    # interestingly the bpe tokenizer is a lot slwoer to run instead of the word tokenizer.
+    # we should see how well this performs with sentencepience.
+
+    if tokenizer_option == "bpe":
+        tokenizer_filepath = PROJECT_DIR / "assets" / "tokenizer" / "fr_en_bpe"
+        tokenizer = BPEVocabulary.from_file(tokenizer_filepath)
+        tokenizer.vocab._progress_bar = iter
+    else:
+        # word option.
+        tokenizer_filepath = PROJECT_DIR / "assets" / "tokenizer" / "fr_en_word_moses"
+        tokenizer = WordVocabulary.from_file(tokenizer_filepath)
+
+    log.info("Loaded tokenizer", tokenizer=tokenizer)
 
     hf_dataset_name = "thien/political"
 
     dataset: Dataset = load_dataset(hf_dataset_name)
     dataset = dataset.class_encode_column("label")
 
-    train_dataloader = bpe_dataloader(
+    train_dataloader = init_dataloader(
         dataset["train"], tokenizer, BATCH_SIZE, shuffle=True
     )
-    val_dataloader = bpe_dataloader(
+    val_dataloader = init_dataloader(
         dataset["eval"], tokenizer, BATCH_SIZE, shuffle=False
     )
 
@@ -652,7 +654,7 @@ def main_new():
         sequence_length=tokenizer.max_length,
     )
 
-    logger = TensorBoardLogger("tb_logs", name="pol_classifier")
+    logger = TensorBoardLogger(LOGGING_DIR, name="pol_classifier")
     logger.log_hyperparams(
         params={
             "batch_size": BATCH_SIZE,
@@ -661,7 +663,7 @@ def main_new():
             "tokenizer_path": tokenizer_filepath,
         }
     )
-    profiler = AdvancedProfiler(dirpath=logger.log_dir, filename="perf_logs")
+    profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
     trainer = pl.Trainer(
         accelerator=DEVICE,
         max_epochs=1,

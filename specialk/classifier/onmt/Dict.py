@@ -21,6 +21,9 @@ class Dict(object):
             else:
                 self.addSpecials(data)
 
+    def __repr__(self) -> str:
+        return f"Dict(lower={self.lower}, seq_length={self.seq_length})"
+
     def size(self):
         return len(self.idxToLabel)
 
@@ -122,7 +125,7 @@ class Dict(object):
         bosWord=None,
         eosWord=None,
         paddingWord=None,
-    ):
+    ) -> List[int]:
         vec = []
 
         if bosWord is not None:
@@ -134,13 +137,16 @@ class Dict(object):
             pad = self.lookup(paddingWord)
 
         vec += [self.lookup(label, default=unk) for label in labels]
+
+        # force truncate the text before closing
+        vec = vec[: self.seq_length - 1]
         # EOS should come before Padding.
         if eosWord is not None:
             vec += [self.lookup(eosWord)]
         if padding:
             vec += [pad] * (self.seq_length - len(vec))
 
-        return torch.LongTensor(vec)
+        return vec
 
     # Convert `idx` to labels. If index `stop` is reached, convert it and return.
     def convertToLabels(self, idx, stop):

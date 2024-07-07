@@ -66,6 +66,7 @@ class Vocabulary:
         self.PAD_TOKEN = PAD_TOKEN
         self.CLS_TOKEN = CLS_TOKEN
         self.BLO_TOKEN = BLO_TOKEN
+        self.SPECIALS = {self.PAD_TOKEN, self.UNK_TOKEN, self.BOS_TOKEN, self.EOS_TOKEN}
 
     @deprecated
     def make(self, data_path: Union[Path, str]):
@@ -139,6 +140,9 @@ class Vocabulary:
         with open(filepath) as infile:
             obj = json.load(infile)
         return cls.from_dict(obj)
+
+    def __repr__(self) -> str:
+        return f"Vocabulary(vocab_size={self.vocab_size}, max_length={self.max_length}, lower={self.lower})"
 
 
 class BPEVocabulary(Vocabulary):
@@ -228,11 +232,32 @@ class BPEVocabulary(Vocabulary):
         # log.info("dict", dict=d)
         return d
 
-    def detokenize(self, tokens: List[int]) -> List[str]:
-        return list(self.vocab.inverse_transform(tokens))
+    def detokenize(
+        self, tokens: List[List[int]], specials=True
+    ) -> Iterable[str | list[str]]:
+        # TODO clean up, this looks horrific
+        out = []
+        if isinstance(tokens[0], list):
+            # nested list
+            for item in tokens:
+                if not specials:
+                    item = [
+                        [i for i in item if self.vocab.word_vocab[self.vocab.PAD] != i]
+                    ]
+                    out.append(next(self.vocab.inverse_transform(item)))
+            return out
+        else:
+            if not specials:
+                tokens = [
+                    [i for i in item if self.vocab.word_vocab[self.vocab.PAD] != i]
+                ]
+                return next(self.vocab.inverse_transform(tokens))
 
     def tokenize(self, text: str) -> List[str]:
         return self.vocab.tokenize(text)
+
+    def __repr__(self) -> str:
+        return f"BPEVocabulary(vocab_size={self.vocab_size}, max_length={self.max_length}, lower={self.lower}, pct_bpe={self.pct_bpe})"
 
 
 class WordVocabulary(Vocabulary):
@@ -243,7 +268,6 @@ class WordVocabulary(Vocabulary):
         self.vocab: onmt.Dict
         self.mt = MosesTokenizer(lang="en")
         self.md = MosesDetokenizer(lang="en")
-        self.SPECIALS = {self.PAD_TOKEN, self.UNK_TOKEN, self.BOS_TOKEN, self.EOS_TOKEN}
 
     def fit(self, texts: Iterable[str]):
         vocab = onmt.Dict(
@@ -393,14 +417,33 @@ class WordVocabulary(Vocabulary):
         Returns:
             torch.LongTensor: List of indices corresponding to the token index from the vocab.
         """
-        return self.vocab.convertToIdx(
-            self.tokenize(text),
-            unkWord=self.UNK_TOKEN,
-            padding=True,
-            bosWord=self.BOS_TOKEN,
-            eosWord=self.EOS_TOKEN,
-            paddingWord=self.PAD_TOKEN,
-        )
+        if isinstance(text, str):
+            text: str
+            return torch.LongTensor(
+                self.vocab.convertToIdx(
+                    self.tokenize(text),
+                    unkWord=self.UNK_TOKEN,
+                    padding=True,
+                    bosWord=self.BOS_TOKEN,
+                    eosWord=self.EOS_TOKEN,
+                    paddingWord=self.PAD_TOKEN,
+                )
+            )
+        else:
+            # import numpy as np
+            tokens = [
+                self.vocab.convertToIdx(
+                    self.tokenize(line),
+                    unkWord=self.UNK_TOKEN,
+                    padding=True,
+                    bosWord=self.BOS_TOKEN,
+                    eosWord=self.EOS_TOKEN,
+                    paddingWord=self.PAD_TOKEN,
+                )
+                for line in text
+            ]
+            # tokens = np.array(tokens)
+            return torch.LongTensor(tokens)
 
     def tokenize(self, text: str) -> List[str]:
         """Performs space level tokenization.
@@ -432,3 +475,6 @@ class WordVocabulary(Vocabulary):
         if not specials:
             labels = [t for t in labels if t not in self.SPECIALS]
         return self.md.detokenize(labels)
+
+    def __repr__(self) -> str:
+        return f"WordVocabulary(vocab_size={self.vocab_size}, max_length={self.max_length}, lower={self.lower})"

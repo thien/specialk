@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from specialk.core.constants import PROJECT_DIR
 from specialk.lib.tokenizer import BPEVocabulary, WordVocabulary
 
 VOCABULARY_SIZE = 1000
@@ -33,6 +34,28 @@ def test_save_load_word_vocabulary(word_tokenizer):
 
     new_tokenizer = WordVocabulary.from_file(tokenizer_filepath)
     assert new_tokenizer.vocab.idxToLabel == word_tokenizer.vocab.idxToLabel
+
+
+def test_word_tokenizer_to_tensor(word_tokenizer):
+    sequences = ["hello world", "hello"]
+    output = word_tokenizer.to_tensor(sequences)
+    max_len = word_tokenizer.max_length
+    assert output.shape[-1] == max_len
+
+
+@pytest.fixture(scope="session", autouse=True)
+def pol_word_tokenizer():
+    tokenizer_filepath = PROJECT_DIR / "assets" / "tokenizer" / "fr_en_word_moses"
+    return WordVocabulary.from_file(tokenizer_filepath)
+
+
+def test_word_tokenizer_to_tensor_long(pol_word_tokenizer):
+    sequence = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
+    output = pol_word_tokenizer.to_tensor(sequence)
+    max_len = pol_word_tokenizer.max_length
+    print(pol_word_tokenizer, max_len)
+    print(output.shape)
+    assert output.shape[-1] == max_len
 
 
 @pytest.fixture(scope="session", autouse=True)

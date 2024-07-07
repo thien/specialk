@@ -37,9 +37,24 @@ def dataset() -> Dataset:
 
 @pytest.fixture(scope="session")
 def bpe_tokenizer() -> BPEVocabulary:
-    tokenizer_filepath = Path(dirpath) / "bpe_tokenizer"
+    return BPEVocabulary.from_file(Path(dirpath) / "bpe_tokenizer")
 
-    return BPEVocabulary.from_file(tokenizer_filepath)
+
+@pytest.fixture(scope="session")
+def word_tokenizer() -> WordVocabulary:
+    return WordVocabulary.from_file(Path(dirpath) / "word_tokenizer")
+
+
+@pytest.fixture(scope="session")
+def word_dataloader(dataset: Dataset, word_tokenizer: WordVocabulary):
+    def tokenize(example):
+        # perform tokenization at this stage.
+        example["text"] = word_tokenizer.to_tensor(example["text"])
+        return example
+
+    tokenized_dataset = dataset.with_format("torch").map(tokenize)
+    dataloader = DataLoader(tokenized_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    return dataloader
 
 
 @pytest.fixture(scope="session")
@@ -83,6 +98,15 @@ def test_model_inference(bpe_dataloader):
         2, torch.unsqueeze(x.T, 2), 1
     )
 
+    # log.info("one hot",one_hot=one_hot_old[:, 0, :])
+
+    # one_hot = torch.nn.functional.one_hot(x.T, num_classes=VOCABULARY_SIZE).float()
+
+    # assert not torch.equal(one_hot, one_hot_old)
+
+    # log.info("one_hots", old=one_hot_old, new=one_hot)
+
+
     assert one_hot.shape == (SEQUENCE_LENGTH, BATCH_SIZE, VOCABULARY_SIZE)
 
     y_hat = model(one_hot).squeeze(-1)
@@ -93,6 +117,7 @@ def test_model_inference(bpe_dataloader):
     log.info("shapes", y=y.shape, y_hat=y_hat.shape)
 
     _ = criterion(y_hat, y.float())
+
 
 def test_accuracy():
     y = torch.LongTensor([0, 0, 1, 1, 1, 1]).float()

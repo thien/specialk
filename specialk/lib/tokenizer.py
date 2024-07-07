@@ -167,7 +167,6 @@ class BPEVocabulary(Vocabulary):
         self.vocab = src_bpe
         log.info("Finished training BPEEncoder.")
 
-    
     def fit(self, texts: Iterable[str]):
         src_bpe = BPEEncoder(
             vocab_size=self.vocab_size,
@@ -183,7 +182,6 @@ class BPEVocabulary(Vocabulary):
         src_bpe.fit(texts)
         self.vocab = src_bpe
         log.info("Finished training BPEEncoder.")
-
 
     def to_tensor(self, text: Union[str, List[str]]) -> Iterable[List[int]]:
         """_summary_
@@ -245,7 +243,7 @@ class WordVocabulary(Vocabulary):
         self.vocab: onmt.Dict
         self.mt = MosesTokenizer(lang="en")
         self.md = MosesDetokenizer(lang="en")
-
+        self.SPECIALS = {self.PAD_TOKEN, self.UNK_TOKEN, self.BOS_TOKEN, self.EOS_TOKEN}
 
     def fit(self, texts: Iterable[str]):
         vocab = onmt.Dict(
@@ -274,7 +272,7 @@ class WordVocabulary(Vocabulary):
         )[:top_n]
         log.debug(
             "Most frequent tokens found",
-            tokens={k: vocab.frequencies[vocab.labelToIdx[k]] for k in head_freq}
+            tokens={k: vocab.frequencies[vocab.labelToIdx[k]] for k in head_freq},
         )
 
         self.vocab = vocab.prune(self.vocab_size)
@@ -409,6 +407,28 @@ class WordVocabulary(Vocabulary):
         Ensure that Moses Tokenization is used here."""
         return [word for word in self.mt.tokenize(text, return_str=True).split()]
 
-    def detokenize(self, tokens: List[torch.LongTensor]) -> str:
-        """Returns detokenized form (not concatenated though)"""
-        return self.md.detokenize([self.vocab.idxToLabel[t.item()] for t in tokens])
+    def detokenize(self, tokens: torch.LongTensor, specials=True) -> str:
+        """Returns detokenized string.
+
+        Args:
+            tokens (torch.LongTensor): Tensor of integer values corresponding
+            to indexes of tokens.
+            specials (bool, optional): If unset, then removes special tokens from output. Defaults to True.
+
+        Returns:
+            str: plain text value.
+
+        Example:
+            text = "récompensée et toi"
+            tokens = word_vocab.to_tensor(tokens)
+            >>> tokens
+            tensor([    2, 29907,    10,  7724,     3,     0,     0 ... ])
+            >>> word_vocab.detokenize(tokens)
+            "<s> récompensée et toi </s> <blank> <blank> ..."
+            >>> word_vocab.detokenize(tokens, specials=False)
+            "récompensée et toi"
+        """
+        labels = [self.vocab.idxToLabel[t.item()] for t in tokens]
+        if not specials:
+            labels = [t for t in labels if t not in self.SPECIALS]
+        return self.md.detokenize(labels)

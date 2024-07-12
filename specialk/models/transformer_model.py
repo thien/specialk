@@ -8,15 +8,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data
-from specialk.lib.nmt_model import NMTModel
-from specialk.lib.transformer.Models import (
+from specialk.models.nmt_model import NMTModel
+from specialk.models.transformer.Models import (
     Decoder,
     Encoder,
     Transformer,
     get_sinusoid_encoding_table,
 )
-from specialk.lib.transformer.Optim import ScheduledOptim
-from specialk.lib.transformer.Translator import Translator
+from specialk.models.transformer.Optim import ScheduledOptim
+from specialk.models.transformer.Translator import Translator
 from tqdm import tqdm
 
 from specialk.core.bpe import Encoder as BPE
@@ -143,7 +143,7 @@ class TransformerModel(NMTModel):
                         self.model.generator.out_features,
                     ),
                     nn.LogSoftmax(dim=1),
-                ).cuda()
+                )
                 generator.load_state_dict(dec["generator"])
                 del self.model.generator
                 self.model.generator = generator

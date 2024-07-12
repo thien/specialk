@@ -16,7 +16,7 @@ from specialk.core.bpe import Encoder as BPEEncoder
 from specialk.core.utils import load_dataset, log, deprecated
 from specialk.preprocess import parse as bpe_parse
 
-# TODO: make padding optional. This can be done by the dataloader.
+import sentencepiece as spm
 
 
 class Vocabulary:
@@ -152,7 +152,7 @@ class BPEVocabulary(Vocabulary):
         self.vocab: BPEEncoder
 
     @deprecated
-    def make(self, data_path: Union[Path, str]) -> BPEEncoder:
+    def make(self, data_path: Union[Path, str]) -> None:
         log.info("Creating BPEEncoder.")
         src_bpe = BPEEncoder(
             vocab_size=self.vocab_size,
@@ -258,6 +258,43 @@ class BPEVocabulary(Vocabulary):
 
     def __repr__(self) -> str:
         return f"BPEVocabulary(vocab_size={self.vocab_size}, max_length={self.max_length}, lower={self.lower}, pct_bpe={self.pct_bpe})"
+
+
+class SentencePieceVocabulary(BPEVocabulary):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.vocab: spm.SentencePieceProcessor
+
+    def fit(
+        self,
+        texts: Optional[Iterable[str]] = None,
+        path: Optional[Union[Path, str]] = None,
+    ):
+        if texts == path:
+            if texts is None:
+                raise Exception("either texts or path needs to be parameterised.")
+
+        self.vocab = spm.SentencePieceTrainer.Train(
+            input=path,
+            vocab_size=self.vocab_size,
+        )
+
+    def from_file(cls, filepath: Path | str) -> BPEVocabulary:
+        raise NotImplementedError
+
+    def to_dict(self) -> dict:
+        raise NotImplementedError
+
+    def tokenize(self, text: str) -> List[str]:
+        raise NotImplementedError
+
+    def detokenize(
+        self, tokens: List[List[int]], specials=True
+    ) -> Iterable[str | List[str]]:
+        raise NotImplementedError
+
+    def to_tensor(self, text: str | List[str]) -> Iterable[List[int]]:
+        raise NotImplementedError
 
 
 class WordVocabulary(Vocabulary):

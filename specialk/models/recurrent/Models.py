@@ -102,12 +102,6 @@ class Decoder(nn.Module):
         assert opt.rnn_size % self.num_directions == 0
         self.hidden_size = opt.rnn_size // self.num_directions
 
-        # self.rnn = nn.LSTM(input_size,
-        #                 self.hidden_size,
-        #                 num_layers=opt.layers,
-        #                 dropout=opt.dropout,
-        #                 bidirectional=opt.brnn)
-
         self.attn = modules.GlobalAttention(opt.rnn_size)
         self.dropout = nn.Dropout(opt.dropout)
 
@@ -122,35 +116,7 @@ class Decoder(nn.Module):
             pretrained = torch.load(opt.pre_word_vecs_dec)
             self.word_lut.weight.data.copy_(pretrained)
 
-    # def forward(self, input, hidden, context, init_output):
-    #     # print("INPUT FOR DECODER:", input.shape)
-    #     emb = self.word_lut(input)
-    #     #print(context.size())
-    #     # n.b. you can increase performance if you compute W_ih * x for all
-    #     # iterations in parallel, but that's only possible if
-    #     # self.input_feed=False
-    #     outputs = []
-    #     output = init_output
-    #     # print("DECODER EMB:", emb.shape)
-    #     for i in range(input.shape[1]):
-    #         # emb_t = emb[:,i,:]
-    #         # emb_t = emb_t.unsqueeze(1)
-    #         print("EMBT:", emb_t.shape)
-    #         # emb_t = emb_t.squeeze(0)
-    #         # if self.input_feed:
-    #         #     emb_t = torch.cat([emb_t, output], 1)
-    #         # print(hidden)
-    #         # print(emb_t.shape)
-    #         # print("HIDDEN:",hidden.shape)
-    #         output, hidden = self.rnn(emb_t, hidden)
-    #         print("OUT:",output.shape, context.shape)
-    #         output, attn = self.attn(output.transpose(0, 1), context.transpose(0, 1))
-    #         # output, attn = self.attn(output, context.transpose(0, 1))
-    #         output = self.dropout(output)
-    #         outputs += [output]
 
-    #     outputs = torch.stack(outputs)
-    #     return outputs, hidden, attn
     def forward(self, input, hidden, context, init_output, useGen=True):
         emb = self.word_lut(input)
         # print(context.size())
@@ -178,7 +144,7 @@ class Decoder(nn.Module):
 class NMTModel(nn.Module):
     def __init__(self, encoder, decoder):
         super(NMTModel, self).__init__()
-        self.encoder = encoder
+        self.encoder: Encoder = encoder
         self.decoder = decoder
 
     def make_init_decoder_output(self, context):

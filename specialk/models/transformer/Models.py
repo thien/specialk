@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from specialk.models.transformer.pos_encoders import PositionalEncoder
 import specialk.core.constants as Constants
 from .Layers import DecoderLayer, EncoderLayer
 
@@ -85,6 +86,7 @@ class Encoder(nn.Module):
             n_src_vocab, d_word_vec, padding_idx=Constants.PAD
         )
 
+        # self.position_enc = PositionalEncoder(d_word_vec, n_position)
         self.position_enc = nn.Embedding.from_pretrained(
             get_sinusoid_encoding_table(n_position, d_word_vec, padding_idx=0),
             freeze=True,

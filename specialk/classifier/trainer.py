@@ -33,7 +33,7 @@ from specialk.core.utils import check_torch_device, log, namespace_to_dict
 from specialk.datasets.dataloaders import (
     init_classification_dataloaders as init_dataloaders,
 )
-from specialk.lib.tokenizer import BPEVocabulary, Vocabulary, WordVocabulary
+from specialk.models.tokenizer import BPEVocabulary, Vocabulary, WordVocabulary
 
 DEVICE: str = check_torch_device()
 
@@ -96,11 +96,9 @@ class CNNClassifier(pl.LightningModule):
             batch_idx (int): ID corresponding to the batch.
 
         Returns:
-            torch.Tensor: Returns loss.
+            Tuple[torch.Tensor, torch.Tensor]: Returns loss, accuracy.
         """
         x, y = batch["text"], batch["label"]
-        # log.info("x.shape", x=x.shape, y=y.shape)
-        # x = x.squeeze(2, 1)
 
         seq_len: int = x.size(1)
         batch_size: int = x.size(0)
@@ -621,7 +619,7 @@ def main_new():
     BATCH_SIZE = 128 if DEVICE == "mps" else 680
 
     # tokenizer
-    tokenizer_option = "bpe"  # "word"
+    tokenizer_option = "word"  # "word"
     # interestingly the bpe tokenizer is a lot slwoer to run instead of the word tokenizer.
     # we should see how well this performs with sentencepience.
 
@@ -663,6 +661,7 @@ def main_new():
             "tokenizer_path": tokenizer_filepath,
         }
     )
+    
     profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
     trainer = pl.Trainer(
         accelerator=DEVICE,

@@ -80,7 +80,6 @@ class ConvNet(nn.Module):
         emb = emb.transpose(0, 1)
         emb = emb.transpose(1, 2)
         emb = emb.unsqueeze(-1)
-        # print("emb:",emb.shape)
         h_conv = self.conv(emb)
         h_relu = self.relu(h_conv)
         h_max = self.maxpool(h_relu)

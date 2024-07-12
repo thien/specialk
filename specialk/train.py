@@ -10,9 +10,9 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 
-from specialk.lib.nmt_model import NMTModel
-from specialk.lib.recurrent_model import RecurrentModel as recurrent
-from specialk.lib.transformer_model import TransformerModel as transformer
+from specialk.models.nmt_model import NMTModel
+from specialk.models.recurrent_model import RecurrentModel as recurrent
+from specialk.models.transformer_model import TransformerModel as transformer
 
 
 def load_args():

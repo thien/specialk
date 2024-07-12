@@ -9,7 +9,7 @@ from datasets import Dataset, load_dataset
 from datasets.exceptions import DatasetGenerationError
 from specialk.core.utils import log
 from specialk.classifier.onmt.CNNModels import ConvNet
-from specialk.lib.tokenizer import BPEVocabulary, WordVocabulary
+from specialk.models.tokenizer import BPEVocabulary, WordVocabulary
 from tests.tokenizer.test_tokenizer import PCT_BPE, VOCABULARY_SIZE
 from specialk.classifier.trainer import memory_efficient_loss
 from torchmetrics.functional import accuracy

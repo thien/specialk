@@ -5,10 +5,10 @@ import sys
 import numpy as np
 import torch
 import torch.nn as nn
-from specialk.lib.nmt_model import NMTModel
+from specialk.models.nmt_model import NMTModel
 from torch.utils.data import DataLoader
 # from specialk.lib.recurrent_model import RecurrentModel as recurrent
-from specialk.lib.transformer_model import TransformerModel as transformer
+from specialk.models.transformer_model import TransformerModel as transformer
 from torch.autograd import Variable
 from tqdm import tqdm
 

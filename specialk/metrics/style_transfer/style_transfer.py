@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 import specialk.metrics.style_transfer.cnn as cnn
 import specialk.metrics.style_transfer.content_preservation as preserv
-from specialk.lib.style_lexicon import StyleLexicon
+from specialk.models.style_lexicon import StyleLexicon
 
 
 class StyleMetric(Metric):

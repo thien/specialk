@@ -201,17 +201,15 @@ def FuncMaxPool3d(
             batch,
             in_channel,
             out_height,
-            ker_h,
             out_width,
-            ker_w,
             out_length,
+            ker_h,
+            ker_w,
             ker_l,
         ),
-        stride=(a, b, c * str_h, c, d * str_w, d, e * str_l, e),
+        stride=(a, b, c * str_h, d * str_w, e * str_l, c, d, e),
     )
-    return torch.amax(out, dim=(3, 5, 7), keepdim=True).view(
-        (batch, in_channel, out_height, out_width, out_length)
-    )
+    return torch.amax(out, dim=(-1, -2, -3))
 
 
 

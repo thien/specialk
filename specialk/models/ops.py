@@ -185,7 +185,10 @@ def FuncMaxPool3d(
     pad_h, pad_w, pad_l = force_triple(padding)
     ker_h, ker_w, ker_l = force_triple(kernel_size)
 
-    x = pad3d(x, pad_w, pad_w, pad_h, pad_h, pad_l, pad_l, -torch.inf)
+    # x = pad3d(x, pad_w, pad_w, pad_h, pad_h, pad_l, pad_l, -torch.inf)
+    pad = (pad_h, pad_h, pad_w, pad_w, pad_l, pad_l)
+    # print(pad)
+    x = torch.nn.functional.pad(x, pad)
 
     # get dimensions out.
     batch, in_channel, height, width, length = x.shape
@@ -196,21 +199,22 @@ def FuncMaxPool3d(
 
     a, b, c, d, e = x.stride()
 
-    out = x.as_strided(
-        size=(
-            batch,
-            in_channel,
-            out_height,
-            out_width,
-            out_length,
-            ker_h,
-            ker_w,
-            ker_l,
+    return torch.amax(
+        x.as_strided(
+            size=(
+                batch,
+                in_channel,
+                out_height,
+                out_width,
+                out_length,
+                ker_h,
+                ker_w,
+                ker_l,
+            ),
+            stride=(a, b, c * str_h, d * str_w, e * str_l, c, d, e),
         ),
-        stride=(a, b, c * str_h, d * str_w, e * str_l, c, d, e),
+        dim=(-1, -2, -3),
     )
-    return torch.amax(out, dim=(-1, -2, -3))
-
 
 
 class MaxPool3d(torch.nn.Module):

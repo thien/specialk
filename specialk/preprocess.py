@@ -1,3 +1,6 @@
+"""
+DEPRECATED
+"""
 import argparse
 import subprocess
 import unicodedata

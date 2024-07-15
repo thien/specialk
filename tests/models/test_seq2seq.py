@@ -4,10 +4,12 @@ import pytest
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-
+from jaxtyping import Float, Int
+from torch import Tensor
 from datasets import Dataset
 import pandas as pd
 from specialk.core.utils import log
+import torch.nn.functional as F
 from specialk.models.tokenizer import BPEVocabulary, WordVocabulary
 from specialk.core.constants import PROJECT_DIR, PAD
 from tests.tokenizer.test_tokenizer import VOCABULARY_SIZE
@@ -33,7 +35,6 @@ def bpe_tokenizer() -> BPEVocabulary:
     return BPEVocabulary.from_file(dirpath / "bpe_tokenizer")
 
 
-
 @pytest.fixture(scope="session")
 def bpe_dataloader(dataset: Dataset, bpe_tokenizer: BPEVocabulary):
     def tokenize(example):
@@ -48,7 +49,7 @@ def bpe_dataloader(dataset: Dataset, bpe_tokenizer: BPEVocabulary):
 
 
 def test_transformer_inference(bpe_dataloader):
-    dataloader, tokenizer = bpe_dataloader 
+    dataloader, tokenizer = bpe_dataloader
     model = TransformerModule(
         name="transformer_1",
         vocabulary_size=VOCABULARY_SIZE,
@@ -65,7 +66,7 @@ def test_transformer_inference(bpe_dataloader):
 
     len_x = (x == PAD).sum(dim=1)
     len_y = (y == PAD).sum(dim=1)
-    
+
     assert len_x.shape[0] == batch_size
 
     print(x.shape, len_x.shape, y.shape, len_y.shape)
@@ -81,16 +82,20 @@ def test_transformer_inference(bpe_dataloader):
 
     _ = criterion(y_hat, y.float())
 
+
 def test_pt_transformer_inference(bpe_dataloader):
-    dataloader, tokenizer = bpe_dataloader 
+    dataloader, tokenizer = bpe_dataloader
     model = PyTorchTransformerModule(
         name="transformer_1",
         vocabulary_size=VOCABULARY_SIZE,
         sequence_length=SEQUENCE_LENGTH,
+        dim_model=32,
+        n_heads=2,
+        num_encoder_layers=1,
+        num_decoder_layers=1,
     )
     model.PAD = 0
     model.eval()
-    criterion = nn.BCELoss()
 
     batch: dict = next(iter(dataloader))
     x: torch.Tensor = batch["source"].squeeze(1)
@@ -99,18 +104,21 @@ def test_pt_transformer_inference(bpe_dataloader):
 
     len_x = (x == PAD).sum(dim=1)
     len_y = (y == PAD).sum(dim=1)
-    
+
     assert len_x.shape[0] == batch_size
 
-    print(x.shape, len_x.shape, y.shape, len_y.shape)
-
-    m = model.model
+    log.info("shapes", x=x.shape, len_x=len_x.shape, y=y.shape, len_y=len_y.shape)
 
     # forward pass
-    enc_output, *_ = m.encoder(x, len_x)
-    dec_output, *_ = m.decoder(y, len_y, x, enc_output)
-    y_hat = m.generator(dec_output) * m.x_logit_scale
+    y_hat: Float[Tensor, "batch seq_length vocab"] = model.model(
+        x
+    )  # output is of shape [batch, sequence_length, vocab_size]
 
     log.info("shapes", y=y.shape, y_hat=y_hat.shape)
 
-    _ = criterion(y_hat, y.float())
+    # flatten tensors for loss function.
+    y_hat: Float[Tensor, "batch_size*seq_length, vocab"] = y_hat.view(
+        -1, y_hat.size(-1)
+    )
+    y: Int[Tensor, "batch_size*vocab"] = y.view(-1)
+    _ = F.cross_entropy(y_hat, y, ignore_index=model.PAD, reduction="sum")

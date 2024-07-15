@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from specialk.core.constants import PROJECT_DIR
-from specialk.lib.tokenizer import BPEVocabulary, WordVocabulary
+from specialk.models.tokenizer import BPEVocabulary, WordVocabulary
 
 VOCABULARY_SIZE = 1000
 SEQUENCE_LENGTH = 100

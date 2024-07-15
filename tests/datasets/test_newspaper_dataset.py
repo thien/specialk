@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 
 from datasets import Dataset, load_dataset
 from specialk.core.utils import log
-from specialk.lib.tokenizer import BPEVocabulary, WordVocabulary
+from specialk.models.tokenizer import BPEVocabulary, WordVocabulary
 from tests.tokenizer.test_tokenizer import PCT_BPE, SEQUENCE_LENGTH, VOCABULARY_SIZE
 
 dirpath = "tests/tokenizer/test_files"

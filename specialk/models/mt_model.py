@@ -134,8 +134,8 @@ class NMTModule(pl.LightningModule):
 
     def test_step(self, batch: dict, batch_idx: int):
         loss, acc = self._shared_eval_step(batch, batch_idx)
-        metrics = {"test_acc": acc, "test_loss": loss}
-        self.log_dict(metrics)
+        metrics = {"val_acc": acc, "val_loss": loss}
+        self.log_dict(metrics, batch_size=batch["text"].size(0))
         return metrics
 
     def predict_step(

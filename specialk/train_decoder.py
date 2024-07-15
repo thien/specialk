@@ -7,11 +7,12 @@ import torch
 import torch.nn as nn
 from specialk.models.nmt_model import NMTModel
 from torch.utils.data import DataLoader
+
 # from specialk.lib.recurrent_model import RecurrentModel as recurrent
 from specialk.models.transformer_model import TransformerModel as transformer
 from torch.autograd import Variable
 from tqdm import tqdm
-
+import lightning.pytorch as pl
 from typing import Tuple, Dict
 import specialk.classifier.onmt as onmt
 import specialk.classifier.onmt.CNNModels as CNNModels
@@ -23,8 +24,7 @@ Trains the transformer decoder for style-transfer specific purposes.
 """
 
 
-class StyleBackTranslationModel(nn.Module):
-    # TODO: test if this works with pl.module
+class StyleBackTranslationModel(pl.LightningModule):
     def __init__(
         self, mt_model: NMTModel, cnn_model: CNNModels, smoothing: bool = True
     ):
@@ -56,23 +56,38 @@ class StyleBackTranslationModel(nn.Module):
         Forward pass of the transformer.
         """
 
-        src_seq, src_pos, tgt_seq, tgt_pos = batch
+        # src_seq, src_pos, tgt_seq, tgt_pos = batch
 
-        references = tgt_seq[:, 1:]
-        tgt_seq = tgt_seq[:, :-1]
-        tgt_pos = tgt_pos[:, :-1]
+        # references = tgt_seq[:, 1:]
+        # tgt_seq = tgt_seq[:, :-1]
+        # tgt_pos = tgt_pos[:, :-1]
+
+        x, y, y_label = batch["source"], batch["target"], batch['label']
 
         # compute encoder output
-        encoder_outputs, _ = self.nmt_model.encoder(src_seq, src_pos, True)
+        encoder_outputs, _ = self.nmt_model.encoder(src_seq)
         # feed into decoder
         predictions, _, _ = self.nmt_model.decoder(
             tgt_seq, tgt_pos, src_seq, encoder_outputs.detach(), True
         )
 
         # compute performance
-        l_recon, l_class, _ = self.joint_loss(self, predictions, references)
+        l_recon, l_class, n_tokens_correct = self.joint_loss(
+            self, predictions, references
+        )
         net_loss = l_recon * l_class
+        n_tokens_total = y.ne(self.constants.PAD).sum().item()
+        accuracy = n_tokens_correct / n_tokens_total
 
+        self.log_dict(
+            {
+                "train_acc": accuracy,
+                "batch_id": batch_idx,
+                "net_loss": net_loss,
+                "recon_loss": l_recon,
+                "classifier_loss": l_class,
+            }
+        )
         return net_loss
 
     def _shared_eval_step(self, batch: DataLoader, batch_idx: int):

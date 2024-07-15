@@ -22,7 +22,7 @@ spm.SentencePieceTrainer.train(
     eos_piece=Constants.EOS_WORD,
     pad_piece=Constants.PAD_WORD,
     shuffle_input_sentence=True,
-    train_extremely_large_corpus=True
+    train_extremely_large_corpus=True,
     normalization_rule_name="identity"
 )
 

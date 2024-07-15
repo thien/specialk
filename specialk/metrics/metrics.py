@@ -9,6 +9,7 @@ from typing import Dict, List, Tuple, Union
 import evaluate
 import gensim.downloader as api
 import numpy as np
+import sacrebleu
 from gensim.corpora.dictionary import Dictionary
 from gensim.models.keyedvectors import KeyedVectors
 from nltk import pos_tag, word_tokenize
@@ -371,6 +372,30 @@ class BLEU(AlignmentMetric):
         bleu4 = sentence_bleu(references, [predictions], weights=(0, 0, 0, 1))
 
         return {"bleu_1": bleu1, "bleu_2": bleu2, "bleu_3": bleu3, "bleu_4": bleu4}
+
+
+class SacreBLEU(AlignmentMetric):
+    def __init__(self):
+        self.bleu = sacrebleu.BLEU()
+
+    def compute(
+        self,
+        predictions: List[str],
+        references: Union[List[str], List[List[str]]],
+    ) -> float:
+        return self.bleu.corpus_score(predictions, references).score
+
+
+class ChrF(AlignmentMetric):
+    def __init__(self):
+        self.chrf = sacrebleu.CHRF()
+
+    def compute(
+        self,
+        predictions: List[str],
+        references: Union[List[str], List[List[str]]],
+    ) -> float:
+        return self.chrf.corpus_score(predictions, references).score
 
 
 class ROUGE(AlignmentMetric):

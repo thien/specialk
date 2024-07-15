@@ -6,6 +6,10 @@ import lightning.pytorch as pl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from jaxtyping import Float, Int
+from specialk.models.tokenizer import Vocabulary
+from torch import Tensor
+from specialk.metrics.metrics import SacreBLEU
 from specialk.models.transformer.Optim import ScheduledOptim
 
 from specialk.models.transformer.Models import Transformer as TransformerModel
@@ -14,6 +18,8 @@ from specialk.models.transformer.Models import get_sinusoid_encoding_table
 from specialk.models.recurrent.Models import NMTModel as Seq2Seq, Encoder, Decoder
 
 from specialk.core.constants import PAD
+
+bleu = SacreBLEU()
 
 
 class NMTModule(pl.LightningModule):
@@ -25,12 +31,15 @@ class NMTModule(pl.LightningModule):
         vocabulary_size: int,
         sequence_length: int,
         label_smoothing: bool = False,
+        tokenizer: Vocabulary | None = None,
+        **kwargs,
     ):
         super().__init__()
         self.name = name
         self.vocabulary_size = vocabulary_size
         self.sequence_length = sequence_length
         self.label_smoothing = label_smoothing
+        self.tokenizer: Vocabulary | None = tokenizer
 
         self.model: Union[TransformerModel, Seq2Seq]
 
@@ -76,25 +85,46 @@ class NMTModule(pl.LightningModule):
         Returns:
             torch.Tensor: Returns loss.
         """
-        x, y = batch["source"], batch["target"]
-        batch_size: int = x.size(0)
+        x: Int[Tensor, "batch seq_len"] = batch["source"]
+        y: Int[Tensor, "batch seq_len"] = batch["target"]
 
-        y_hat = self.model(x).squeeze(-1)
+        y_hat: Float[Tensor, "batch seq_len vocab"] = self.model(x)
         loss = self.criterion(y_hat, y)
 
         n_tokens_correct = self.calculate_classification_metrics(y_hat, y)
         n_tokens_total = y.ne(self.constants.PAD).sum().item()
         accuracy = n_tokens_correct / n_tokens_total
 
+        metric_dict = {
+            "eval_acc": accuracy,
+            "batch_id": batch_idx,
+            "eval_loss": loss,
+        }
+        if self.tokenizer is not None:
+            metric_dict["bleu"] = self.validation_bleu(y_hat, y)
+
         self.log_dict(
-            {
-                "train_acc": accuracy,
-                "batch_id": batch_idx,
-                "train_loss": loss,
-            },
-            batch_size=batch_size,
+            metric_dict,
+            batch_size=x.size(0),
         )
         return loss, accuracy
+
+    def validation_bleu(self, y_hat: Tensor, y: Tensor) -> float:
+        """Calculates BLEU score @ validation phase.
+
+        Args:
+            y_hat (Tensor): Prediction tensor.
+            y (Tensor): Reference tensor.
+
+        Returns:
+            float: BLEU score.
+        """
+        if not self.tokenizer:
+            return None
+        y_hat = y_hat.argmax(dim=-1)
+        predictions = self.tokenizer.detokenize(y_hat)
+        references = self.tokenizer.detokenize(y)
+        return bleu.compute(predictions, references)
 
     def validation_step(self, batch: dict, batch_idx: int):
         loss, acc = self._shared_eval_step(batch, batch_idx)

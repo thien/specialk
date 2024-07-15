@@ -35,4 +35,5 @@ cache
 .venv
 .arrow
 tensorboard_logs
-models/
+/models/
+.envrc

@@ -1,14 +1,16 @@
-import pandas as pd
-from specialk.core.utils import load_dataset
 from pathlib import Path
+
+import pandas as pd
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+
 import datasets
 from datasets import Dataset
-from tqdm import tqdm
-from torch.utils.data import DataLoader
+from specialk.core.utils import load_dataset
 
 parent_dir = Path("/Users/t/Projects/specialk/datasets/machine_translation/")
 
-from specialk.models.tokenizer import BPEVocabulary, BPEEncoder, WordVocabulary
+from specialk.models.tokenizer import BPEEncoder, BPEVocabulary, WordVocabulary
 
 word_vocab = WordVocabulary.from_file(
     "/Users/t/Projects/specialk/assets/tokenizer/fr_en_word_moses"

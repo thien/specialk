@@ -1,18 +1,18 @@
 from specialk.metrics.metrics import (
-    Metric,
-    AlignmentMetric,
-    LexicalMetrics,
-    Polarity,
-    Meteor,
     BLEU,
     ROUGE,
+    AlignmentMetric,
     EarthMoverDistance,
+    LexicalMetrics,
+    Meteor,
+    Metric,
+    Polarity,
 )
 from specialk.metrics.style_transfer.style_transfer import (
-    StyleMetric,
     Intensity,
     Naturalness,
     Preservation,
+    StyleMetric,
 )
 
 __ALL__ = [

@@ -1,7 +1,8 @@
+import pytest
+
 from specialk.metrics import (
     Intensity,
 )
-import pytest
 
 
 @pytest.fixture

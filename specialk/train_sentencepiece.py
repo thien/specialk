@@ -1,4 +1,5 @@
 import sentencepiece as spm
+
 import specialk.core.constants as Constants
 
 special_tokens = ["<blank>", "<unk>", "<s>", "</s>", "<p>", "<sep>", "<cls>"]
@@ -23,7 +24,7 @@ spm.SentencePieceTrainer.train(
     pad_piece=Constants.PAD_WORD,
     shuffle_input_sentence=True,
     train_extremely_large_corpus=True,
-    normalization_rule_name="identity"
+    normalization_rule_name="identity",
 )
 
 print("hello")

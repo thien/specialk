@@ -12,6 +12,7 @@ else:
 
 # THIS IS ONLY FOR WORD DATASETS
 
+
 def paired_collate_fn(insts):
     src_insts, tgt_insts = list(zip(*insts))
     src_insts = collate_fn(src_insts)

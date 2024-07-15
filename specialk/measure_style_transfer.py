@@ -4,11 +4,11 @@ import json
 import multiprocessing
 import os
 import sys
+from pathlib import Path
+from typing import Optional, Union
 
 import numpy as np
 import torch
-from typing import Union, Optional
-from pathlib import Path
 
 # import nlgeval
 # from pyemd import emd
@@ -19,15 +19,13 @@ from nltk.translate.bleu_score import sentence_bleu
 from tqdm import tqdm
 
 import specialk.metrics.style_transfer.cnn as cnn
-from specialk.core.utils import log
 
 # from gensim.corpora.dictionary import Dictionary
 # style transfer metrics codebase
-
 # sys.path.append('/home/t/Data/Files/Github/msc_project_model/base/')
 from specialk.core.sentenciser import *
 from specialk.core.utils import batch_compute, get_len, log
-from specialk.metrics import Preservation, Naturalness, Intensity
+from specialk.metrics import Intensity, Naturalness, Preservation
 
 cachedir = "/home/t/Data/Datasets/msc_proj_cache/"
 

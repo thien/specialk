@@ -1,10 +1,11 @@
-from specialk.metrics import (
-    Meteor,
-    BLEU,
-    Polarity,
-    LexicalMetrics,
-)
 import pytest
+
+from specialk.metrics import (
+    BLEU,
+    LexicalMetrics,
+    Meteor,
+    Polarity,
+)
 
 
 @pytest.fixture

@@ -1,7 +1,8 @@
+import pytest
+
 from specialk.metrics import (
     Naturalness,
 )
-import pytest
 
 
 @pytest.fixture

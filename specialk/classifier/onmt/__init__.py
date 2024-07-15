@@ -1,4 +1,5 @@
 import specialk.classifier.onmt.CNNModels as CNNModels
+
 # import specialk.classifier.onmt.Constants as Constants
 # import specialk.classifier.onmt.core as core
 from specialk.classifier.onmt.Dataset import Dataset

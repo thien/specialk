@@ -1,5 +1,6 @@
-from specialk.core.bpe import Encoder
 from tqdm import tqdm
+
+from specialk.core.bpe import Encoder
 
 # TODO convert this into test cases
 

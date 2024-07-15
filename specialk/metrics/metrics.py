@@ -18,9 +18,9 @@ from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from nltk.translate.bleu_score import sentence_bleu
 from pyemd import emd
 
+from specialk.core.constants import PROJECT_DIR
 from specialk.core.sentenciser import find_sentences
 from specialk.core.utils import log
-from specialk.core.constants import PROJECT_DIR
 
 
 class Metric:

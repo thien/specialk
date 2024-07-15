@@ -35,9 +35,9 @@ from specialk.datasets.dataloaders import (
 )
 from specialk.models.tokenizer import (
     BPEVocabulary,
+    SentencePieceVocabulary,
     Vocabulary,
     WordVocabulary,
-    SentencePieceVocabulary,
 )
 
 DEVICE: str = check_torch_device()

@@ -1,14 +1,14 @@
+import functools
 import logging
 import subprocess
-from multiprocessing import Pool, cpu_count
-from typing import List, Dict, Any
-import torch
+import warnings
 from argparse import Namespace
+from multiprocessing import Pool, cpu_count
+from typing import Any, Dict, List
 
 import structlog
+import torch
 from tqdm import tqdm
-import warnings
-import functools
 
 """
 Misc. functions used by a variety of parts of the library.

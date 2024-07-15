@@ -7,6 +7,7 @@ import torch
 from tqdm import tqdm
 
 import specialk.classifier.onmt as onmt
+
 CNN_MODELS_DIR = "metrics/cnn_models"
 
 NATURALNESS_DEFAULTS = {

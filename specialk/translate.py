@@ -8,9 +8,10 @@ on the encoder and decoders used.)
 import argparse
 
 import torch
+from tqdm import tqdm
+
 from models.recurrent import RecurrentModel as recurrent
 from models.transformer import TransformerModel as transformer
-from tqdm import tqdm
 
 
 def load_args():

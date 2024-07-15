@@ -1,10 +1,13 @@
+from typing import Dict, Optional
+
 import torch
 import torch.nn as nn
 
 from specialk.core.constants import PAD
-from typing import Optional, Dict
 from specialk.core.utils import log
+
 # from specialk.models.ops import MaxPool3d
+
 
 class ConvNet(nn.Module):
     def __init__(
@@ -58,8 +61,9 @@ class ConvNet(nn.Module):
         )
         self.relu = nn.ReLU()
         self.maxpool = nn.MaxPool3d(
-        # self.maxpool = MaxPool3d(
-            kernel_size=(1, self.pooling_window_size, 1), stride=(1, 1, 1)
+            # self.maxpool = MaxPool3d(
+            kernel_size=(1, self.pooling_window_size, 1),
+            stride=(1, 1, 1),
         )
         self.dropout = nn.Dropout(self.dropout)
         self.linear = nn.Linear(self.num_filters, self.num_classes - 1)

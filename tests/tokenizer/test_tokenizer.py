@@ -6,8 +6,8 @@ import pytest
 from specialk.core.constants import PROJECT_DIR
 from specialk.models.tokenizer import (
     BPEVocabulary,
-    WordVocabulary,
     SentencePieceVocabulary,
+    WordVocabulary,
 )
 
 VOCABULARY_SIZE = 1000

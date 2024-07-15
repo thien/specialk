@@ -57,6 +57,7 @@ def word_tokenizer() -> WordVocabulary:
     word_tokenizer.load()
     return word_tokenizer
 
+
 @pytest.fixture(scope="session")
 def bpe_dataloader(dataset: Dataset, bpe_tokenizer: BPEVocabulary):
     def tokenize(example):
@@ -67,6 +68,7 @@ def bpe_dataloader(dataset: Dataset, bpe_tokenizer: BPEVocabulary):
     tokenized_dataset = dataset.with_format("torch").map(tokenize)
     dataloader = DataLoader(tokenized_dataset, batch_size=BATCH_SIZE, shuffle=True)
     return dataloader
+
 
 def test_make_dataloader(dataset):
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE)

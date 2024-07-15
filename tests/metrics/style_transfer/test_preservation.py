@@ -1,7 +1,8 @@
+import pytest
+
 from specialk.metrics import (
     Preservation,
 )
-import pytest
 
 
 @pytest.fixture

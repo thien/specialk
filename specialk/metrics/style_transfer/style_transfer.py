@@ -2,8 +2,6 @@
 Various Wrapper functions for evaluation metrics, regarding text datasets.
 """
 
-from specialk.metrics import Metric, AlignmentMetric
-
 import hashlib
 from pathlib import Path
 from typing import List, Optional, Union
@@ -15,6 +13,7 @@ from tqdm import tqdm
 
 import specialk.metrics.style_transfer.cnn as cnn
 import specialk.metrics.style_transfer.content_preservation as preserv
+from specialk.metrics import AlignmentMetric, Metric
 from specialk.models.style_lexicon import StyleLexicon
 
 

@@ -1,21 +1,22 @@
 import argparse
 import os
 import sys
+from typing import Dict, Tuple
 
+import lightning.pytorch as pl
 import numpy as np
 import torch
 import torch.nn as nn
-from specialk.models.nmt_model import NMTModel
+from torch.autograd import Variable
 from torch.utils.data import DataLoader
+from tqdm import tqdm
+
+import specialk.classifier.onmt as onmt
+import specialk.classifier.onmt.CNNModels as CNNModels
+from specialk.models.nmt_model import NMTModel
 
 # from specialk.lib.recurrent_model import RecurrentModel as recurrent
 from specialk.models.transformer_model import TransformerModel as transformer
-from torch.autograd import Variable
-from tqdm import tqdm
-import lightning.pytorch as pl
-from typing import Tuple, Dict
-import specialk.classifier.onmt as onmt
-import specialk.classifier.onmt.CNNModels as CNNModels
 
 description = """
 train_decoder.py
@@ -62,7 +63,7 @@ class StyleBackTranslationModel(pl.LightningModule):
         # tgt_seq = tgt_seq[:, :-1]
         # tgt_pos = tgt_pos[:, :-1]
 
-        x, y, y_label = batch["source"], batch["target"], batch['label']
+        x, y, y_label = batch["source"], batch["target"], batch["label"]
 
         # compute encoder output
         encoder_outputs, _ = self.nmt_model.encoder(src_seq)

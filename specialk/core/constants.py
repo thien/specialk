@@ -4,8 +4,9 @@ CAPITALISED.
 """
 
 from pathlib import Path
-import specialk
 from typing import List
+
+import specialk
 
 PAD = 0
 UNK = 1

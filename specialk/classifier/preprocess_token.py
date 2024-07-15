@@ -1,8 +1,9 @@
 """
-THIS SHOULD BE DEPRECATED BECAUSE WE CAN TOKENISE 
+THIS SHOULD BE DEPRECATED BECAUSE WE CAN TOKENISE
 DIRECTLY @ THE DATA LOADER.
 YOU SHOULD ONLY LOAD THIS TO CREATE THE TOKENIZER DATASET.
 """
+
 import argparse
 import codecs
 from pathlib import Path
@@ -207,7 +208,7 @@ def main():
         tokenizer.make(opt.train_src)
 
     if opt.bpe:
-        dicts['src'] = tokenizer.vocab.vocabs_to_dict(False)
+        dicts["src"] = tokenizer.vocab.vocabs_to_dict(False)
     else:
         dicts["src"] = tokenizer.vocab
 

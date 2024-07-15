@@ -8,8 +8,8 @@ on the encoder and decoders used.)
 import argparse
 
 import torch
-from lib.RecurrentModel import RecurrentModel as recurrent
-from lib.TransformerModel import TransformerModel as transformer
+from models.recurrent import RecurrentModel as recurrent
+from models.transformer import TransformerModel as transformer
 from tqdm import tqdm
 
 

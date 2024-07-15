@@ -33,7 +33,12 @@ from specialk.core.utils import check_torch_device, log, namespace_to_dict
 from specialk.datasets.dataloaders import (
     init_classification_dataloaders as init_dataloaders,
 )
-from specialk.models.tokenizer import BPEVocabulary, Vocabulary, WordVocabulary
+from specialk.models.tokenizer import (
+    BPEVocabulary,
+    Vocabulary,
+    WordVocabulary,
+    SentencePieceVocabulary,
+)
 
 DEVICE: str = check_torch_device()
 
@@ -627,10 +632,16 @@ def main_new():
         tokenizer_filepath = PROJECT_DIR / "assets" / "tokenizer" / "fr_en_bpe"
         tokenizer = BPEVocabulary.from_file(tokenizer_filepath)
         tokenizer.vocab._progress_bar = iter
-    else:
+    elif tokenizer_option == "word":
         # word option.
         tokenizer_filepath = PROJECT_DIR / "assets" / "tokenizer" / "fr_en_word_moses"
         tokenizer = WordVocabulary.from_file(tokenizer_filepath)
+    else:
+        # sentencepiece
+        tokenizer_filepath = str(
+            PROJECT_DIR / "assets" / "tokenizer" / "sentencepiece" / "enfr.model"
+        )
+        tokenizer = SentencePieceVocabulary.from_file(tokenizer_filepath, max_length=72)
 
     log.info("Loaded tokenizer", tokenizer=tokenizer)
 
@@ -656,12 +667,12 @@ def main_new():
     logger.log_hyperparams(
         params={
             "batch_size": BATCH_SIZE,
-            "tokenizer": tokenizer.to_dict()["class"],
+            "tokenizer": tokenizer.__class__.__name__,
             "dataset": hf_dataset_name,
             "tokenizer_path": tokenizer_filepath,
         }
     )
-    
+
     profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
     trainer = pl.Trainer(
         accelerator=DEVICE,

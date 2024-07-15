@@ -4,7 +4,7 @@ import torch.nn as nn
 from specialk.core.constants import PAD
 from typing import Optional, Dict
 from specialk.core.utils import log
-
+# from specialk.models.ops import MaxPool3d
 
 class ConvNet(nn.Module):
     def __init__(
@@ -58,6 +58,7 @@ class ConvNet(nn.Module):
         )
         self.relu = nn.ReLU()
         self.maxpool = nn.MaxPool3d(
+        # self.maxpool = MaxPool3d(
             kernel_size=(1, self.pooling_window_size, 1), stride=(1, 1, 1)
         )
         self.dropout = nn.Dropout(self.dropout)
@@ -75,7 +76,6 @@ class ConvNet(nn.Module):
 
         ## matrix multiply instead of lookup
         emb = torch.mm(input.view(-1, vocab_size), self.word_lut.weight)
-        # emb = torch.mm(input.view(-1, input.size(2)), self.word_lut.weight)
         emb = emb.view(-1, batch_size, self.word_vec_size)
         emb = emb.transpose(0, 1)
         emb = emb.transpose(1, 2)

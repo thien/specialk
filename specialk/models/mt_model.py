@@ -113,8 +113,8 @@ class NMTModule(pl.LightningModule):
         """Calculates BLEU score @ validation phase.
 
         Args:
-            y_hat (Tensor): Prediction tensor.
-            y (Tensor): Reference tensor.
+            y_hat (Int[Tensor, "batch seq_len vocab"]): Prediction tensor.
+            y (Int[Tensor, "batch seq_len"]): Reference tensor.
 
         Returns:
             float: BLEU score.

@@ -20,27 +20,40 @@ from specialk.core.utils import log
 
 
 class PyTorchTransformerModel(nn.Transformer):
-    """PyTorch native implementation of a Transformer (see parent class)."""
-
     def __init__(
         self,
         vocab_size: int,
-        dim_model: int,
-        n_heads: int,
-        dim_hidden: int,
-        num_layers: int,
-        dropout=0.5,
         max_seq_length=100,
+        dim_model: int = 512,
+        n_heads: int = 8,
+        dim_feedforward: int = 2048,
+        num_encoder_layers: int = 6,
+        num_decoder_layers: int = 6,
+        dropout=0.1,
         decoder_generator_weight_sharing=True,
+        name: str ="PyTorchTransformer",
         **kwargs,
     ):
+        """PyTorch native implementation of a Transformer (see parent class).
+
+        Args:
+            vocab_size (int): Vocabulary size of tokenizer.
+            max_seq_length (int, optional): Maximum sequence length. Defaults to 100.
+            dim_model (int, optional): The number of expected features in the encoder/decoder inputs. Defaults to 512.
+            n_heads (int, optional): The number of self-attention heads. Defaults to 8.
+            dim_feedforward (int, optional): Dimension of the FFM. Defaults to 2048.
+            num_encoder_layers (int, optional): Number of attn layers in the encoder. Defaults to 6.
+            num_decoder_layers (int, optional): Number of attn layers in the decoder. Defaults to 6.
+            dropout (float, optional): Dropout value. Defaults to 0.1.
+            decoder_generator_weight_sharing (bool, optional): If set, shares weight between deocder and generator. Defaults to True.
+        """
         super(PyTorchTransformerModel, self).__init__(
             d_model=dim_model,
             nhead=n_heads,
-            dim_feedforward=dim_hidden,
-            num_encoder_layers=num_layers,
-            num_decoder_layers=num_layers,
-            **kwargs,
+            dim_feedforward=dim_feedforward,
+            num_encoder_layers=num_encoder_layers,
+            num_decoder_layers=num_decoder_layers,
+            dropout=dropout
         )
         self.model_type = "Transformer"
         self.dim_model = dim_model
@@ -58,7 +71,7 @@ class PyTorchTransformerModel(nn.Transformer):
         self.init_weights()
 
     def _generate_square_subsequent_mask(self, sz: int) -> LongTensor:
-        """Generate square mask."""
+        """Generate square causal mask for the sequence."""
         return torch.log(
             torch.tril(torch.ones(sz, sz, device=self.generator.weight.device))
         )
@@ -113,6 +126,7 @@ class PyTorchTransformerModule(NMTModule):
         self.model = PyTorchTransformerModel(
             vocab_size=self.vocabulary_size,
             batch_first=True,
+            **kwargs,
         )
 
     def configure_optimizers(self) -> torch.optim.Optimizer:

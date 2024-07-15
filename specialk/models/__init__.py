@@ -5,4 +5,6 @@
 
 # __all__ = [transformer, recurrent, TransformerModel]
 
-from . import recurrent, transformer
+
+import specialk.models.recurrent as recurrent
+import specialk.models.transformer as transformer 

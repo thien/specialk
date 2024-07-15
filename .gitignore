@@ -28,10 +28,10 @@ base/results
 hansard.36
 .DS_Store
 specialk/results
-specialk/models
 specialk/telegram.json
 cache
 *.ruff_cache
-models
 .vscode
 .venv
+.arrow
+tensorboard_logs

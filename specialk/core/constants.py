@@ -34,5 +34,5 @@ def get_tokens() -> List[str]:
 PROJECT_DIR: Path = Path(specialk.__file__).parent.parent
 
 # for tensorboard; logging
-LOGGING_DIR: Path = PROJECT_DIR / "tb_logs"
+LOGGING_DIR: Path = PROJECT_DIR / "tensorboard_logs"
 LOGGING_PERF_NAME: str = "perf_logs"

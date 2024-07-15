@@ -4,7 +4,11 @@ from pathlib import Path
 import pytest
 
 from specialk.core.constants import PROJECT_DIR
-from specialk.models.tokenizer import BPEVocabulary, WordVocabulary
+from specialk.models.tokenizer import (
+    BPEVocabulary,
+    WordVocabulary,
+    SentencePieceVocabulary,
+)
 
 VOCABULARY_SIZE = 1000
 SEQUENCE_LENGTH = 100
@@ -94,3 +98,28 @@ def test_save_load_bpe_vocabulary(bpe_tokenizer):
     assert new_tokenizer.vocab.word_vocab == bpe_tokenizer.vocab.word_vocab
     assert new_tokenizer.vocab.required_tokens == bpe_tokenizer.vocab.required_tokens
     assert new_tokenizer.vocab.strict == bpe_tokenizer.vocab.strict
+
+
+@pytest.fixture(scope="session", autouse=True)
+def sentencepiece_tokenizer():
+    spm_path = str(
+        PROJECT_DIR / "assets" / "tokenizer" / "sentencepiece" / "enfr.model"
+    )
+    tokenizer = SentencePieceVocabulary.from_file(spm_path, max_length=100)
+    return tokenizer
+
+
+def test_spm_tokenizer_to_tensor_long(sentencepiece_tokenizer):
+    sequence = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
+    output = sentencepiece_tokenizer.to_tensor(sequence)
+    max_len = sentencepiece_tokenizer.max_length
+    print(sentencepiece_tokenizer, max_len)
+    print(output.shape)
+    assert output.shape[-1] == max_len
+
+
+def test_spm_tokenizer_encode_decode(sentencepiece_tokenizer):
+    sequence = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
+    tokens = sentencepiece_tokenizer.tokenize(sequence)
+    assert tokens != sequence
+    assert sentencepiece_tokenizer.detokenize(tokens) == sequence

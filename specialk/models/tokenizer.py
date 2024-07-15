@@ -39,7 +39,7 @@ class Vocabulary:
         Args:
             name (str): name of vocabulary.
             data_file (Union[Path,str]): path of file containing training data to use for the vocabulary.
-            vocabulary_file (Union[Path,str]): path of vocabulary file to either load from, or save to.
+            filename (Union[Path,str]): path of vocabulary file to either load from, or save to.
             vocab_size (int, Optional): If set, sets cap on vocabulary size.
             max_length (int): maxiumum token length of a sequence.
             BOS_TOKEN (Optional[str], optional): A special token representing the beginning of a sentence. Defaults to Constants.SOS_WORD.
@@ -260,41 +260,79 @@ class BPEVocabulary(Vocabulary):
         return f"BPEVocabulary(vocab_size={self.vocab_size}, max_length={self.max_length}, lower={self.lower}, pct_bpe={self.pct_bpe})"
 
 
-class SentencePieceVocabulary(BPEVocabulary):
+class SentencePieceVocabulary(Vocabulary):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.vocab: spm.SentencePieceProcessor
 
     def fit(
         self,
-        texts: Optional[Iterable[str]] = None,
-        path: Optional[Union[Path, str]] = None,
+        **kwargs,
     ):
-        if texts == path:
-            if texts is None:
-                raise Exception("either texts or path needs to be parameterised.")
+        raise NotImplementedError("Train this with train_sentencepiece.py")
 
-        self.vocab = spm.SentencePieceTrainer.Train(
-            input=path,
-            vocab_size=self.vocab_size,
+    @classmethod
+    def from_file(
+        cls, filepath: Path | str, max_length: int
+    ) -> SentencePieceVocabulary:
+        """Loads SentencePiece model from path.
+
+        Args:
+            filepath (Path | str): _description_
+
+        Returns:
+            SentencePieceVocabulary: _description_
+        """
+        filename = Path(filepath).name
+        filepath = str(filepath)
+        vocab = spm.SentencePieceProcessor(model_file=filepath)
+        ID_BOS, ID_EOS, ID_PAD, ID_UNK = (
+            vocab.bos_id(),
+            vocab.eos_id(),
+            vocab.pad_id(),
+            vocab.unk_id(),
         )
-
-    def from_file(cls, filepath: Path | str) -> BPEVocabulary:
-        raise NotImplementedError
+        BOS, EOS, PAD, UNK = (
+            vocab.IdToPiece(ID_BOS),
+            vocab.IdToPiece(ID_EOS),
+            vocab.IdToPiece(ID_PAD),
+            vocab.IdToPiece(ID_UNK),
+        )
+        vocab_size = len(vocab)
+        this = cls(
+            name=filename,
+            vocab_size=vocab_size,
+            max_length=max_length,
+            filename=filepath,
+            BOS_TOKEN=BOS,
+            EOS_TOKEN=EOS,
+            PAD_TOKEN=PAD,
+            UNK_TOKEN=UNK,
+        )
+        this.vocab = vocab
+        return this
 
     def to_dict(self) -> dict:
         raise NotImplementedError
 
     def tokenize(self, text: str) -> List[str]:
-        raise NotImplementedError
+        return self.vocab.encode(text, out_type=str)
 
     def detokenize(
         self, tokens: List[List[int]], specials=True
     ) -> Iterable[str | List[str]]:
-        raise NotImplementedError
+        return self.vocab.decode(tokens)
 
     def to_tensor(self, text: str | List[str]) -> Iterable[List[int]]:
-        raise NotImplementedError
+        if isinstance(text, str):
+            text = [text]
+        token_sequences = self.vocab.encode(text, out_type=int)
+        for i, tokens in enumerate(token_sequences):
+            tokens = tokens[: self.max_length - 2]
+            tokens = [self.vocab.bos_id()] + tokens + [self.vocab.eos_id()]
+            tokens = tokens + [self.vocab.pad_id()] * (self.max_length - len(tokens))
+            token_sequences[i] = tokens
+        return torch.LongTensor(token_sequences)
 
 
 class WordVocabulary(Vocabulary):

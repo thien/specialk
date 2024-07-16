@@ -10,11 +10,11 @@ import torch
 from sacremoses import MosesDetokenizer, MosesTokenizer
 from tqdm import tqdm
 
-import specialk.classifier.onmt as onmt
+import specialk.models.classifier.onmt as onmt
 import specialk.core.constants as Constants
 from specialk.core.bpe import Encoder as BPEEncoder
 from specialk.core.utils import load_dataset, log, deprecated
-from specialk.preprocess import parse as bpe_parse
+from specialk.datasets.preprocess import parse as bpe_parse
 
 import sentencepiece as spm
 

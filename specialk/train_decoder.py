@@ -11,8 +11,8 @@ from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-import specialk.classifier.onmt as onmt
-import specialk.classifier.onmt.CNNModels as CNNModels
+import specialk.models.classifier.onmt as onmt
+import specialk.models.classifier.onmt.CNNModels as CNNModels
 from specialk.models.nmt_model import NMTModel
 
 # from specialk.lib.recurrent_model import RecurrentModel as recurrent

@@ -37,3 +37,4 @@ cache
 tensorboard_logs
 /models/
 .envrc
+tb_logs

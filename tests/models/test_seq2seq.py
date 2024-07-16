@@ -10,13 +10,19 @@ from datasets import Dataset
 import pandas as pd
 from specialk.core.utils import log
 import torch.nn.functional as F
-from specialk.models.tokenizer import BPEVocabulary, WordVocabulary
+from specialk.models.tokenizer import SentencePieceVocabulary
 from specialk.core.constants import PROJECT_DIR, PAD
 from tests.tokenizer.test_tokenizer import VOCABULARY_SIZE
 from specialk.models.mt_model import TransformerModule, RNNModule
-from specialk.models.transformer.pytorch_transformer import PyTorchTransformerModule
+from specialk.models.transformer.pytorch_transformer import (
+    PyTorchTransformerModule,
+    PyTorchTransformerModel,
+)
 
 dirpath: Path = Path("tests/tokenizer/test_files")
+tokenizer_path: Path = (
+    PROJECT_DIR / "assets" / "tokenizer" / "sentencepiece" / "enfr.model"
+)
 dataset_path = PROJECT_DIR / "tests/test_files/datasets/en_fr.parquet"
 
 BATCH_SIZE = 25
@@ -31,21 +37,21 @@ def dataset() -> Dataset:
 
 
 @pytest.fixture(scope="session")
-def bpe_tokenizer() -> BPEVocabulary:
-    return BPEVocabulary.from_file(dirpath / "bpe_tokenizer")
+def spm_tokenizer() -> SentencePieceVocabulary:
+    return SentencePieceVocabulary.from_file(tokenizer_path, 100)
 
 
 @pytest.fixture(scope="session")
-def bpe_dataloader(dataset: Dataset, bpe_tokenizer: BPEVocabulary):
+def bpe_dataloader(dataset: Dataset, spm_tokenizer: SentencePieceVocabulary):
     def tokenize(example):
         # perform tokenization at this stage.
-        example["source"] = bpe_tokenizer.to_tensor(example["source"])
-        example["target"] = bpe_tokenizer.to_tensor(example["target"])
+        example["source"] = spm_tokenizer.to_tensor(example["source"])
+        example["target"] = spm_tokenizer.to_tensor(example["target"])
         return example
 
     tokenized_dataset = dataset.with_format("torch").map(tokenize)
     dataloader = DataLoader(tokenized_dataset, batch_size=BATCH_SIZE, shuffle=True)
-    return dataloader, bpe_tokenizer
+    return dataloader, spm_tokenizer
 
 
 def test_transformer_inference(bpe_dataloader):
@@ -87,13 +93,14 @@ def test_pt_transformer_inference(bpe_dataloader):
     dataloader, tokenizer = bpe_dataloader
     model = PyTorchTransformerModule(
         name="transformer_1",
-        vocabulary_size=VOCABULARY_SIZE,
+        vocabulary_size=tokenizer.vocab_size,
         sequence_length=SEQUENCE_LENGTH,
         dim_model=32,
         n_heads=2,
         num_encoder_layers=1,
         num_decoder_layers=1,
     )
+    model.model: PyTorchTransformerModel
     model.PAD = 0
     model.eval()
 
@@ -110,9 +117,8 @@ def test_pt_transformer_inference(bpe_dataloader):
     log.info("shapes", x=x.shape, len_x=len_x.shape, y=y.shape, len_y=len_y.shape)
 
     # forward pass
-    y_hat: Float[Tensor, "batch seq_length vocab"] = model.model(
-        x
-    )  # output is of shape [batch, sequence_length, vocab_size]
+    # x = model.
+    y_hat: Float[Tensor, "batch seq_length vocab"] = model.model.forward(x, y)
 
     log.info("shapes", y=y.shape, y_hat=y_hat.shape)
 

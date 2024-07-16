@@ -1,12 +1,12 @@
 """A wrapper class for optimizer"""
 
 import numpy as np
+from torch.optim import Optimizer
 
-
-class ScheduledOptim:
+class ScheduledOptim(Optimizer):
     """A simple wrapper class for learning rate scheduling"""
 
-    def __init__(self, optimizer, d_model, n_warmup_steps):
+    def __init__(self, optimizer: Optimizer, d_model: int, n_warmup_steps: int):
         self._optimizer = optimizer
         self.n_warmup_steps = n_warmup_steps
         self.n_current_steps = 0

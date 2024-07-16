@@ -10,7 +10,7 @@ from copy import deepcopy as copy
 import torch
 from tqdm import tqdm
 
-import specialk.classifier.onmt as onmt
+import specialk.models.classifier.onmt as onmt
 
 sys.path.append("../")
 

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
-import specialk.classifier.onmt as onmt
+import specialk.models.classifier.onmt as onmt
 from specialk.core.constants import UNK_WORD
 
 

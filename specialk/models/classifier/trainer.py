@@ -25,9 +25,9 @@ from torch.nn.modules.loss import _Loss as Loss
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-import specialk.classifier.onmt as onmt
+import specialk.models.classifier.onmt as onmt
 from datasets import Dataset, load_dataset
-from specialk.classifier.onmt.CNNModels import ConvNet
+from specialk.models.classifier.onmt.CNNModels import ConvNet
 from specialk.core.constants import LOGGING_DIR, LOGGING_PERF_NAME, PROJECT_DIR
 from specialk.core.utils import check_torch_device, log, namespace_to_dict
 from specialk.datasets.dataloaders import (

@@ -7,7 +7,7 @@ import sys
 
 import torch
 
-import specialk.classifier.onmt as onmt
+import specialk.models.classifier.onmt as onmt
 
 parser = argparse.ArgumentParser(description="translate.py")
 

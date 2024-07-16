@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 import specialk.core.constants as Constants
 from specialk.core.bpe import Encoder as bpe_encoder
-from specialk.preprocess import load_file, reclip, seq2idx
+from specialk.datasets.preprocess import load_file, reclip, seq2idx
 
 
 def load_args():

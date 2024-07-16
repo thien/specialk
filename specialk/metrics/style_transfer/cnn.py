@@ -6,7 +6,7 @@ import sys
 import torch
 from tqdm import tqdm
 
-import specialk.classifier.onmt as onmt
+import specialk.models.classifier.onmt as onmt
 
 CNN_MODELS_DIR = "metrics/cnn_models"
 

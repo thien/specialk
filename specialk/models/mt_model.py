@@ -11,7 +11,7 @@ from specialk.models.tokenizer import Vocabulary
 from torch import Tensor
 from specialk.metrics.metrics import SacreBLEU
 from specialk.models.transformer.Optim import ScheduledOptim
-
+from specialk.core.utils import log
 from specialk.models.transformer.Models import Transformer as TransformerModel
 from specialk.models.transformer.Models import get_sinusoid_encoding_table
 
@@ -31,7 +31,7 @@ class NMTModule(pl.LightningModule):
         vocabulary_size: int,
         sequence_length: int,
         label_smoothing: bool = False,
-        tokenizer: Vocabulary | None = None,
+        tokenizer: Union[Vocabulary, None] = None,
         **kwargs,
     ):
         super().__init__()
@@ -39,9 +39,10 @@ class NMTModule(pl.LightningModule):
         self.vocabulary_size = vocabulary_size
         self.sequence_length = sequence_length
         self.label_smoothing = label_smoothing
-        self.tokenizer: Vocabulary | None = tokenizer
+        self.tokenizer: Union[Vocabulary, None] = tokenizer
 
         self.model: Union[TransformerModel, Seq2Seq]
+        self.criterion = torch.nn.CrossEntropyLoss(ignore_index=PAD)
 
     def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
         """Run Training step.
@@ -53,14 +54,14 @@ class NMTModule(pl.LightningModule):
         Returns:
             torch.Tensor: Returns loss.
         """
-        x, y = batch["source"], batch["target"]
-        batch_size: int = x.size(0)
+        x: Int[Tensor, "batch seq_len"] = batch["source"]
+        y: Int[Tensor, "batch seq_len"] = batch["target"]
 
-        y_hat = self.model(x).squeeze(-1)
-        loss = self.criterion(y_hat, y)
+        y_hat = self.model(x, y)
+        loss = self.loss(y_hat.view(-1, y_hat.size(-1)), y.view(-1))
 
         n_tokens_correct = self.calculate_classification_metrics(y_hat, y)
-        n_tokens_total = y.ne(self.constants.PAD).sum().item()
+        n_tokens_total = y.ne(PAD).sum().item()
         accuracy = n_tokens_correct / n_tokens_total
 
         self.log_dict(
@@ -69,7 +70,7 @@ class NMTModule(pl.LightningModule):
                 "batch_id": batch_idx,
                 "train_loss": loss,
             },
-            batch_size=batch_size,
+            batch_size=x.size(0),
         )
         return loss
 
@@ -88,11 +89,11 @@ class NMTModule(pl.LightningModule):
         x: Int[Tensor, "batch seq_len"] = batch["source"]
         y: Int[Tensor, "batch seq_len"] = batch["target"]
 
-        y_hat: Float[Tensor, "batch seq_len vocab"] = self.model(x)
-        loss = self.criterion(y_hat, y)
+        y_hat: Float[Tensor, "batch seq_len vocab"] = self.model(x, y)
+        loss = self.loss(y_hat.view(-1, y_hat.size(-1)), y.view(-1))
 
         n_tokens_correct = self.calculate_classification_metrics(y_hat, y)
-        n_tokens_total = y.ne(self.constants.PAD).sum().item()
+        n_tokens_total = y.ne(PAD).sum().item()
         accuracy = n_tokens_correct / n_tokens_total
 
         metric_dict = {
@@ -122,20 +123,20 @@ class NMTModule(pl.LightningModule):
         if not self.tokenizer:
             return None
         y_hat = y_hat.argmax(dim=-1)
-        predictions = self.tokenizer.detokenize(y_hat)
-        references = self.tokenizer.detokenize(y)
+        predictions = self.tokenizer.detokenize(y_hat.tolist())
+        references = self.tokenizer.detokenize(y.tolist())
         return bleu.compute(predictions, references)
 
     def validation_step(self, batch: dict, batch_idx: int):
         loss, acc = self._shared_eval_step(batch, batch_idx)
         metrics = {"val_acc": acc, "val_loss": loss}
-        self.log_dict(metrics, batch_size=batch["text"].size(0))
+        self.log_dict(metrics, batch_size=batch["source"].size(0))
         return metrics
 
     def test_step(self, batch: dict, batch_idx: int):
         loss, acc = self._shared_eval_step(batch, batch_idx)
         metrics = {"val_acc": acc, "val_loss": loss}
-        self.log_dict(metrics, batch_size=batch["text"].size(0))
+        self.log_dict(metrics, batch_size=batch["source"].size(0))
         return metrics
 
     def predict_step(
@@ -169,14 +170,13 @@ class NMTModule(pl.LightningModule):
 
             log_prb = F.log_softmax(pred, dim=1)
             # create non-padding mask with torch.ne()
-            non_pad_mask = ref.ne(self.constants.PAD)
+            non_pad_mask = ref.ne(PAD)
             loss = -(one_hot * log_prb).sum(dim=1)
             # losses are averaged later
             loss = loss.masked_select(non_pad_mask).sum()
         else:
-            loss = F.cross_entropy(
-                pred, ref, ignore_index=self.constants.PAD, reduction="sum"
-            )
+            loss= self.criterion(pred, ref)
+            # loss = F.cross_entropy(pred, ref, ignore_index=PAD, reduction="sum")
         return loss
 
     @staticmethod
@@ -193,9 +193,8 @@ class NMTModule(pl.LightningModule):
         Returns:
             int: Accuracy.
         """
-        output = output.max(1)[1]
-        target = target.contiguous().view(-1)
-        non_pad_mask = target.ne(self.constants.PAD)
+        output = output.argmax(dim=-1)
+        non_pad_mask = target.ne(PAD)
         n_correct = output.eq(target)
         n_correct = n_correct.masked_select(non_pad_mask).sum().item()
         return n_correct

@@ -12,7 +12,7 @@ class Encoder(nn.Module):
     LSTM Encoder.
     """
 
-    def __init__(self, opt, vocabulary_size):
+    def __init__(self, opt, vocabulary_size: int):
         self.layers = opt.layers
         self.num_directions = 2 if opt.brnn else 1
         assert opt.rnn_size % self.num_directions == 0

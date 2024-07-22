@@ -11,7 +11,7 @@ from lib.TransformerModel import TransformerModel as transformer
 from preprocess import reclip
 from train import load_args
 
-from specialk.core.bpe import Encoder as BPE
+from specialk.models.tokenizers.bpe import Encoder as BPE
 from specialk.core.dataset import TranslationDataset, collate_fn, paired_collate_fn
 
 googt = GTranslator()

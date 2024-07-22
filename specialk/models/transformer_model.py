@@ -19,7 +19,7 @@ from specialk.models.transformer.Optim import ScheduledOptim
 from specialk.models.transformer.Translator import Translator
 from tqdm import tqdm
 
-from specialk.core.bpe import Encoder as BPE
+from specialk.models.tokenizers.bpe import Encoder as BPE
 
 """
 Wrapper class for Transformer.

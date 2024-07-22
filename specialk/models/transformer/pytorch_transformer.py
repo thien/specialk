@@ -5,20 +5,21 @@ Included to sanity check the remaining implementations.
 This was based on this implementation:
 
 https://github.com/pytorch/examples/blob/main/word_language_model/model.py
-https://pytorch.org/tutorials/beginner/translation_transformer.html
+https://pytorch.org/tutorials/beginner/translation_transformer.html which doesn't actually work.
 """
 
-import torch
-from jaxtyping import Int, Float, Bool
 import numpy as np
-from torch import Tensor, LongTensor
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from jaxtyping import Bool, Float, Int
+from torch import LongTensor, Tensor
+
+import specialk.core.constants as Constants
+from specialk.core.utils import log
 from specialk.models.mt_model import NMTModule
 from specialk.models.transformer.Optim import ScheduledOptim
 from specialk.models.transformer.pos_encoders import PositionalEncoder
-import specialk.core.constants as Constants
-from specialk.core.utils import log
 
 
 class PyTorchTransformerModel(nn.Transformer):
@@ -79,27 +80,22 @@ class PyTorchTransformerModel(nn.Transformer):
         self.dropout = dropout
         self.init_weights()
 
-    def _generate_square_subsequent_mask(self, sz: int) -> LongTensor:
-        """Generate square causal mask for the sequence."""
-        return torch.log(
-            torch.tril(torch.ones(sz, sz, device=self.generator.weight.device))
-        )
+    def generate_square_subsequent_mask(self, size: int) -> LongTensor:
+        """Generate square causal mask.
 
-    def generate_square_subsequent_mask(self, seq_length: int) -> LongTensor:
-        mask = (
-            torch.triu(
-                torch.ones(
-                    (seq_length, seq_length), device=self.generator.weight.device
-                )
-            )
-            == 1
-        ).transpose(0, 1)
-        mask = (
-            mask.float()
-            .masked_fill(mask == 0, float("-inf"))
-            .masked_fill(mask == 1, float(0.0))
+        Top half of the diagonal is -inf, else 0's.
+
+        Parameters:
+                length (int): Number of tokens in each sequence in the target batch.
+        Returns:
+                mask (arr): tgt_mask, looks like [[0., -inf, -inf],
+                                                  [0.,   0., -inf],
+                                                  [0.,   0.,   0.]]
+                            for a size=3.
+        """
+        return torch.log(
+            torch.tril(torch.ones(size, size, device=self.generator.weight.device))
         )
-        return mask
 
     def create_pad_mask(self, x: Tensor, pad_token: int = Constants.PAD) -> Tensor:
         """Return tensor of the same shape to mask out padding tokens."""
@@ -113,46 +109,47 @@ class PyTorchTransformerModel(nn.Transformer):
 
     def forward(
         self,
-        x: Int[Tensor, "batch_size seq_len"],
-        y: Int[Tensor, "batch_size seq_len"],
-    ) -> Float[Tensor, "batch_size seq_len generator"]:
-        """_summary_
+        x: Int[Tensor, "batch seq"],
+        y: Int[Tensor, "batch seq"],
+    ) -> Float[Tensor, "batch seq generator"]:
+        """Runs forward training pass for this seq2seq transformer training.
 
-        Args:
-            x (LongTensor): Input sequence to perform translation.
-            has_mask (bool, optional): _description_. Defaults to True.
+        Parameters:
+            x (Tensor): Input sequence to train.
+            y (Tensor): Output sequence to train.
 
         Returns:
-            _type_: _description_
+            Tensor: output tokens to
         """
-        x_pad_mask, y_pad_mask = self.create_pad_mask(x), self.create_pad_mask(y)
-        x_mask = torch.zeros(
-            (self.max_seq_length, self.max_seq_length), device=x.device
-        ).type(torch.bool)
-        y_mask = self.generate_square_subsequent_mask(self.max_seq_length)
 
-        x: Float[Tensor, "batch seq_len d_embed"] = self.pos_encoder(
+        # create masks
+        length = self.max_seq_length
+        x_pad_mask = self.create_pad_mask(x)
+        y_pad_mask = self.create_pad_mask(y)
+        x_mask = torch.zeros((length, length), device=x.device).type(torch.bool)
+        y_mask = self.generate_square_subsequent_mask(length)
+
+        x_emb: Float[Tensor, "batch seq_len d_embed"] = self.pos_encoder(
             self.input_emb(x) * np.sqrt(self.dim_model)
         )
-        y: Float[Tensor, "batch seq_len d_embed"] = self.pos_encoder(
+        y_emb: Float[Tensor, "batch seq_len d_embed"] = self.pos_encoder(
             self.output_emb(y) * np.sqrt(self.dim_model)
         )
-        y_hat = super().forward(
-            src=x,
-            tgt=y,
+        y_hat: Float[Tensor, "batch seq_len d_embed"] = super().forward(
+            src=x_emb,
+            tgt=y_emb,
             src_mask=x_mask,
             tgt_mask=y_mask,
             src_key_padding_mask=x_pad_mask,
             tgt_key_padding_mask=y_pad_mask,
             memory_key_padding_mask=x_pad_mask,
         )
-
-        y_hat = self.generator(y_hat)
-        return F.log_softmax(y_hat, dim=-1)
+        y_hat_tokens: Float[Tensor, "batch seq generator"] = self.generator(y_hat)
+        return F.log_softmax(y_hat_tokens, dim=-1)
 
     def encode(
         self, x: Float[Tensor, "batch seq_len"], x_mask: Bool[Tensor, "seq_len seq_len"]
-    ) -> Tensor:
+    ) -> Float[Tensor, "batch seq_len d_model"]:
         """Split encoder and decoder runs."""
         x_emb: Float[Tensor, "batch seq_len d_embed"] = self.input_emb(x) * np.sqrt(
             self.dim_model
@@ -165,19 +162,31 @@ class PyTorchTransformerModel(nn.Transformer):
 
     def decode(
         self,
-        y: Float[Tensor, "batch seq_len d_model"],
-        memory: Float[Tensor, "batch cur_len d_model"],
+        y: Float[Tensor, "batch seq_len"],
+        memory: Float[Tensor, "batch seq_len d_model"],
         y_mask: Int[Tensor, ""],
-    ) -> Tensor:
+    ) -> Float[Tensor, "batch seq_len d_embed"]:
         """Run decoder stage. This is needed for different decoding strategies."""
         y_emb = self.output_emb(y)
         y_emb = self.pos_encoder(y_emb)
-        return self.decoder(y, memory, y_mask)
+        return self.decoder(tgt=y_emb, memory=memory, tgt_mask=y_mask)
 
 
 class PyTorchTransformerModule(NMTModule):
-    def __init__(self, n_warmup_steps: int = 4000, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(
+        self,
+        n_warmup_steps: int = 4000,
+        name="PyTorchTransformer",
+        vocabulary_size=35000,
+        sequence_length=100,
+        **kwargs,
+    ):
+        super().__init__(
+            name=name,
+            vocabulary_size=vocabulary_size,
+            sequence_length=sequence_length,
+            **kwargs,
+        )
         self.n_warmup_steps = n_warmup_steps
         self.model = PyTorchTransformerModel(
             vocab_size=self.vocabulary_size,

@@ -3,8 +3,9 @@ from __future__ import division
 import argparse
 from pathlib import Path
 from typing import Optional, Tuple, Union
-import pandas as pd
+
 import lightning.pytorch as pl
+import pandas as pd
 import torch
 import torch.nn as nn
 from lightning.pytorch.loggers import TensorBoardLogger
@@ -15,21 +16,20 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from datasets import Dataset, load_dataset
-from specialk.models.mt_model import RNNModule
-from specialk.models.transformer.pytorch_transformer import (
-    PyTorchTransformerModule as TransformerModule,
-)
 from specialk.core.constants import LOGGING_DIR, LOGGING_PERF_NAME, PROJECT_DIR
 from specialk.core.utils import check_torch_device, log, namespace_to_dict
-
 from specialk.datasets.dataloaders import (
     init_classification_dataloaders as init_dataloaders,
 )
+from specialk.models.mt_model import RNNModule
 from specialk.models.tokenizer import (
     BPEVocabulary,
     SentencePieceVocabulary,
     Vocabulary,
     WordVocabulary,
+)
+from specialk.models.transformer.pytorch_transformer import (
+    PyTorchTransformerModule as TransformerModule,
 )
 
 DEVICE: str = check_torch_device()
@@ -58,47 +58,57 @@ def init_dataloader(
 def load_tokenizer(
     option: str = "word",
 ) -> Union[BPEVocabulary, WordVocabulary, SentencePieceVocabulary]:
-    if option == "bpe":
-        tokenizer_filepath = PROJECT_DIR / "assets" / "tokenizer" / "fr_en_bpe"
+    """_summary_
+
+    Args:
+        option (str, optional): _description_. Defaults to "word".
+
+    Returns:
+        Union[BPEVocabulary, WordVocabulary, SentencePieceVocabulary]: Returns tokenizer.
+    """
+    WORD, BPE, SPM = "word", "bpe", "spm"
+    assert option in {WORD, BPE, SPM}
+
+    dir_tokenizer = PROJECT_DIR / "assets" / "tokenizer"
+    if option == BPE:
+        tokenizer_filepath = dir_tokenizer / "fr_en_bpe"
         tokenizer = BPEVocabulary.from_file(tokenizer_filepath)
         tokenizer.vocab._progress_bar = iter
-    elif option == "word":
-        # word option.
-        tokenizer_filepath = PROJECT_DIR / "assets" / "tokenizer" / "fr_en_word_moses"
+    elif option == WORD:
+        tokenizer_filepath = dir_tokenizer / "fr_en_word_moses"
         tokenizer = WordVocabulary.from_file(tokenizer_filepath)
-    # sentencepiece
-    tokenizer_filepath = str(
-        PROJECT_DIR / "assets" / "tokenizer" / "sentencepiece" / "enfr.model"
-    )
-    tokenizer = SentencePieceVocabulary.from_file(tokenizer_filepath, max_length=100)
+    elif option == SPM:
+        tokenizer_filepath = dir_tokenizer / "sentencepiece" / "enfr.model"
+        tokenizer = SentencePieceVocabulary.from_file(
+            tokenizer_filepath, max_length=100
+        )
     return tokenizer, tokenizer_filepath
 
 
 def main():
     BATCH_SIZE = 64 if DEVICE == "mps" else 32
 
-    # tokenizer
+    # init tokenizer
     tokenizer, tokenizer_filepath = load_tokenizer("sentencepiece")
     log.info("Loaded tokenizer", tokenizer=tokenizer)
 
+    # load dataset
     dataset_dir = PROJECT_DIR / "datasets" / "machine_translation" / "parquets"
-    path_val = dataset_dir / "corpus_enfr_final.val.parquet"
+    path_valid = dataset_dir / "corpus_enfr_final.val.parquet"
     path_train = dataset_dir / "corpus_enfr_final.train.parquet"
-    path_test = dataset_dir / "corpus_enfr_final.test.parquet"
-    train_dataset: Dataset = Dataset.from_pandas(pd.read_parquet(path_train).sample(n=1000000, random_state=1))
-    valid_dataset: Dataset = Dataset.from_pandas(pd.read_parquet(path_val))
-    # train_dataset = valid_dataset
-    test_dataset: Dataset = Dataset.from_pandas(pd.read_parquet(path_test))
 
+    train_dataset: Dataset = Dataset.from_pandas(
+        pd.read_parquet(path_train).sample(n=1000000, random_state=1)
+    )
+    valid_dataset: Dataset = Dataset.from_pandas(pd.read_parquet(path_valid))
+
+    # create dataloaders
     train_dataloader, _ = init_dataloader(
         train_dataset, tokenizer, BATCH_SIZE, shuffle=True
     )
     val_dataloader, _ = init_dataloader(
         valid_dataset, tokenizer, BATCH_SIZE, shuffle=False
     )
-    # test_dataloader, _ = init_dataloader(
-    #     test_dataset, tokenizer, BATCH_SIZE, shuffle=False
-    # )
 
     task = TransformerModule(
         name="transformer",

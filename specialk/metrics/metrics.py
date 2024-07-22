@@ -362,6 +362,7 @@ class Meteor(AlignmentMetric):
 
 
 class BLEU(AlignmentMetric):
+    @staticmethod
     def compute(
         predictions: List[str],
         references: Union[List[str], List[List[str]]],
@@ -376,7 +377,7 @@ class BLEU(AlignmentMetric):
 
 class SacreBLEU(AlignmentMetric):
     def __init__(self):
-        self.bleu = sacrebleu.BLEU()
+        self.bleu = evaluate.load("sacrebleu")
 
     def compute(
         self,
@@ -388,14 +389,16 @@ class SacreBLEU(AlignmentMetric):
 
 class ChrF(AlignmentMetric):
     def __init__(self):
-        self.chrf = sacrebleu.CHRF()
+        self.chrf = evaluate.load("chrf")
 
     def compute(
         self,
         predictions: List[str],
         references: Union[List[str], List[List[str]]],
     ) -> float:
-        return self.chrf.corpus_score(predictions, references).score
+        return self.chrf.compute(predictions=predictions, references=references)[
+            "score"
+        ]
 
 
 class ROUGE(AlignmentMetric):

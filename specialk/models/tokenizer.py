@@ -62,8 +62,8 @@ class Vocabulary:
         self.BOS_TOKEN = BOS_TOKEN
         self.EOS_TOKEN = EOS_TOKEN
         self.UNK_TOKEN = UNK_TOKEN
-        self.SEP_TOKEN = SEP_TOKEN
         self.PAD_TOKEN = PAD_TOKEN
+        self.SEP_TOKEN = SEP_TOKEN
         self.CLS_TOKEN = CLS_TOKEN
         self.BLO_TOKEN = BLO_TOKEN
         self.SPECIALS = {self.PAD_TOKEN, self.UNK_TOKEN, self.BOS_TOKEN, self.EOS_TOKEN}
@@ -143,6 +143,38 @@ class Vocabulary:
 
     def __repr__(self) -> str:
         return f"Vocabulary(vocab_size={self.vocab_size}, max_length={self.max_length}, lower={self.lower})"
+
+    # @property
+    # def SOS_TOKEN(self) -> str:
+    #     raise NotImplementedError
+
+    # @property
+    # def EOS_TOKEN(self) -> str:
+    #     raise NotImplementedError
+
+    # @property
+    # def PAD_TOKEN(self) -> str:
+    #     raise NotImplementedError
+
+    # @property
+    # def UNK_TOKEN(self) -> str:
+    #     raise NotImplementedError
+
+    # @property
+    # def BOS(self) -> int:
+    #     raise NotImplementedError
+
+    # @property
+    # def EOS(self) -> int:
+    #     raise NotImplementedError
+
+    # @property
+    # def PAD(self) -> int:
+    #     raise NotImplementedError
+
+    # @property
+    # def UNK(self) -> int:
+    #     raise NotImplementedError
 
 
 class BPEVocabulary(Vocabulary):
@@ -310,6 +342,10 @@ class SentencePieceVocabulary(Vocabulary):
             UNK_TOKEN=UNK,
         )
         this.vocab = vocab
+        this.SOS = vocab.bos_id()
+        this.EOS = vocab.eos_id()
+        this.UNK = vocab.unk_id()
+        this.PAD = vocab.pad_id()
         return this
 
     def to_dict(self) -> dict:
@@ -333,6 +369,38 @@ class SentencePieceVocabulary(Vocabulary):
             tokens = tokens + [self.vocab.pad_id()] * (self.max_length - len(tokens))
             token_sequences[i] = tokens
         return torch.LongTensor(token_sequences)
+
+    # @property
+    # def SOS_TOKEN(self) -> str:
+    #     return self.vocab.IdToPiece(self.SOS)
+
+    # @property
+    # def EOS_TOKEN(self)-> str:
+    #     return self.vocab.IdToPiece(self.EOS)
+
+    # @property
+    # def PAD_TOKEN(self)-> str:
+    #     return self.vocab.IdToPiece(self.PAD)
+
+    # @property
+    # def UNK_TOKEN(self)-> str:
+    #     return self.vocab.IdToPiece(self.UNK)
+
+    # @property
+    # def SOS(self) -> int:
+    #     return self.vocab.bos_id()
+
+    # @property
+    # def EOS(self) -> int:
+    #     return self.vocab.eos_id()
+
+    # @property
+    # def PAD(self) -> int:
+    #     return self.vocab.pad_id()
+
+    # @property
+    # def UNK(self) -> int:
+    #     return self.vocab.unk_id()
 
 
 class WordVocabulary(Vocabulary):

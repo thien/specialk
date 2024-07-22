@@ -12,14 +12,15 @@ import os
 
 import telebot
 import torch
+import torch.nn.functional as F
 import torch.utils.data
 from tqdm import tqdm
 
 import specialk.core.constants as constants
-from specialk.models.tokenizers.bpe import Encoder as BPE
 from specialk.core.dataset import TranslationDataset, collate_fn, paired_collate_fn
 from specialk.datasets.preprocess import load_file, reclip, seq2idx
-import torch.nn.functional as F
+from specialk.models.tokenizers.bpe import Encoder as BPE
+
 
 class NMTModel:
     def __init__(self, opt, models_folder="models"):

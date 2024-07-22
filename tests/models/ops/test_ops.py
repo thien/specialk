@@ -1,7 +1,8 @@
-from specialk.models.ops import mask_out_special_tokens
 import torch
 from torch import LongTensor
-from specialk.core.constants import PAD, EOS
+
+from specialk.core.constants import EOS, PAD
+from specialk.models.ops import mask_out_special_tokens
 
 
 def test_mask_out_special_tokens():

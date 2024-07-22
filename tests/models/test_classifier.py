@@ -4,15 +4,15 @@ import pytest
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
+from torchmetrics.functional import accuracy
 
 from datasets import Dataset, load_dataset
 from datasets.exceptions import DatasetGenerationError
 from specialk.core.utils import log
 from specialk.models.classifier.onmt.CNNModels import ConvNet
+from specialk.models.classifier.trainer import memory_efficient_loss
 from specialk.models.tokenizer import BPEVocabulary, WordVocabulary
 from tests.tokenizer.test_tokenizer import PCT_BPE, VOCABULARY_SIZE
-from specialk.models.classifier.trainer import memory_efficient_loss
-from torchmetrics.functional import accuracy
 
 dirpath = "tests/tokenizer/test_files"
 dev_path = (
@@ -105,7 +105,6 @@ def test_model_inference(bpe_dataloader):
     # assert not torch.equal(one_hot, one_hot_old)
 
     # log.info("one_hots", old=one_hot_old, new=one_hot)
-
 
     assert one_hot.shape == (SEQUENCE_LENGTH, BATCH_SIZE, VOCABULARY_SIZE)
 

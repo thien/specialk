@@ -1,23 +1,23 @@
 from pathlib import Path
 
+import pandas as pd
 import pytest
 import torch
-from torch import nn
-from torch.utils.data import DataLoader
-from jaxtyping import Float, Int
-from torch import Tensor
-from datasets import Dataset
-import pandas as pd
-from specialk.core.utils import log
 import torch.nn.functional as F
+from jaxtyping import Float, Int
+from torch import Tensor, nn
+from torch.utils.data import DataLoader
+
+from datasets import Dataset
+from specialk.core.constants import PAD, PROJECT_DIR
+from specialk.core.utils import log
+from specialk.models.mt_model import RNNModule, TransformerModule
 from specialk.models.tokenizer import SentencePieceVocabulary
-from specialk.core.constants import PROJECT_DIR, PAD
-from tests.tokenizer.test_tokenizer import VOCABULARY_SIZE
-from specialk.models.mt_model import TransformerModule, RNNModule
 from specialk.models.transformer.pytorch_transformer import (
-    PyTorchTransformerModule,
     PyTorchTransformerModel,
+    PyTorchTransformerModule,
 )
+from tests.tokenizer.test_tokenizer import VOCABULARY_SIZE
 
 dirpath: Path = Path("tests/tokenizer/test_files")
 tokenizer_path: Path = (

@@ -27,12 +27,12 @@ from tqdm import tqdm
 
 import specialk.models.classifier.onmt as onmt
 from datasets import Dataset, load_dataset
-from specialk.models.classifier.onmt.CNNModels import ConvNet
 from specialk.core.constants import LOGGING_DIR, LOGGING_PERF_NAME, PROJECT_DIR
 from specialk.core.utils import check_torch_device, log, namespace_to_dict
 from specialk.datasets.dataloaders import (
     init_classification_dataloaders as init_dataloaders,
 )
+from specialk.models.classifier.onmt.CNNModels import ConvNet
 from specialk.models.tokenizer import (
     BPEVocabulary,
     SentencePieceVocabulary,

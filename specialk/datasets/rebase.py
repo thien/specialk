@@ -12,8 +12,8 @@ import torch
 from tqdm import tqdm
 
 import specialk.core.constants as Constants
-from specialk.models.tokenizers.bpe import Encoder as bpe_encoder
 from specialk.datasets.preprocess import load_file, reclip, seq2idx
+from specialk.models.tokenizers.bpe import Encoder as bpe_encoder
 
 
 def load_args():

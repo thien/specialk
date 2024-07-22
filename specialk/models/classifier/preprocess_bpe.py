@@ -24,9 +24,9 @@ from copy import deepcopy as copy
 from tqdm import tqdm
 
 import specialk.core.constants as Constants
-from specialk.models.tokenizers.bpe import Encoder as bpe_encoder
 from specialk.datasets.preprocess import load_file, reclip, seq2idx
 from specialk.datasets.preprocess import parse as bpe_parse
+from specialk.models.tokenizers.bpe import Encoder as bpe_encoder
 
 
 def load_args():

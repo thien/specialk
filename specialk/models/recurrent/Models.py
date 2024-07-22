@@ -116,7 +116,6 @@ class Decoder(nn.Module):
             pretrained = torch.load(opt.pre_word_vecs_dec)
             self.word_lut.weight.data.copy_(pretrained)
 
-
     def forward(self, input, hidden, context, init_output, useGen=True):
         emb = self.word_lut(input)
         # print(context.size())

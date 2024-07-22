@@ -12,8 +12,8 @@ import torch
 from tqdm import tqdm
 
 import specialk.core.constants as Constants
-from specialk.models.tokenizers.bpe import Encoder as bpe_encoder
 from specialk.core.utils import get_len
+from specialk.models.tokenizers.bpe import Encoder as bpe_encoder
 
 """
 Preprocesses mose style code to pytorch ready files.

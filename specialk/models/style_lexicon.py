@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from specialk.core.utils import log
-
 import specialk.metrics.style_transfer.style_lexicon as stme_lexicon
-
 import specialk.metrics.style_transfer.utils as stme_utils
+from specialk.core.utils import log
 
 
 class StyleLexicon:

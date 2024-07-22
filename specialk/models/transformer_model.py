@@ -8,7 +8,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data
+from tqdm import tqdm
+
 from specialk.models.nmt_model import NMTModel
+from specialk.models.tokenizers.bpe import Encoder as BPE
 from specialk.models.transformer.Models import (
     Decoder,
     Encoder,
@@ -17,9 +20,6 @@ from specialk.models.transformer.Models import (
 )
 from specialk.models.transformer.Optim import ScheduledOptim
 from specialk.models.transformer.Translator import Translator
-from tqdm import tqdm
-
-from specialk.models.tokenizers.bpe import Encoder as BPE
 
 """
 Wrapper class for Transformer.

@@ -3,6 +3,7 @@
 import numpy as np
 from torch.optim import Optimizer
 
+
 class ScheduledOptim(Optimizer):
     """A simple wrapper class for learning rate scheduling"""
 

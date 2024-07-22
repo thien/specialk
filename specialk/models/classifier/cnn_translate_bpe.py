@@ -20,8 +20,8 @@ from preprocess import load_file, reclip, seq2idx
 from preprocess import parse as bpe_parse
 
 import specialk.core.constants as Constants
-from specialk.models.tokenizers.bpe import Encoder as bpe_encoder
 from specialk.core.utils import get_len
+from specialk.models.tokenizers.bpe import Encoder as bpe_encoder
 
 SOS, EOS = Constants.SOS, Constants.EOS
 

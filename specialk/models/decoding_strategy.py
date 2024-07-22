@@ -1,8 +1,10 @@
 import torch
 
+
 class DecoderStrategy:
     def __init__(self, model):
         self.model = model
+
 
 class GreedyDecoder(DecoderStrategy):
     def __init__(self, model):

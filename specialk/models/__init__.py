@@ -7,4 +7,4 @@
 
 
 import specialk.models.recurrent as recurrent
-import specialk.models.transformer as transformer 
+import specialk.models.transformer as transformer

@@ -1,22 +1,22 @@
 """Tokenizer/Vocabulary library."""
 
 from __future__ import annotations
-import codecs
-from pathlib import Path
-from typing import Iterable, List, Optional, Union, Any
-import json
 
+import codecs
+import json
+from pathlib import Path
+from typing import Any, Iterable, List, Optional, Union
+
+import sentencepiece as spm
 import torch
 from sacremoses import MosesDetokenizer, MosesTokenizer
 from tqdm import tqdm
 
-import specialk.models.classifier.onmt as onmt
 import specialk.core.constants as Constants
+import specialk.models.classifier.onmt as onmt
 from specialk.core.bpe import Encoder as BPEEncoder
-from specialk.core.utils import load_dataset, log, deprecated
+from specialk.core.utils import deprecated, load_dataset, log
 from specialk.datasets.preprocess import parse as bpe_parse
-
-import sentencepiece as spm
 
 
 class Vocabulary:

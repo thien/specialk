@@ -4,8 +4,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from specialk.models.transformer.pos_encoders import PositionalEncoder
 import specialk.core.constants as Constants
+from specialk.models.transformer.pos_encoders import PositionalEncoder
+
 from .Layers import DecoderLayer, EncoderLayer
 
 __author__ = "Yu-Hsiang Huang"

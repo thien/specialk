@@ -1,8 +1,10 @@
-import torch
-from torch import Tensor
-from typing import Union, Tuple, Optional
+from typing import Optional, Tuple, Union
+
 import einops
+import torch
 from jaxtyping import Float, Int
+from torch import Tensor
+
 from specialk import Constants
 
 Pair = Tuple[int, int]

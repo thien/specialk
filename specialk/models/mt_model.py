@@ -7,17 +7,18 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from jaxtyping import Float, Int
-from specialk.models.tokenizer import Vocabulary
 from torch import Tensor
-from specialk.metrics.metrics import SacreBLEU
-from specialk.models.transformer.Optim import ScheduledOptim
-from specialk.core.utils import log
-from specialk.models.transformer.Models import Transformer as TransformerModel
-from specialk.models.transformer.Models import get_sinusoid_encoding_table
-
-from specialk.models.recurrent.Models import NMTModel as Seq2Seq, Encoder, Decoder
 
 from specialk.core.constants import PAD
+from specialk.core.utils import log
+from specialk.metrics.metrics import SacreBLEU
+from specialk.models.ops import mask_out_special_tokens
+from specialk.models.recurrent.Models import Decoder, Encoder
+from specialk.models.recurrent.Models import NMTModel as Seq2Seq
+from specialk.models.tokenizer import Vocabulary
+from specialk.models.transformer.Models import Transformer as TransformerModel
+from specialk.models.transformer.Models import get_sinusoid_encoding_table
+from specialk.models.transformer.Optim import ScheduledOptim
 
 bleu = SacreBLEU()
 
@@ -123,6 +124,7 @@ class NMTModule(pl.LightningModule):
         if not self.tokenizer:
             return None
         y_hat = y_hat.argmax(dim=-1)
+        y_hat = mask_out_special_tokens(y_hat, self.tokenizer.EOS, self.tokenizer.PAD)
         predictions = self.tokenizer.detokenize(y_hat.tolist())
         references = self.tokenizer.detokenize(y.tolist())
         return bleu.compute(predictions, references)
@@ -175,7 +177,7 @@ class NMTModule(pl.LightningModule):
             # losses are averaged later
             loss = loss.masked_select(non_pad_mask).sum()
         else:
-            loss= self.criterion(pred, ref)
+            loss = self.criterion(pred, ref)
             # loss = F.cross_entropy(pred, ref, ignore_index=PAD, reduction="sum")
         return loss
 

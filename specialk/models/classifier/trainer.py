@@ -43,18 +43,81 @@ from specialk.models.tokenizer import (
 DEVICE: str = check_torch_device()
 
 
-class CNNClassifier(pl.LightningModule):
-    """CNN Classifier in lightning wrapper."""
+class TextClassifier(pl.LightningModule):
+    """Base class for Text Classification."""
 
     def __init__(self, name: str, vocabulary_size: int, sequence_length: int):
         super().__init__()
         self.name = name
         self.vocabulary_size = vocabulary_size
         self.sequence_length = sequence_length
+        self.criterion = nn.BCELoss()
+        self.model = None
+
+    def validation_step(self, batch: dict, batch_idx: int):
+        loss, acc = self._shared_eval_step(batch, batch_idx)
+        metrics = {"val_acc": acc, "val_loss": loss}
+        self.log_dict(metrics, batch_size=batch["text"].size(0))
+        return metrics
+
+    def test_step(self, batch: dict, batch_idx: int):
+        loss, acc = self._shared_eval_step(batch, batch_idx)
+        metrics = {"test_acc": acc, "test_loss": loss}
+        self.log_dict(metrics)
+        return metrics
+
+    def predict_step(
+        self, batch: dict, batch_idx: int, dataloader_idx=0
+    ) -> torch.Tensor:
+        raise NotImplementedError
+
+    def _shared_eval_step(
+        self, batch: dict, batch_idx: int
+    ) -> Tuple[torch.Tensor, float]:
+        """Run shared eval step.
+
+        Args:
+            batch (dict): individual batch generated from the DataLoader.
+            batch_idx (int): ID corresponding to the batch.
+
+        Returns:
+            Tuple[torch.Tensor, float]: Returns loss, accuracy.
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def calculate_classification_metrics(
+        output: torch.Tensor,
+        target: torch.Tensor,
+    ) -> float:
+        """Calculate downstream metrics.
+
+        Args:
+            output (torch.Tensor): Predicted values generated from the model.
+            target (torch.Tensor): Values we want to predict.
+
+        Returns:
+            int: Accuracy.
+        """
+
+        outputs = (output > 0.5).long()
+        n_correct: float = outputs.eq(target).sum().item() / outputs.size(0)
+        return n_correct
+
+
+class CNNClassifier(TextClassifier):
+    """CNN Text Classifier. Operates on one-hot."""
+
+    def __init__(self, name: str, vocabulary_size: int, sequence_length: int):
+        super().__init__(
+            name=name, vocabulary_size=vocabulary_size, sequence_length=sequence_length
+        )
+        # min_batch_size is used because the convolution
+        # operations depend on a minimum size.
+        self.min_batch_size = 50
         self.model = ConvNet(
             vocab_size=self.vocabulary_size, sequence_length=self.sequence_length
         )
-        self.criterion = nn.BCELoss()
 
     def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
         """Run Training step.
@@ -67,14 +130,12 @@ class CNNClassifier(pl.LightningModule):
             torch.Tensor: Returns loss.
         """
         x, y = batch["text"], batch["label"]
+        batch_size, seq_len = x.size()
 
-        # x = x.squeeze(2, 1)
-
-        seq_len: int = x.size(1)
-        batch_size: int = x.size(0)
-
-        if batch_size < 50:
-            log.error("batch size should be greater than 50.")
+        if batch_size < self.min_batch_size:
+            log.error(
+                f"batch size (currently set to {batch_size}) should be at least {self.min_batch_size}."
+            )
 
         # wrap into one-hot encoding of tokens for activation.
         one_hot = torch.zeros(
@@ -82,9 +143,10 @@ class CNNClassifier(pl.LightningModule):
         ).scatter_(2, torch.unsqueeze(x.T, 2), 1)
 
         y_hat = self.model(one_hot).squeeze(-1)
-        loss = self.criterion(y_hat, y.float())
 
+        loss: torch.Tensor = self.criterion(y_hat, y.float())
         accuracy = self.calculate_classification_metrics(y_hat, y)
+
         self.log_dict(
             {"train_acc": accuracy, "batch_id": batch_idx, "train_loss": loss},
             batch_size=batch_size,
@@ -93,7 +155,7 @@ class CNNClassifier(pl.LightningModule):
 
     def _shared_eval_step(
         self, batch: dict, batch_idx: int
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, float]:
         """Run shared eval step.
 
         Args:
@@ -101,7 +163,7 @@ class CNNClassifier(pl.LightningModule):
             batch_idx (int): ID corresponding to the batch.
 
         Returns:
-            Tuple[torch.Tensor, torch.Tensor]: Returns loss, accuracy.
+            Tuple[torch.Tensor, float]: Returns loss, accuracy.
         """
         x, y = batch["text"], batch["label"]
 
@@ -114,7 +176,7 @@ class CNNClassifier(pl.LightningModule):
         ).scatter_(2, torch.unsqueeze(x.T, 2), 1)
 
         y_hat = self.model(one_hot).squeeze(-1)
-        loss = self.criterion(y_hat, y.float())
+        loss: torch.Tensor = self.criterion(y_hat, y.float())
 
         accuracy = self.calculate_classification_metrics(y_hat, y)
         return loss, accuracy
@@ -140,25 +202,6 @@ class CNNClassifier(pl.LightningModule):
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
         return torch.optim.Adam(self.model.parameters(), lr=0.02)
-
-    @staticmethod
-    def calculate_classification_metrics(
-        output: torch.Tensor,
-        target: torch.Tensor,
-    ) -> int:
-        """Calculate downstream metrics.
-
-        Args:
-            output (torch.Tensor): Predicted values generated from the model.
-            target (torch.Tensor): Values we want to predict.
-
-        Returns:
-            int: Accuracy.
-        """
-
-        outputs = (output > 0.5).long()
-        n_correct: int = outputs.eq(target).sum().item() / outputs.size(0)
-        return n_correct
 
 
 def get_args() -> argparse.Namespace:
@@ -624,23 +667,21 @@ def main_new():
     BATCH_SIZE = 128 if DEVICE == "mps" else 680
 
     # tokenizer
-    tokenizer_option = "word"  # "word"
+    tokenizer_option = "spm"  # "word"
     # interestingly the bpe tokenizer is a lot slwoer to run instead of the word tokenizer.
     # we should see how well this performs with sentencepience.
-
+    dir_tokenizer = PROJECT_DIR / "assets" / "tokenizer"
     if tokenizer_option == "bpe":
-        tokenizer_filepath = PROJECT_DIR / "assets" / "tokenizer" / "fr_en_bpe"
+        tokenizer_filepath = dir_tokenizer / "fr_en_bpe"
         tokenizer = BPEVocabulary.from_file(tokenizer_filepath)
         tokenizer.vocab._progress_bar = iter
     elif tokenizer_option == "word":
         # word option.
-        tokenizer_filepath = PROJECT_DIR / "assets" / "tokenizer" / "fr_en_word_moses"
+        tokenizer_filepath = dir_tokenizer / "fr_en_word_moses"
         tokenizer = WordVocabulary.from_file(tokenizer_filepath)
     else:
         # sentencepiece
-        tokenizer_filepath = str(
-            PROJECT_DIR / "assets" / "tokenizer" / "sentencepiece" / "enfr.model"
-        )
+        tokenizer_filepath = str(dir_tokenizer / "sentencepiece" / "enfr.model")
         tokenizer = SentencePieceVocabulary.from_file(tokenizer_filepath, max_length=72)
 
     log.info("Loaded tokenizer", tokenizer=tokenizer)
@@ -676,7 +717,7 @@ def main_new():
     profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
     trainer = pl.Trainer(
         accelerator=DEVICE,
-        max_epochs=1,
+        max_epochs=2,
         log_every_n_steps=20,
         logger=logger,
         profiler=profiler,

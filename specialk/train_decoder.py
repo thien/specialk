@@ -1,19 +1,20 @@
 import argparse
 import os
-import sys
 from typing import Dict, Tuple
 
 import lightning.pytorch as pl
 import numpy as np
 import torch
 import torch.nn as nn
+from jaxtyping import Float, Int
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import specialk.models.classifier.onmt as onmt
 import specialk.models.classifier.onmt.CNNModels as CNNModels
-from specialk.models.nmt_model import NMTModel
+from specialk.models.classifier.trainer import CNNClassifier, TextClassifier
+from specialk.models.mt_model import NMTModule
 
 # from specialk.lib.recurrent_model import RecurrentModel as recurrent
 from specialk.models.transformer_model import TransformerModel as transformer
@@ -27,7 +28,7 @@ Trains the transformer decoder for style-transfer specific purposes.
 
 class StyleBackTranslationModel(pl.LightningModule):
     def __init__(
-        self, mt_model: NMTModel, cnn_model: CNNModels, smoothing: bool = True
+        self, mt_model: NMTModule, classifier: CNNClassifier, smoothing: bool = True
     ):
         """
         Args:
@@ -35,14 +36,14 @@ class StyleBackTranslationModel(pl.LightningModule):
             cnn_model (CNNModels): Style classifier model.
             smoothing (bool, optional): If set, adds smothing to reconstruction loss function. Defaults to True.
         """
-        self.nmt_model: NMTModel = mt_model
-        self.cnn_model: CNNModels = cnn_model
-        self.target_label: int = self.cnn_model.refs.tgt_label
+        self.nmt_model: NMTModule = mt_model
+        self.classifier: CNNClassifier = classifier
+        self.target_label: int = self.classifier.refs.tgt_label
 
         # learn NN that feeds the decoder output into the classifier
         self.class_input = nn.Linear(
             self.nmt_model.decoder.layer_stack[0].slf_attn.w_qs.out_features,
-            self.cnn_model.classifier.word_lut.weight.shape[0],
+            self.classifier.classifier.word_lut.weight.shape[0],
         )
 
         # encoder will always be in eval mode. We're only updating the decoder weights.
@@ -55,14 +56,8 @@ class StyleBackTranslationModel(pl.LightningModule):
     def training_step(self, batch: DataLoader, batch_idx: int) -> torch.Tensor:
         """
         Forward pass of the transformer.
+        The output from the model is then sent to the classifier.
         """
-
-        # src_seq, src_pos, tgt_seq, tgt_pos = batch
-
-        # references = tgt_seq[:, 1:]
-        # tgt_seq = tgt_seq[:, :-1]
-        # tgt_pos = tgt_pos[:, :-1]
-
         x, y, y_label = batch["source"], batch["target"], batch["label"]
 
         # compute encoder output
@@ -71,6 +66,33 @@ class StyleBackTranslationModel(pl.LightningModule):
         predictions, _, _ = self.nmt_model.decoder(
             tgt_seq, tgt_pos, src_seq, encoder_outputs.detach(), True
         )
+
+        # translate generator outputs to class inputs
+        exp = Variable(predictions.data, requires_grad=True, volatile=False)
+        linear: torch.FloatTensor = self.class_input(exp)
+        dim_batch, dim_length, dim_vocab = linear.size()
+
+        # reshape it for softmax, and shape it back.
+        out: torch.FloatTensor = softmax(linear.view(-1, dim_vocab)).view(
+            dim_batch, dim_length, dim_vocab
+        )
+
+        out = out.transpose(0, 1)
+        dim_length, dim_batch, dim_vocab = out.size()
+
+        # setup padding because the CNN only accepts inputs of certain dimension
+        if dim_length < seq_length:
+            # pad sequences
+            cnn_padding = torch.FloatTensor(
+                abs(seq_length - dim_length), dim_batch, dim_vocab
+            ).zero_()
+            cat = torch.cat((out, cnn_padding), dim=0)
+        else:
+            # trim sequences
+            cat = out[:seq_length]
+
+        # get class prediction with cnn
+        class_outputs = self.classifier(cat).squeeze()
 
         # compute performance
         l_recon, l_class, n_tokens_correct = self.joint_loss(
@@ -159,8 +181,8 @@ class StyleBackTranslationModel(pl.LightningModule):
         dim_vocab: int
 
         softmax = nn.Softmax(dim=1)
-        seq_length = self.cnn_model.opt.sequence_length
-        target_label = self.cnn_model.refs.tgt_label
+        seq_length = self.classifier.opt.sequence_length
+        target_label = self.classifier.refs.tgt_label
 
         # translate generator outputs to class inputs
         exp = Variable(pred.data, requires_grad=True, volatile=False)
@@ -187,7 +209,7 @@ class StyleBackTranslationModel(pl.LightningModule):
             cat = out[:seq_length]
 
         # get class prediction with cnn
-        class_outputs = self.cnn_model(cat).squeeze()
+        class_outputs = self.classifier(cat).squeeze()
 
         # return loss between predicted class outputs and a vector of class_targets
         return self.criterion_classifier(

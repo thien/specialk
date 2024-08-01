@@ -5,10 +5,7 @@ import torch
 import torch.utils.data
 
 # deal with constants
-if os.getcwd().split("/")[-1] == "core":
-    import constants as Constants
-else:
-    import specialk.core.constants as Constants
+import specialk.core.constants as Constants
 
 # THIS IS ONLY FOR WORD DATASETS
 

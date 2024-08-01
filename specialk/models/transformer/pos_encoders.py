@@ -37,6 +37,4 @@ class PositionalEncoder(nn.Module):
             torch.Tensor: x with the positional encodings added to each value.
         """
         _, sequence_length, _ = x.shape
-        # print("pos enc", self.pos_enc.shape)
-        # print("pos enc min", self.pos_enc[:, :sequence_length, :].shape)
         return x + self.pos_enc[:, :sequence_length, :]

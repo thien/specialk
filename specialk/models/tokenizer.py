@@ -14,9 +14,9 @@ from tqdm import tqdm
 
 import specialk.core.constants as Constants
 import specialk.models.classifier.onmt as onmt
-from specialk.core.bpe import Encoder as BPEEncoder
 from specialk.core.utils import deprecated, load_dataset, log
 from specialk.datasets.preprocess import parse as bpe_parse
+from specialk.models.tokenizers.bpe import Encoder as BPEEncoder
 
 
 class Vocabulary:

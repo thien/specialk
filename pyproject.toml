@@ -14,3 +14,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.ruff.lint]
 ignore=["F722"]
+
+[tool.pytest.ini_options]
+testpaths = ["./tests"]
+filterwarnings = ["ignore:.*U.*mode is deprecated:DeprecationWarning", "ignore::DeprecationWarning"]

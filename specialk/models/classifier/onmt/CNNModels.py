@@ -79,7 +79,8 @@ class ConvNet(nn.Module):
         seq_len, batch_size, vocab_size = input.shape
 
         ## matrix multiply instead of lookup
-        emb = torch.mm(input.view(-1, vocab_size), self.word_lut.weight)
+        input = input.contiguous().view(-1, vocab_size)
+        emb = torch.mm(input, self.word_lut.weight)
         emb = emb.view(-1, batch_size, self.word_vec_size)
         emb = emb.transpose(0, 1)
         emb = emb.transpose(1, 2)

@@ -80,7 +80,7 @@ class PyTorchTransformerModel(nn.Transformer):
         self.dropout = dropout
         self.init_weights()
 
-    def generate_square_subsequent_mask(self, size: int) -> LongTensor:
+    def generate_square_subsequent_mask(self, size: int) -> Tensor:
         """Generate square causal mask.
 
         Top half of the diagonal is -inf, else 0's.
@@ -107,11 +107,11 @@ class PyTorchTransformerModel(nn.Transformer):
             if p.dim() > 1:
                 nn.init.kaiming_uniform_(p)
 
-    def forward(
+    def _forward(
         self,
         x: Int[Tensor, "batch seq"],
         y: Int[Tensor, "batch seq"],
-    ) -> Float[Tensor, "batch seq generator"]:
+    ) -> Float[Tensor, "batch seq model"]:
         """Runs forward training pass for this seq2seq transformer training.
 
         Parameters:
@@ -119,7 +119,7 @@ class PyTorchTransformerModel(nn.Transformer):
             y (Tensor): Output sequence to train.
 
         Returns:
-            Tensor: output tokens to
+            Tensor: output tokens by model space.
         """
 
         # create masks
@@ -144,6 +144,23 @@ class PyTorchTransformerModel(nn.Transformer):
             tgt_key_padding_mask=y_pad_mask,
             memory_key_padding_mask=x_pad_mask,
         )
+        return y_hat
+
+    def forward(
+        self,
+        x: Int[Tensor, "batch seq"],
+        y: Int[Tensor, "batch seq"],
+    ) -> Float[Tensor, "batch seq generator"]:
+        """Runs forward training pass for this seq2seq transformer training.
+
+        Parameters:
+            x (Tensor): Input sequence to train.
+            y (Tensor): Output sequence to train.
+
+        Returns:
+            Tensor: output tokens to
+        """
+        y_hat = self._forward(x, y)
         y_hat_tokens: Float[Tensor, "batch seq generator"] = self.generator(y_hat)
         return F.log_softmax(y_hat_tokens, dim=-1)
 

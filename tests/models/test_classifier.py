@@ -97,8 +97,13 @@ def test_model_inference(bpe_dataloader):
         2, torch.unsqueeze(x.T, 2), 1
     )
 
-    # note that this is a lot slower than the implementation above.
+    # log.info("one hot",one_hot=one_hot_old[:, 0, :])
+
     # one_hot = torch.nn.functional.one_hot(x.T, num_classes=VOCABULARY_SIZE).float()
+
+    # assert not torch.equal(one_hot, one_hot_old)
+
+    # log.info("one_hots", old=one_hot_old, new=one_hot)
 
     assert one_hot.shape == (SEQUENCE_LENGTH, BATCH_SIZE, VOCABULARY_SIZE)
 

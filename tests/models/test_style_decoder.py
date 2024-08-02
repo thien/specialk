@@ -68,7 +68,7 @@ def seq2seq_model(tokenizer):
 def test_model_inference(spm_tokenizer, spm_dataloader):
     vocabulary_size = spm_tokenizer.vocab_size
     seq2seq = seq2seq_model(spm_tokenizer)
-    # eval doesn't work
+    # eval doesn't work (i.e. it still stores gradients?)
     seq2seq.model.encoder.eval()
 
     # disables gradient accumulation @ the encoder.
@@ -103,45 +103,49 @@ def test_model_inference(spm_tokenizer, spm_dataloader):
 
     # the forward pass
 
-    # # wrap into one-hot encoding of tokens for activation.
+    # wrap into one-hot encoding of tokens for activation.
+    # this implementation won't pass gradients because of the argmax.
     # x_argmax = torch.argmax(tgt_pred, dim=-1)
     # classifier_x: Float[Tensor, "length batch vocab"]
     # classifier_x = torch.zeros(SEQUENCE_LENGTH, BATCH_SIZE, vocabulary_size).scatter_(
-    #     2, torch.unsqueeze(x_argmax.T, 2), 1
+    #    2, torch.unsqueeze(x_argmax.T, 2), 1
     # )
+
+    classifier_x = tgt_pred_tokens.transpose(0, 1)
 
     """
     method here is the original(ish) implementation
     """
     # TODO: you need to learn a different projection from the decoder to the tokenizer's input space.
-    class_input = nn.Linear(
-        seq2seq.model.generator.weight.shape[1],
-        classifier.word_lut.weight.shape[0],
-    )
+    # class_input = nn.Linear(
+    #     seq2seq.model.generator.weight.shape[1],
+    #     classifier.word_lut.weight.shape[0],
+    # )
 
-    linear: Tensor = class_input(tgt_pred)
-    dim_batch, dim_length, dim_vocab = linear.size()
+    # linear: Tensor = class_input(tgt_pred)
+    # dim_batch, dim_length, dim_vocab = linear.size()
 
-    # reshape it for softmax, and shape it back.
-    out: Tensor = F.softmax(linear.view(-1, dim_vocab), dim=-1).view(
-        dim_batch, dim_length, dim_vocab
-    )
+    # # reshape it for softmax, and shape it back.
+    # out: Tensor = F.softmax(linear.view(-1, dim_vocab), dim=-1).view(
+    #     dim_batch, dim_length, dim_vocab
+    # )
 
-    out = out.transpose(0, 1)
-    dim_length, dim_batch, dim_vocab = out.size()
+    # out = out.transpose(0, 1)
+    # dim_length, dim_batch, dim_vocab = out.size()
 
-    # setup padding because the CNN only accepts inputs of certain dimension
-    if dim_length < SEQUENCE_LENGTH:
-        # pad sequences
-        cnn_padding = torch.FloatTensor(
-            abs(SEQUENCE_LENGTH - dim_length), dim_batch, dim_vocab
-        ).zero_()
-        cat = torch.cat((out, cnn_padding), dim=0)
-    else:
-        # trim sequences
-        cat = out[:SEQUENCE_LENGTH]
+    # # setup padding because the CNN only accepts inputs of certain dimension
+    # if dim_length < SEQUENCE_LENGTH:
+    #     # pad sequences
+    #     cnn_padding = torch.zeros(
+    #         (abs(SEQUENCE_LENGTH - dim_length), dim_batch, dim_vocab)
+    #     )
+    #     cat = torch.cat((out, cnn_padding), dim=0)
+    # else:
+    #     # trim sequences
+    #     cat = out[:SEQUENCE_LENGTH]
+    # classifier_x = cat
 
-    y_hat = classifier(cat).squeeze(-1)
+    y_hat = classifier(classifier_x).squeeze(-1)
 
     # classifier loss
     loss_class = criterion(y_hat.squeeze(-1), label.float())
@@ -155,7 +159,7 @@ def test_model_inference(spm_tokenizer, spm_dataloader):
 
     # combine losses
     joint_loss = loss_class + loss_reconstruction
-    joint_loss.backward()
+    loss_class.backward()
 
     encoder_grad = seq2seq.model.encoder.layers[0].linear1.weight.grad
     assert encoder_grad is None

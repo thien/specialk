@@ -22,6 +22,14 @@ SEQUENCE_LENGTH = 100
 
 torch.manual_seed(1337)
 
+VOCAB_SIZE_SMALL = 1000
+VOCAB_SIZE_BIG = 5000
+
+PAD = 0
+
+criterion_class = nn.BCELoss()
+crirerion_recon = torch.nn.CrossEntropyLoss(ignore_index=PAD)
+
 
 @pytest.fixture(scope="session", autouse=True)
 def dataset() -> Dataset:
@@ -46,6 +54,8 @@ def spm_dataloader(dataset: Dataset, spm_tokenizer: SentencePieceVocabulary):
         return example
 
     tokenized_dataset = dataset.with_format("torch").map(tokenize)
+
+    # idk, but the dataset adds an additional dimension
     dataloader = DataLoader(tokenized_dataset, batch_size=BATCH_SIZE, shuffle=True)
     return dataloader
 
@@ -60,43 +70,59 @@ def seq2seq_model(tokenizer):
         num_encoder_layers=1,
         num_decoder_layers=1,
     )
-    model.PAD = 0
+    model.PAD = PAD
+
+    # eval doesn't work (i.e. it still stores gradients?)
+    model.model.encoder.eval()
+
+    # disables gradient accumulation @ the encoder.
+    for param in model.model.encoder.parameters():
+        param.requires_grad = False
 
     return model
+
+
+def classifier_small_vocab():
+    classifier = ConvNet(
+        vocab_size=VOCAB_SIZE_SMALL,
+        sequence_length=SEQUENCE_LENGTH,
+    )
+    classifier.eval()
+    # disables gradient accumulation @ the classifier.
+    for param in classifier.parameters():
+        param.requires_grad = False
+    return classifier
+
+
+def classifier_spm(spm_tokenizer):
+    classifier = ConvNet(
+        vocab_size=spm_tokenizer.vocab_size,
+        sequence_length=SEQUENCE_LENGTH,
+    )
+    classifier.eval()
+    # disables gradient accumulation @ the classifier.
+    for param in classifier.parameters():
+        param.requires_grad = False
+    return classifier
 
 
 def test_model_inference(spm_tokenizer, spm_dataloader):
     vocabulary_size = spm_tokenizer.vocab_size
     seq2seq = seq2seq_model(spm_tokenizer)
-    # eval doesn't work (i.e. it still stores gradients?)
-    seq2seq.model.encoder.eval()
-
-    # disables gradient accumulation @ the encoder.
-    for param in seq2seq.model.encoder.parameters():
-        param.requires_grad = False
-
-    classifier = ConvNet(
-        vocab_size=vocabulary_size,
-        sequence_length=SEQUENCE_LENGTH,
-    )
-
-    # disables gradient accumulation @ the classifier.
-    for param in classifier.parameters():
-        param.requires_grad = False
-
-    classifier.eval()
-    criterion = nn.BCELoss()
+    classifier = classifier_spm(spm_tokenizer)
 
     # classifier stuff
     batch: dict = next(iter(spm_dataloader))
-    src_text, tgt_text, label = batch["text_fr"], batch["text"], batch["label"]
+    src_text, tgt_text, label = (
+        batch["text_fr"].squeeze(1),
+        batch["text"].squeeze(1),
+        batch["label"],
+    )  # not sure why there's additional indexes.
 
-    src_text: torch.Tensor = src_text.squeeze(1)
-    tgt_text: torch.Tensor = tgt_text.squeeze(1)
-
-    tgt_pred: Float[Tensor, "batch length vocab"]
-    tgt_pred = seq2seq.model._forward(src_text, tgt_text)
-
+    # sequence 2 sequence forward pass
+    tgt_pred: Float[Tensor, "batch length vocab"] = seq2seq.model._forward(
+        src_text, tgt_text
+    )
     tgt_pred_tokens: Float[Tensor, "batch seq generator"] = F.log_softmax(
         seq2seq.model.generator(tgt_pred), dim=-1
     )
@@ -111,7 +137,11 @@ def test_model_inference(spm_tokenizer, spm_dataloader):
     #    2, torch.unsqueeze(x_argmax.T, 2), 1
     # )
 
+    # if the tokenizers are the same, then you can do this approach.
     classifier_x = tgt_pred_tokens.transpose(0, 1)
+
+    # otherwise you need to learn a mapping on top.
+    # also throw a warning out.
 
     """
     method here is the original(ish) implementation
@@ -145,16 +175,15 @@ def test_model_inference(spm_tokenizer, spm_dataloader):
     #     cat = out[:SEQUENCE_LENGTH]
     # classifier_x = cat
 
-    y_hat = classifier(classifier_x).squeeze(-1)
+    # classifer pass
+    y_hat: Float[Tensor, "batch length vocab"] = classifier(classifier_x).squeeze(-1)
 
     # classifier loss
-    loss_class = criterion(y_hat.squeeze(-1), label.float())
+    loss_class = criterion_class(y_hat.squeeze(-1), label.float())
 
     # reconstruction loss
-    recon_criterion = torch.nn.CrossEntropyLoss(ignore_index=seq2seq.PAD)
-    y_hat = tgt_pred_tokens
-    loss_reconstruction = recon_criterion(
-        y_hat.view(-1, y_hat.size(-1)), tgt_text.view(-1)
+    loss_reconstruction = crirerion_recon(
+        tgt_pred_tokens.view(-1, tgt_pred_tokens.size(-1)), tgt_text.view(-1)
     )
 
     # combine losses

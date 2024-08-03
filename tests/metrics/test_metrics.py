@@ -1,11 +1,8 @@
+from typing import List, Tuple
+
 import pytest
 
-from specialk.metrics import (
-    BLEU,
-    LexicalMetrics,
-    Meteor,
-    Polarity,
-)
+from specialk.metrics import BLEU, LexicalMetrics, Meteor, Polarity
 
 
 @pytest.fixture
@@ -26,6 +23,20 @@ def bleu():
 @pytest.fixture
 def meteor():
     return Meteor()
+
+
+@pytest.fixture
+def pos_sequence_1(lexical) -> List[Tuple[str, str]]:
+    sequence = "It's uncear what Teresa May is planning."
+    pos_tokens = lexical.pos(sequence)
+    return pos_tokens
+
+
+@pytest.fixture
+def pos_sequence_2(lexical) -> List[Tuple[str, str]]:
+    sequence = "he was responsible for all for."
+    pos_tokens = lexical.pos(sequence)
+    return pos_tokens
 
 
 def test_meteor(meteor):
@@ -63,16 +74,19 @@ def test_bleu(bleu):
 
 
 def test_syllables(lexical):
-    raise NotImplementedError
+    assert lexical.syllables("word") > 0
 
 
-def test_lexical_lex_match_1(lexical):
-    raise NotImplementedError
+def test_lexical_lex_match_1(lexical, pos_sequence_1):
+    scores = lexical.lex_match_1(pos_sequence_1)
+    assert len(scores) > 0
 
 
-def test_lexical_lex_match_2(lexical):
-    raise NotImplementedError
+def test_lexical_lex_match_2(lexical, pos_sequence_2):
+    scores = lexical.lex_match_2(pos_sequence_2)
+    assert len(scores) > 0
 
 
 def test_lexical_basic_stats(lexical):
-    raise NotImplementedError
+    article = "The quick brown fox jumped over the lazy dog. He moved and jumped."
+    lexical.basic_stats(article)

@@ -9,7 +9,6 @@ from typing import Dict, List, Tuple, Union
 import evaluate
 import gensim.downloader as api
 import numpy as np
-import sacrebleu
 from gensim.corpora.dictionary import Dictionary
 from gensim.models.keyedvectors import KeyedVectors
 from nltk import pos_tag, word_tokenize

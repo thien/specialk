@@ -368,7 +368,8 @@ class SentencePieceVocabulary(Vocabulary):
             tokens = [self.vocab.bos_id()] + tokens + [self.vocab.eos_id()]
             tokens = tokens + [self.vocab.pad_id()] * (self.max_length - len(tokens))
             token_sequences[i] = tokens
-        return torch.LongTensor(token_sequences)
+        # return torch.LongTensor(token_sequences)
+        return token_sequences
 
     # @property
     # def SOS_TOKEN(self) -> str:

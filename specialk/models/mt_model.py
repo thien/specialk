@@ -1,6 +1,8 @@
 from __future__ import division
 
-from typing import Tuple, Union
+from argparse import Namespace
+from pathlib import Path
+from typing import Optional, Tuple, Union
 
 import lightning.pytorch as pl
 import torch
@@ -10,15 +12,15 @@ from jaxtyping import Float, Int
 from torch import Tensor
 
 from specialk.core.constants import PAD
-from specialk.core.utils import log
 from specialk.metrics.metrics import SacreBLEU
 from specialk.models.ops import mask_out_special_tokens
-from specialk.models.recurrent.Models import Decoder, Encoder
+from specialk.models.recurrent.Models import Decoder as RNNDecoder
+from specialk.models.recurrent.Models import Encoder as RNNEncoder
 from specialk.models.recurrent.Models import NMTModel as Seq2Seq
 from specialk.models.tokenizer import Vocabulary
-from specialk.models.transformer.Models import Transformer as TransformerModel
-from specialk.models.transformer.Models import get_sinusoid_encoding_table
-from specialk.models.transformer.Optim import ScheduledOptim
+from specialk.models.transformer.legacy.Models import Transformer as TransformerModel
+from specialk.models.transformer.legacy.Models import get_sinusoid_encoding_table
+from specialk.models.transformer.legacy.Optim import ScheduledOptim
 
 bleu = SacreBLEU()
 
@@ -269,8 +271,58 @@ class TransformerModule(NMTModule):
 
 
 class RNNModule(NMTModule):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.encoder = Encoder(vocabulary_size=self.vocabulary_size)
-        self.decoder = Decoder(vocabulary_size=self.vocabulary_size)
-        self.model = Seq2Seq(self.encoder, self.decoder)
+    def __init__(self, vocabulary_size: int, **kwargs):
+        super().__init__(vocabulary_size=vocabulary_size, **kwargs)
+        args = self.patch_args(**kwargs)
+        self.model = Seq2Seq(
+            RNNEncoder(args, vocabulary_size),
+            RNNDecoder(args, vocabulary_size),
+        )
+
+    @staticmethod
+    def patch_args(
+        layers: int = 2,
+        brnn: bool = False,
+        rnn_size: int = 500,
+        d_word_vec: int = 300,
+        dropout: float = 0.1,
+        input_feed: int = 0,
+        pre_word_vecs_enc: Optional[Union[Path, str]] = None,
+        pre_word_vecs_dec: Optional[Union[Path, str]] = None,
+        **kwargs,
+    ) -> Namespace:
+        """Patch args into Namespace format to feed into model.
+
+        Args:
+            layers (int): Number of layers to use.
+            brnn (bool): If set, Uses a bidirectional encoder.
+            rnn_size (int): Dimension of RNN.
+            d_word_vec (int): Dimension size of the token vectors
+                representing words (or characters, or bytes).
+            dropout (float): Dropout probability' applied between
+                self-attention layers/RNN Stacks.
+            input_feed (Tensor): Feed the context vector at each time
+                step as additional input (via concatenation with the
+                word embeddings) to the decoder."
+            pre_word_vecs_enc (Union[Path, str]): If a valid path is
+                specified, then this will load pretrained word
+                embeddings on the encoder side. See README for
+                specific formatting instructions.
+            pre_word_vecs_dec (Union[Path, str]): If a valid path is
+                specified, then this will load pretrained word
+                embeddings on the decoder side. See README for
+                specific formatting instructions.
+
+        Returns:
+            Namespace: Argument namespace containing args in param.
+        """
+        args = Namespace()
+        args.layers = layers
+        args.brnn = brnn
+        args.rnn_size = rnn_size
+        args.d_word_vec = d_word_vec
+        args.dropout = dropout
+        args.pre_word_vecs_enc = pre_word_vecs_enc
+        args.input_feed = input_feed
+        args.pre_word_vecs_dec = pre_word_vecs_dec
+        return args

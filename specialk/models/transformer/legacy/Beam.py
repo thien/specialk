@@ -5,7 +5,6 @@ For code in OpenNMT-py, please check the following link:
 https://github.com/OpenNMT/OpenNMT-py/blob/master/onmt/Beam.py
 """
 
-import numpy as np
 import torch
 
 # import transformer.Constants as Constants

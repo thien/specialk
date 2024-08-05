@@ -9,8 +9,10 @@
 # EOS_WORD = '</s>'
 
 # import os
-from specialk.core.constants import *
+
 # if os.getcwd().split("/")[-1] == "transformer":
 #     from specialk.core.constants import *
 # else:
 #     from specialk.core.constants import *
+
+from specialk.core.constants import *  # noqa: F403

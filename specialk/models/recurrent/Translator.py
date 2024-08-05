@@ -46,33 +46,6 @@ class Translator(object):
             self.model = model
             self.model.eval()
 
-    # def buildData(self, srcBatch, goldBatch):
-    #     srcData = [self.src_dict.convertToIdx(b,
-    #                 Constants.UNK_WORD) for b in srcBatch]
-    #     tgtData = None
-    #     if goldBatch:
-    #         tgtData = [self.tgt_dict.convertToIdx(b,
-    #                    Constants.UNK_WORD,
-    #                    Constants.SOS_WORD,
-    #                    Constants.EOS_WORD) for b in goldBatch]
-    #     with torch.no_grad():
-    #         return Dataset(srcData, tgtData,
-    #             self.opt.batch_size, self.opt.cuda)
-
-    # def buildTargetTokens(self, pred, src, attn):
-    #     tokens = self.tgt_dict.convertToLabels(pred, Constants.EOS)
-    #     # remove EOS token
-    #     tokens = tokens[:-1]
-    #     if self.opt.replace_unk:
-    #         for i in range(len(tokens)):
-    #             # if we have an UNK token then we'll want to replace it
-    #             # with the most probable entry from our source value.
-    #             if tokens[i] == Constants.UNK_WORD:
-    #                 _, maxIndex = attn[i].max(0)
-    #                 tokens[i] = src[maxIndex.item()]
-
-    #     return tokens
-
     def translate_batch(self, src_seq, src_pos):
         """Translation work in one batch"""
 
@@ -148,14 +121,6 @@ class Translator(object):
                 )
                 return dec_partial_pos
 
-            # def predict_word(dec_seq, dec_pos, src_seq, enc_output, n_active_inst, n_bm):
-            #     # dec_output, *_ = self.model.decoder(dec_seq, dec_pos, src_seq, enc_output)
-            #     # dec_output = dec_output[:, -1, :]  # Pick the last step: (bh * bm) * d_h
-            #     # word_prob = F.log_softmax(self.model.generator(dec_output), dim=1)
-            #     # word_prob = word_prob.view(n_active_inst, n_bm, -1)
-            #     out, _,_ = self.decoder(dec_seq, decStates, context, enc_output)
-            #     word_prob = out.view(n_active_inst, n_bm, -1)
-            #     return word_prob
 
             def collect_active_inst_idx_list(
                 inst_beams, word_prob, inst_idx_to_position_map

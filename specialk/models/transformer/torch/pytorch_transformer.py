@@ -8,17 +8,18 @@ https://github.com/pytorch/examples/blob/main/word_language_model/model.py
 https://pytorch.org/tutorials/beginner/translation_transformer.html which doesn't actually work.
 """
 
+from typing import Optional
+
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from jaxtyping import Bool, Float, Int
-from torch import LongTensor, Tensor
+from torch import Tensor
 
 import specialk.core.constants as Constants
-from specialk.core.utils import log
 from specialk.models.mt_model import NMTModule
-from specialk.models.transformer.Optim import ScheduledOptim
+from specialk.models.transformer.legacy.Optim import ScheduledOptim
 from specialk.models.transformer.pos_encoders import PositionalEncoder
 
 
@@ -143,6 +144,7 @@ class PyTorchTransformerModel(nn.Transformer):
             src_key_padding_mask=x_pad_mask,
             tgt_key_padding_mask=y_pad_mask,
             memory_key_padding_mask=x_pad_mask,
+            tgt_is_causal=True,
         )
         return y_hat
 
@@ -165,15 +167,20 @@ class PyTorchTransformerModel(nn.Transformer):
         return F.log_softmax(y_hat_tokens, dim=-1)
 
     def encode(
-        self, x: Float[Tensor, "batch seq_len"], x_mask: Bool[Tensor, "seq_len seq_len"]
+        self,
+        x: Float[Tensor, "batch seq_len"],
+        x_mask: Optional[Bool[Tensor, "seq_len seq_len"]],
     ) -> Float[Tensor, "batch seq_len d_model"]:
         """Split encoder and decoder runs."""
-        x_emb: Float[Tensor, "batch seq_len d_embed"] = self.input_emb(x) * np.sqrt(
-            self.dim_model
+        if x_mask is None:
+            # create src_key_padding_mask
+            x_mask = self.create_pad_mask(x)
+
+        x_emb: Float[Tensor, "batch seq_len d_embed"] = self.pos_encoder(
+            self.input_emb(x) * np.sqrt(self.dim_model)
         )
-        x_emb: Float[Tensor, "batch seq_len d_embed"] = self.pos_encoder(x_emb)
         z: Float[Tensor, "batch seq_len d_model"] = self.encoder(
-            self.pos_encoder(self.input_emb(x)), mask=x_mask
+            x_emb, src_key_padding_mask=x_mask
         )
         return z
 
@@ -181,12 +188,26 @@ class PyTorchTransformerModel(nn.Transformer):
         self,
         y: Float[Tensor, "batch seq_len"],
         memory: Float[Tensor, "batch seq_len d_model"],
-        y_mask: Int[Tensor, ""],
-    ) -> Float[Tensor, "batch seq_len d_embed"]:
+        tgt_mask=None,
+        memory_key_padding_mask=None,
+    ):
         """Run decoder stage. This is needed for different decoding strategies."""
-        y_emb = self.output_emb(y)
-        y_emb = self.pos_encoder(y_emb)
-        return self.decoder(tgt=y_emb, memory=memory, tgt_mask=y_mask)
+        if tgt_mask is None:
+            tgt_mask = self.generate_square_subsequent_mask(y.size(1)).to(y.device)
+
+        y_padding_mask = self.create_pad_mask(y)
+
+        y_emb: Float[Tensor, "batch seq_len d_embed"] = self.pos_encoder(
+            self.output_emb(y) * np.sqrt(self.dim_model)
+        )
+
+        return self.decoder(
+            y_emb,
+            memory,
+            tgt_mask=tgt_mask,
+            tgt_key_padding_mask=y_padding_mask,
+            memory_key_padding_mask=memory_key_padding_mask,
+        )
 
 
 class PyTorchTransformerModule(NMTModule):

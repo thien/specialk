@@ -1,5 +1,9 @@
+from typing import Tuple
+
 import torch
 import torch.nn as nn
+from jaxtyping import Float
+from torch import Tensor
 from torch.autograd import Variable
 from torch.nn.utils.rnn import pack_padded_sequence as pack
 from torch.nn.utils.rnn import pad_packed_sequence as unpack
@@ -144,7 +148,7 @@ class NMTModel(nn.Module):
     def __init__(self, encoder, decoder):
         super(NMTModel, self).__init__()
         self.encoder: Encoder = encoder
-        self.decoder = decoder
+        self.decoder: Decoder = decoder
 
     def make_init_decoder_output(self, context):
         batch_size = context.size(1)
@@ -164,9 +168,23 @@ class NMTModel(nn.Module):
         else:
             return h
 
-    def forward(self, src, tgt):
-        x, x_length = src
-        y, y_length = tgt
+    def forward(self, src: Float[Tensor, "batch seq"], tgt: Float[Tensor, "batch seq"]):
+        """
+        Forward pass of RNN training.
+        """
+
+        if isinstance(src, Tuple):
+            x, x_length = src
+        else:
+            x = src
+            x_length = (x == self.PAD).sum(dim=1)
+
+        if isinstance(tgt, Tuple):
+            y, y_length = tgt
+        else:
+            y = tgt
+            y_length = (y == self.PAD).sum(dim=1)
+
         # sort for pack_padded_sequences
         sorted_lengths, sorted_idx = torch.sort(x_length, descending=True)
         x = x[sorted_idx]

@@ -4,7 +4,6 @@ import einops
 import torch
 from jaxtyping import Float, Int
 from torch import Tensor
-
 from specialk import Constants
 
 Pair = Tuple[int, int]
@@ -67,10 +66,10 @@ def pad3d(
 
     Return: shape (batch, in_channels, top + height + bottom, left + width + right, back + length + front)
     """
-    b, in_c, h, w, l = x.shape
-    shape_out = (b, in_c, top + h + bottom, left + w + right, back + l + front)
+    b, in_c, h, w, length = x.shape
+    shape_out = (b, in_c, top + h + bottom, left + w + right, back + length + front)
     out = x.new_full(shape_out, pad_value)
-    out[:, :, top : top + h, left : left + w, back : back + l] = x
+    out[:, :, top : top + h, left : left + w, back : back + length] = x
     return out
 
 
@@ -147,7 +146,7 @@ def maxpool2d(
     pad_h, pad_w = force_pair(padding)
     ker_h, ker_w = force_pair(kernel_size)
 
-    x = pad2d(x, pad_w, pad_w, pad_h, pad_h, -t.inf)
+    x = pad2d(x, pad_w, pad_w, pad_h, pad_h, -torch.inf)
 
     batch, in_channel, height, width = x.shape
 

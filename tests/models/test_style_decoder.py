@@ -60,7 +60,7 @@ def spm_dataloader(dataset: Dataset, spm_tokenizer: SentencePieceVocabulary):
     return dataloader
 
 
-def seq2seq_model(tokenizer):
+def seq2seq_transformer_model(tokenizer):
     model = PyTorchTransformerModule(
         name="transformer_1",
         vocabulary_size=tokenizer.vocab_size,
@@ -106,9 +106,9 @@ def classifier_spm(spm_tokenizer):
     return classifier
 
 
-def test_model_inference(spm_tokenizer, spm_dataloader):
+def test_model_inference_transformer(spm_tokenizer, spm_dataloader):
     vocabulary_size = spm_tokenizer.vocab_size
-    seq2seq = seq2seq_model(spm_tokenizer)
+    seq2seq = seq2seq_transformer_model(spm_tokenizer)
     classifier = classifier_spm(spm_tokenizer)
 
     # classifier stuff

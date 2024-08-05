@@ -57,7 +57,7 @@ def init_dataloader(
 
 
 def load_tokenizer(
-    option: str = "word",
+    option: str = "word", max_length: int = 100
 ) -> Tuple[Union[BPEVocabulary, WordVocabulary, SentencePieceVocabulary], Path]:
     """_summary_
 
@@ -83,7 +83,7 @@ def load_tokenizer(
     elif option == SPM:
         tokenizer_filepath = dir_tokenizer / "sentencepiece" / "enfr.model"
         tokenizer = SentencePieceVocabulary.from_file(
-            tokenizer_filepath, max_length=100
+            tokenizer_filepath, max_length=max_length
         )
     return tokenizer, tokenizer_filepath
 
@@ -98,9 +98,11 @@ def main():
     BATCH_SIZE = 64 if DEVICE == "mps" else 32
     BACK_TRANSLATION = True
     MODEL = "rnn"
+    if MODEL == "rnn":
+        BATCH_SIZE = 128
 
     # init tokenizer
-    tokenizer, tokenizer_filepath = load_tokenizer("spm")
+    tokenizer, tokenizer_filepath = load_tokenizer("spm", 70)
     log.info("Loaded tokenizer", tokenizer=tokenizer)
 
     # load dataset

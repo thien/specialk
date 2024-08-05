@@ -87,6 +87,7 @@ class Encoder(nn.Module):
             n_src_vocab, d_word_vec, padding_idx=Constants.PAD
         )
 
+        # TODO: see how this interacts with the old checkpoints
         # self.position_enc = PositionalEncoder(d_word_vec, n_position)
         self.position_enc = nn.Embedding.from_pretrained(
             get_sinusoid_encoding_table(n_position, d_word_vec, padding_idx=0),
@@ -108,8 +109,7 @@ class Encoder(nn.Module):
         non_pad_mask = get_non_pad_mask(src_seq)
 
         # -- Forward
-        # print("BEFORE FIRE")
-        enc_output = self.src_word_emb(src_seq)
+        enc_output = self.src_word_emb(src_seq)  # batch_size, seq_len, model_dim
         enc_output += self.position_enc(src_pos)
 
         for enc_layer in self.layer_stack:
@@ -212,6 +212,7 @@ class Transformer(nn.Module):
         dropout=0.1,
         tgt_emb_prj_weight_sharing=True,
         emb_src_tgt_weight_sharing=True,
+        **kwargs,
     ):
         super().__init__()
 

@@ -25,7 +25,7 @@ tokenizer_path: Path = (
 )
 dataset_path = PROJECT_DIR / "tests/test_files/datasets/en_fr.parquet"
 
-BATCH_SIZE = 25
+BATCH_SIZE = 3
 SEQUENCE_LENGTH = 100
 
 torch.manual_seed(1337)
@@ -38,11 +38,11 @@ def dataset() -> Dataset:
 
 @pytest.fixture(scope="session")
 def spm_tokenizer() -> SentencePieceVocabulary:
-    return SentencePieceVocabulary.from_file(tokenizer_path, max_length=100)
+    return SentencePieceVocabulary.from_file(tokenizer_path, max_length=SEQUENCE_LENGTH)
 
 
 @pytest.fixture(scope="session")
-def bpe_dataloader(dataset: Dataset, spm_tokenizer: SentencePieceVocabulary):
+def spm_dataloader(dataset: Dataset, spm_tokenizer: SentencePieceVocabulary):
     def tokenize(example):
         # perform tokenization at this stage.
         example["source"] = spm_tokenizer.to_tensor(example["source"])
@@ -54,8 +54,8 @@ def bpe_dataloader(dataset: Dataset, spm_tokenizer: SentencePieceVocabulary):
     return dataloader, spm_tokenizer
 
 
-def test_rnn_inference(bpe_dataloader):
-    dataloader, tokenizer = bpe_dataloader
+def test_rnn_inference(spm_dataloader):
+    dataloader, tokenizer = spm_dataloader
     model = RNNModule(
         name="rnn_1",
         vocabulary_size=tokenizer.vocab_size,
@@ -81,28 +81,33 @@ def test_rnn_inference(bpe_dataloader):
     loss.backward()
 
 
-def test_transformer_inference(bpe_dataloader):
-    dataloader, tokenizer = bpe_dataloader
+def test_transformer_inference(spm_dataloader):
+    dataloader, tokenizer = spm_dataloader
     model = TransformerModule(
         name="transformer_1",
-        vocabulary_size=VOCABULARY_SIZE,
+        vocabulary_size=tokenizer.vocab_size,
         sequence_length=SEQUENCE_LENGTH,
+        d_word_vec=16,
+        d_model=16,
+        d_inner=8,
+        n_layers=2,
+        n_head=2,
+        d_k=3,
+        d_v=3,
+        dropout=0.1,
     )
-    model.PAD = 0
+    model.change_pos_enc_len(SEQUENCE_LENGTH)
+    model.PAD = tokenizer.PAD
     model.eval()
-    criterion = nn.BCELoss()
 
     batch: dict = next(iter(dataloader))
     x: torch.Tensor = batch["source"].squeeze(1)
     y: torch.Tensor = batch["target"].squeeze(1)
-    batch_size: int = x.shape[0]
 
-    len_x = (x == PAD).sum(dim=1)
-    len_y = (y == PAD).sum(dim=1)
-
-    assert len_x.shape[0] == batch_size
-
-    print(x.shape, len_x.shape, y.shape, len_y.shape)
+    len_x = torch.arange(SEQUENCE_LENGTH).repeat((BATCH_SIZE, 1)) + 1
+    len_x = len_x.masked_fill((x == PAD), 0)
+    len_y = torch.arange(SEQUENCE_LENGTH).repeat((BATCH_SIZE, 1)) + 1
+    len_y = len_y.masked_fill((y == PAD), 0)
 
     m = model.model
 
@@ -111,18 +116,20 @@ def test_transformer_inference(bpe_dataloader):
     dec_output, *_ = m.decoder(y, len_y, x, enc_output)
     y_hat = m.generator(dec_output) * m.x_logit_scale
 
-    log.info("shapes", y=y.shape, y_hat=y_hat.shape)
+    y_hat: Float[Tensor, "batch_size*seq_length, vocab"] = y_hat.view(
+        -1, y_hat.size(-1)
+    )
+    y: Int[Tensor, "batch_size*vocab"] = y.view(-1)
+    _ = F.cross_entropy(y_hat, y, ignore_index=model.PAD, reduction="sum")
 
-    _ = criterion(y_hat, y.float())
 
-
-def test_pt_transformer_inference(bpe_dataloader):
-    dataloader, tokenizer = bpe_dataloader
+def test_pt_transformer_inference(spm_dataloader):
+    dataloader, tokenizer = spm_dataloader
     model = PyTorchTransformerModule(
         name="transformer_1",
         vocabulary_size=tokenizer.vocab_size,
         sequence_length=SEQUENCE_LENGTH,
-        dim_model=32,
+        dim_model=8,
         n_heads=2,
         num_encoder_layers=1,
         num_decoder_layers=1,

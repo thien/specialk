@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from specialk.models.nmt_model import NMTModel
 from specialk.models.tokenizers.bpe import Encoder as BPE
-from specialk.models.transformer.Models import (
+from specialk.models.transformer.legacy.Models import (
     Decoder,
     Encoder,
     Transformer,

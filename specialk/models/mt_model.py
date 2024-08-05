@@ -238,6 +238,7 @@ class TransformerModule(NMTModule):
             n_src_vocab=self.vocabulary_size,
             n_tgt_vocab=self.vocabulary_size,
             len_max_seq=self.sequence_length,
+            **kwargs,
         )
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
@@ -252,7 +253,7 @@ class TransformerModule(NMTModule):
             n_warmup_steps=self.n_warmup_steps,
         )
 
-    def change_sequence_length(self, size: int, pad_token: int = PAD):
+    def change_pos_enc_len(self, seq_len: int, pad_token: int = PAD):
         """Change the maximum sequence length of the transformer input.
 
         Args:
@@ -261,11 +262,11 @@ class TransformerModule(NMTModule):
         enc_d_word_vec = self.model.encoder.src_word_emb.weight.shape[1]
         dec_d_word_vec = self.model.decoder.tgt_word_emb.weight.shape[1]
         self.model.encoder.position_enc = nn.Embedding.from_pretrained(
-            get_sinusoid_encoding_table(size, enc_d_word_vec, padding_idx=pad_token),
+            get_sinusoid_encoding_table(seq_len, enc_d_word_vec, padding_idx=pad_token),
             freeze=True,
         )
         self.model.decoder.position_enc = nn.Embedding.from_pretrained(
-            get_sinusoid_encoding_table(size, dec_d_word_vec, padding_idx=pad_token),
+            get_sinusoid_encoding_table(seq_len, dec_d_word_vec, padding_idx=pad_token),
             freeze=True,
         )
 

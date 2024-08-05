@@ -120,7 +120,14 @@ class Decoder(nn.Module):
             pretrained = torch.load(opt.pre_word_vecs_dec)
             self.word_lut.weight.data.copy_(pretrained)
 
-    def forward(self, input, hidden, context, init_output, useGen=True):
+    def forward(
+        self,
+        input: Float[Tensor, "batch seq_len"],
+        hidden: Float[Tensor, ""],
+        context: Float[Tensor, ""],
+        init_output: Float[Tensor, ""],
+        useGen: bool = True,
+    ):
         emb = self.word_lut(input)
         # print(context.size())
         # n.b. you can increase performance if you compute W_ih * x for all

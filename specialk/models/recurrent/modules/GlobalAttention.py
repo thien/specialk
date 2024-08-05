@@ -17,13 +17,15 @@ Constructs a unit mapping.
 
 import torch
 import torch.nn as nn
+from jaxtyping import Float
+from torch import Tensor
 
 
 class GlobalAttention(nn.Module):
-    def __init__(self, dim):
+    def __init__(self, dim: int):
         super(GlobalAttention, self).__init__()
         self.linear_in = nn.Linear(dim, dim, bias=False)
-        self.sm = nn.Softmax(dim=1)
+        self.softmax = nn.Softmax(dim=1)
         self.linear_out = nn.Linear(dim * 2, dim, bias=False)
         self.tanh = nn.Tanh()
         self.mask = None
@@ -31,20 +33,35 @@ class GlobalAttention(nn.Module):
     def applyMask(self, mask):
         self.mask = mask
 
-    def forward(self, input, context):
+    def forward(
+        self,
+        input: Float[Tensor, "batch dim"],
+        context: Float[Tensor, "batch seq_len dim"],
+    ):
         """
         input: batch x dim
         context: batch x sourceL x dim
         """
-        targetT = self.linear_in(input).unsqueeze(2)  # batch x dim x 1
+        targetT: Float[Tensor, "batch dim 1"] = self.linear_in(input).unsqueeze(
+            2
+        )  # batch x dim x 1
+        # print("targetT.shape", targetT.shape)
 
         # Get attention
-        attn = torch.bmm(context, targetT).squeeze(2)  # batch x sourceL
+        attn: Float[Tensor, "batch seq_len"] = torch.bmm(context, targetT).squeeze(
+            2
+        )  # batch x sourceL
+        # print("attn_shape", attn.shape)
+
+        # apply mask
         if self.mask is not None:
+            # print("mask.shape", self.mask.shape)
             attn.data.masked_fill_(
                 self.mask.view(-1, self.mask.shape[-1]), -float("inf")
             )
-        attn = self.sm(attn)
+            
+        attn = self.softmax(attn)
+
         attn3 = attn.view(attn.size(0), 1, attn.size(1))  # batch x 1 x sourceL
 
         weightedContext = torch.bmm(attn3, context).squeeze(1)  # batch x dim

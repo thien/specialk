@@ -23,6 +23,9 @@ BLO_WORD = "<p>"  # paragraph block
 SEP_WORD = "<sep>"
 CLS_TOKEN = "<cls>"
 
+SOURCE = "source"
+TARGET = "target"
+
 
 def get_tokens() -> List[str]:
     g = globals()

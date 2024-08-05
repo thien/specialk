@@ -11,7 +11,7 @@ import torch.nn.functional as F
 from jaxtyping import Float, Int
 from torch import Tensor
 
-from specialk.core.constants import PAD
+from specialk.core.constants import PAD, SOURCE, TARGET
 from specialk.metrics.metrics import SacreBLEU
 from specialk.models.ops import mask_out_special_tokens
 from specialk.models.recurrent.Models import Decoder as RNNDecoder
@@ -57,8 +57,8 @@ class NMTModule(pl.LightningModule):
         Returns:
             torch.Tensor: Returns loss.
         """
-        x: Int[Tensor, "batch seq_len"] = batch["source"]
-        y: Int[Tensor, "batch seq_len"] = batch["target"]
+        x: Int[Tensor, "batch seq_len"] = batch[SOURCE]
+        y: Int[Tensor, "batch seq_len"] = batch[TARGET]
 
         y_hat = self.model(x, y)
         loss = self.loss(y_hat.view(-1, y_hat.size(-1)), y.view(-1))
@@ -89,8 +89,8 @@ class NMTModule(pl.LightningModule):
         Returns:
             torch.Tensor: Returns loss.
         """
-        x: Int[Tensor, "batch seq_len"] = batch["source"]
-        y: Int[Tensor, "batch seq_len"] = batch["target"]
+        x: Int[Tensor, "batch seq_len"] = batch[SOURCE]
+        y: Int[Tensor, "batch seq_len"] = batch[TARGET]
 
         y_hat: Float[Tensor, "batch seq_len vocab"] = self.model(x, y)
         loss = self.loss(y_hat.view(-1, y_hat.size(-1)), y.view(-1))
@@ -134,13 +134,13 @@ class NMTModule(pl.LightningModule):
     def validation_step(self, batch: dict, batch_idx: int):
         loss, acc = self._shared_eval_step(batch, batch_idx)
         metrics = {"val_acc": acc, "val_loss": loss}
-        self.log_dict(metrics, batch_size=batch["source"].size(0))
+        self.log_dict(metrics, batch_size=batch[SOURCE].size(0))
         return metrics
 
     def test_step(self, batch: dict, batch_idx: int):
         loss, acc = self._shared_eval_step(batch, batch_idx)
         metrics = {"val_acc": acc, "val_loss": loss}
-        self.log_dict(metrics, batch_size=batch["source"].size(0))
+        self.log_dict(metrics, batch_size=batch[SOURCE].size(0))
         return metrics
 
     def predict_step(
@@ -211,7 +211,7 @@ class NMTModule(pl.LightningModule):
         Generate tokens using decoder strategies, such as greedy,
         beam search, top-k, nucleus sampling.
         """
-        x = batch["source"]
+        x = batch[SOURCE]
         batch_size: int = x.shape(0)
         device: str = self.model.device
         max_length: int = self.sequence_length

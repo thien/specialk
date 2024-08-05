@@ -177,13 +177,13 @@ class NMTModel(nn.Module):
             x, x_length = src
         else:
             x = src
-            x_length = (x == self.PAD).sum(dim=1)
+            x_length = (x != self.PAD).sum(dim=1)
 
         if isinstance(tgt, Tuple):
             y, y_length = tgt
         else:
             y = tgt
-            y_length = (y == self.PAD).sum(dim=1)
+            y_length = (y != self.PAD).sum(dim=1)
 
         # sort for pack_padded_sequences
         sorted_lengths, sorted_idx = torch.sort(x_length, descending=True)
@@ -194,6 +194,7 @@ class NMTModel(nn.Module):
         x = x.transpose(0, 1)
         y = y.transpose(0, 1)
 
+        sorted_lengths = sorted_lengths.to("cpu")
         enc_hidden, context = self.encoder((x, sorted_lengths))
         init_output = self.make_init_decoder_output(context)
 

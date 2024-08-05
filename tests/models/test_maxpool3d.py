@@ -1,10 +1,5 @@
-import math
-
-import einops
 import torch
-from tqdm import tqdm
 
-from specialk.core.utils import log
 from specialk.models.ops import FuncMaxPool3d
 
 

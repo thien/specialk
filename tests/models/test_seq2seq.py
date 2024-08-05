@@ -13,7 +13,7 @@ from specialk.core.constants import PAD, PROJECT_DIR
 from specialk.core.utils import log
 from specialk.models.mt_model import RNNModule, TransformerModule
 from specialk.models.tokenizer import SentencePieceVocabulary
-from specialk.models.transformer.pytorch_transformer import (
+from specialk.models.transformer.torch.pytorch_transformer import (
     PyTorchTransformerModel,
     PyTorchTransformerModule,
 )
@@ -38,7 +38,7 @@ def dataset() -> Dataset:
 
 @pytest.fixture(scope="session")
 def spm_tokenizer() -> SentencePieceVocabulary:
-    return SentencePieceVocabulary.from_file(tokenizer_path, 100)
+    return SentencePieceVocabulary.from_file(tokenizer_path, max_length=100)
 
 
 @pytest.fixture(scope="session")
@@ -52,6 +52,33 @@ def bpe_dataloader(dataset: Dataset, spm_tokenizer: SentencePieceVocabulary):
     tokenized_dataset = dataset.with_format("torch").map(tokenize)
     dataloader = DataLoader(tokenized_dataset, batch_size=BATCH_SIZE, shuffle=True)
     return dataloader, spm_tokenizer
+
+
+def test_rnn_inference(bpe_dataloader):
+    dataloader, tokenizer = bpe_dataloader
+    model = RNNModule(
+        name="rnn_1",
+        vocabulary_size=tokenizer.vocab_size,
+        sequence_length=SEQUENCE_LENGTH,
+    )
+    model.model.PAD = tokenizer.PAD
+
+    batch: dict = next(iter(dataloader))
+    x: torch.Tensor = batch["source"].squeeze(1)
+    y: torch.Tensor = batch["target"].squeeze(1)
+
+    m = model.model
+    y_hat = m(x, y)
+
+    # flatten tensors for loss function.
+    y_hat: Float[Tensor, "batch_size*seq_length, vocab"] = y_hat.view(
+        -1, y_hat.size(-1)
+    )
+    y: Int[Tensor, "batch_size*vocab"] = y.view(-1)
+
+    log.info("Y Shapes", y_hat=y_hat.shape, y=y.shape)
+    loss = F.cross_entropy(y_hat, y, ignore_index=model.model.PAD, reduction="sum")
+    loss.backward()
 
 
 def test_transformer_inference(bpe_dataloader):

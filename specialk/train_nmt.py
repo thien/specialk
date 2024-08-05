@@ -100,7 +100,7 @@ def main():
     MAX_SEQ_LEN = 100
     MODEL = "rnn"
     if MODEL == "rnn":
-        BATCH_SIZE = 256
+        BATCH_SIZE = 192
         MAX_SEQ_LEN = 75
 
     # init tokenizer
@@ -112,7 +112,7 @@ def main():
     path_valid = dataset_dir / "corpus_enfr_final.val.parquet"
     path_train = dataset_dir / "corpus_enfr_final.train.parquet"
 
-    df_train = pd.read_parquet(path_train).sample(frac=1)
+    df_train = pd.read_parquet(path_train).sample(frac=1)  # shuffle.
     df_valid = pd.read_parquet(path_valid)
 
     log.info("Loaded dataset", df_train=df_train.shape, df_valid=df_valid.shape)

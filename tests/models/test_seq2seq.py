@@ -9,7 +9,7 @@ from torch import Tensor, nn
 from torch.utils.data import DataLoader
 
 from datasets import Dataset
-from specialk.core.constants import PAD, PROJECT_DIR
+from specialk.core.constants import PAD, PROJECT_DIR, SOURCE, TARGET
 from specialk.core.utils import log
 from specialk.models.mt_model import RNNModule, TransformerModule
 from specialk.models.tokenizer import SentencePieceVocabulary
@@ -45,8 +45,8 @@ def spm_tokenizer() -> SentencePieceVocabulary:
 def spm_dataloader(dataset: Dataset, spm_tokenizer: SentencePieceVocabulary):
     def tokenize(example):
         # perform tokenization at this stage.
-        example["source"] = spm_tokenizer.to_tensor(example["source"])
-        example["target"] = spm_tokenizer.to_tensor(example["target"])
+        example[SOURCE] = spm_tokenizer.to_tensor(example[SOURCE])
+        example[TARGET] = spm_tokenizer.to_tensor(example[TARGET])
         return example
 
     tokenized_dataset = dataset.with_format("torch").map(tokenize)
@@ -64,8 +64,37 @@ def test_rnn_inference(spm_dataloader):
     model.model.PAD = tokenizer.PAD
 
     batch: dict = next(iter(dataloader))
-    x: torch.Tensor = batch["source"].squeeze(1)
-    y: torch.Tensor = batch["target"].squeeze(1)
+    x: torch.Tensor = batch[SOURCE].squeeze(1)
+    y: torch.Tensor = batch[TARGET].squeeze(1)
+
+    m = model.model
+    y_hat = m(x, y)
+
+    # flatten tensors for loss function.
+    y_hat: Float[Tensor, "batch_size*seq_length, vocab"] = y_hat.view(
+        -1, y_hat.size(-1)
+    )
+    y: Int[Tensor, "batch_size*vocab"] = y.view(-1)
+
+    log.info("Y Shapes", y_hat=y_hat.shape, y=y.shape)
+    loss = F.cross_entropy(y_hat, y, ignore_index=model.model.PAD, reduction="sum")
+    loss.backward()
+
+
+def test_rnn_inference_mps(spm_dataloader):
+    dataloader, tokenizer = spm_dataloader
+    model = RNNModule(
+        name="rnn_1",
+        vocabulary_size=tokenizer.vocab_size,
+        sequence_length=SEQUENCE_LENGTH,
+    )
+    device = "mps"
+    model.model.to(device)
+    model.model.PAD = tokenizer.PAD
+
+    batch: dict = next(iter(dataloader))
+    x: torch.Tensor = batch[SOURCE].squeeze(1).to(device)
+    y: torch.Tensor = batch[TARGET].squeeze(1).to(device)
 
     m = model.model
     y_hat = m(x, y)
@@ -84,7 +113,7 @@ def test_rnn_inference(spm_dataloader):
 def test_transformer_inference(spm_dataloader):
     dataloader, tokenizer = spm_dataloader
     model = TransformerModule(
-        name="transformer_1",
+        name="transformer_2",
         vocabulary_size=tokenizer.vocab_size,
         sequence_length=SEQUENCE_LENGTH,
         d_word_vec=16,
@@ -101,8 +130,8 @@ def test_transformer_inference(spm_dataloader):
     model.eval()
 
     batch: dict = next(iter(dataloader))
-    x: torch.Tensor = batch["source"].squeeze(1)
-    y: torch.Tensor = batch["target"].squeeze(1)
+    x: torch.Tensor = batch[SOURCE].squeeze(1)
+    y: torch.Tensor = batch[TARGET].squeeze(1)
 
     len_x = torch.arange(SEQUENCE_LENGTH).repeat((BATCH_SIZE, 1)) + 1
     len_x = len_x.masked_fill((x == PAD), 0)
@@ -139,8 +168,8 @@ def test_pt_transformer_inference(spm_dataloader):
     model.eval()
 
     batch: dict = next(iter(dataloader))
-    x: torch.Tensor = batch["source"].squeeze(1)
-    y: torch.Tensor = batch["target"].squeeze(1)
+    x: torch.Tensor = batch[SOURCE].squeeze(1)
+    y: torch.Tensor = batch[TARGET].squeeze(1)
     batch_size: int = x.shape[0]
 
     len_x = (x == PAD).sum(dim=1)

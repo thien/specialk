@@ -160,6 +160,7 @@ def main():
             "tokenizer": tokenizer.__class__.__name__,
             "dataset": "machine_translation",
             "tokenizer_path": tokenizer_filepath,
+            "max_sequence_length": tokenizer.max_length,
         }
     )
 

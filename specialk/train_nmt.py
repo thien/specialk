@@ -97,12 +97,14 @@ def invert_df_columns(df: pd.DataFrame) -> pd.DataFrame:
 def main():
     BATCH_SIZE = 64 if DEVICE == "mps" else 32
     BACK_TRANSLATION = True
+    MAX_SEQ_LEN = 100
     MODEL = "rnn"
     if MODEL == "rnn":
-        BATCH_SIZE = 128
+        BATCH_SIZE = 256
+        MAX_SEQ_LEN = 75
 
     # init tokenizer
-    tokenizer, tokenizer_filepath = load_tokenizer("spm", 70)
+    tokenizer, tokenizer_filepath = load_tokenizer("spm", MAX_SEQ_LEN)
     log.info("Loaded tokenizer", tokenizer=tokenizer)
 
     # load dataset
@@ -110,7 +112,7 @@ def main():
     path_valid = dataset_dir / "corpus_enfr_final.val.parquet"
     path_train = dataset_dir / "corpus_enfr_final.train.parquet"
 
-    df_train = pd.read_parquet(path_train).sample(n=100000, random_state=1)
+    df_train = pd.read_parquet(path_train).sample(frac=1)
     df_valid = pd.read_parquet(path_valid)
 
     log.info("Loaded dataset", df_train=df_train.shape, df_valid=df_valid.shape)
@@ -118,7 +120,9 @@ def main():
     if BACK_TRANSLATION:
         df_train = invert_df_columns(df_train)
         df_valid = invert_df_columns(df_valid)
-        log.info("Backtranslation flag enabled")
+        log.info("Backtranslation flag enabled.")
+    else:
+        log.info("Backtranslation is disabled.")
 
     train_dataset: Dataset = Dataset.from_pandas(df_train)
     valid_dataset: Dataset = Dataset.from_pandas(df_valid)
@@ -130,7 +134,6 @@ def main():
     val_dataloader, _ = init_dataloader(
         valid_dataset, tokenizer, BATCH_SIZE, shuffle=False
     )
-
     log.info("Created dataset dataloaders.")
 
     if MODEL == "rnn":
@@ -161,6 +164,7 @@ def main():
             "dataset": "machine_translation",
             "tokenizer_path": tokenizer_filepath,
             "max_sequence_length": tokenizer.max_length,
+            "dataset_path": path_train,
         }
     )
 

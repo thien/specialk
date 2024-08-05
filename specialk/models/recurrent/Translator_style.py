@@ -94,7 +94,7 @@ class Translator(object):
 
         def applyContextMask(m):
             if isinstance(m, modules.GlobalAttention):
-                m.applyMask(padMask)
+                m.mask = padMask
 
         #  (2) if a target is specified, compute the 'goldScore'
         #  (i.e. log likelihood) of the target under the model

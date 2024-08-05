@@ -121,7 +121,6 @@ class Translator(object):
                 )
                 return dec_partial_pos
 
-
             def collect_active_inst_idx_list(
                 inst_beams, word_prob, inst_idx_to_position_map
             ):
@@ -235,9 +234,9 @@ class Translator(object):
         #  so that the attention ignores source padding
         padMask = srcBatch.data.eq(Constants.PAD).t()
 
-        def applyContextMask(m):
+        def apply_context_mask(m):
             if isinstance(m, modules.GlobalAttention):
-                m.applyMask(padMask)
+                m.mask = padMask
 
         #  (2) if a target is specified, compute the 'goldScore'
         #  (i.e. log likelihood) of the target under the model
@@ -247,7 +246,7 @@ class Translator(object):
         if tgtBatch is not None:
             decStates = encStates
             decOut = self.model.make_init_decoder_output(context)
-            self.model.decoder.apply(applyContextMask)
+            self.model.decoder.apply(apply_context_mask)
             initOutput = self.model.make_init_decoder_output(context)
 
             decOut, decStates, attn = self.model.decoder(
@@ -269,7 +268,7 @@ class Translator(object):
             Variable(encStates[1].data.repeat(1, beamSize, 1)),
         )
 
-        beam = [Beam(beamSize, self.opt.cuda) for k in range(batchSize)]
+        beam = [Beam(beamSize, context.device) for k in range(batchSize)]
 
         decOut = self.model.make_init_decoder_output(context)
 
@@ -280,11 +279,11 @@ class Translator(object):
         batchIdx = list(range(batchSize))
         remainingSents = batchSize
         for i in range(self.max_token_seq_len):
-            self.model.decoder.apply(applyContextMask)
+            self.model.decoder.apply(apply_context_mask)
 
             # Prepare decoder input.
             input = (
-                torch.stack([b.getCurrentState() for b in beam if not b.done])
+                torch.stack([b.get_current_state() for b in beam if not b.done])
                 .t()
                 .contiguous()
                 .view(1, -1)
@@ -318,7 +317,7 @@ class Translator(object):
                         -1, beamSize, remainingSents, decState.size(2)
                     )[:, :, idx]
                     sentStates.data.copy_(
-                        sentStates.data.index_select(1, beam[b].getCurrentOrigin())
+                        sentStates.data.index_select(1, beam[b].get_current_origin())
                     )
 
             if not active:
@@ -350,11 +349,11 @@ class Translator(object):
         n_best = self.opt.n_best
 
         for b in range(batchSize):
-            scores, ks = beam[b].sortBest()
+            scores, ks = beam[b].sort_best()
 
             allScores += [scores[:n_best]]
             valid_attn = srcBatch.data[:, b].ne(Constants.PAD).nonzero().squeeze(1)
-            hyps, attn = zip(*[beam[b].getHyp(k) for k in ks[:n_best]])
+            hyps, attn = zip(*[beam[b].get_hyp(k) for k in ks[:n_best]])
             attn = [a.index_select(1, valid_attn) for a in attn]
             allHyp += [hyps]
             allAttn += [attn]

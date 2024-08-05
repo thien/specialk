@@ -2,6 +2,7 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
+from typing import Optional
 from jaxtyping import Float
 from torch import Tensor
 from torch.autograd import Variable
@@ -36,11 +37,10 @@ class Encoder(nn.Module):
         )
 
     def load_pretrained_vectors(self, opt):
-        if opt.pre_word_vecs_enc is not None:
-            pretrained = torch.load(opt.pre_word_vecs_enc)
-            self.word_lut.weight.data.copy_(pretrained)
+        if opt.pre_word_vecs_enc:
+            self.word_lut.weight.data.copy_(torch.load(opt.pre_word_vecs_enc))
 
-    def forward(self, input, hidden=None):
+    def forward(self, input: Tensor, hidden: Optional[Tensor] = None):
         """
         if input is a tuple:
             (list of sequences, list of sequence lengths)
@@ -49,13 +49,14 @@ class Encoder(nn.Module):
         """
         if isinstance(input, tuple):
             x, x_lengths = input
-            emb = pack(self.word_lut(x), x_lengths)
+            emb = pack(self.word_lut(x), x_lengths.cpu())
         else:
             emb = self.word_lut(input)
+
         outputs, hidden_t = self.rnn(emb, hidden)
 
         if isinstance(input, tuple):
-            outputs = unpack(outputs)[0]
+            outputs, _ = unpack(outputs)
 
         return hidden_t, outputs
 
@@ -116,9 +117,8 @@ class Decoder(nn.Module):
         )
 
     def load_pretrained_vectors(self, opt):
-        if opt.pre_word_vecs_dec is not None:
-            pretrained = torch.load(opt.pre_word_vecs_dec)
-            self.word_lut.weight.data.copy_(pretrained)
+        if opt.pre_word_vecs_dec:
+            self.word_lut.weight.data.copy_(torch.load(opt.pre_word_vecs_dec))
 
     def forward(
         self,
@@ -133,6 +133,7 @@ class Decoder(nn.Module):
         # n.b. you can increase performance if you compute W_ih * x for all
         # iterations in parallel, but that's only possible if
         # self.input_feed=False
+
         outputs = []
         output = init_output
         for emb_t in emb.split(1):

@@ -1,72 +1,90 @@
 """
-Global attention takes a matrix and a query vector. It
-then computes a parameterized convex combination of the matrix
-based on the input query.
-        H_1 H_2 H_3 ... H_n
-          q   q   q       q
-            |  |   |       |
-              \ |   |      /
-                      .....
-                  \   |  /
-                          a
-Constructs a unit mapping.
+Global attention module that computes a parameterized convex combination of a matrix
+based on an input query vector.
+
+The attention mechanism can be visualized as:
+
+    H_1 H_2 H_3 ... H_n
+     q   q   q       q
+       |  |   |       |
+         \ |   |      /
+                 .....
+             \   |  /
+                     a
+
+It constructs a unit mapping:
     $$(H_1 + H_n, q) => (a)$$
-    Where H is of `batch x n x dim` and q is of `batch x dim`.
-    The full def is  $$\tanh(W_2 [(softmax((W_1 q + b_1) H) H), q] + b_2)$$.:
+Where H is of shape `batch x seq_len x dim` and q is of shape `batch x dim`.
+
+The full definition is:
+    $$\tanh(W_2 [(softmax((W_1 q + b_1) H) H), q] + b_2)$$
 """
 
 import torch
 import torch.nn as nn
 from jaxtyping import Float
 from torch import Tensor
+from specialk.core.utils import log
 
 
 class GlobalAttention(nn.Module):
     def __init__(self, dim: int):
-        super(GlobalAttention, self).__init__()
+        super().__init__()
         self.linear_in = nn.Linear(dim, dim, bias=False)
         self.softmax = nn.Softmax(dim=1)
         self.linear_out = nn.Linear(dim * 2, dim, bias=False)
         self.tanh = nn.Tanh()
-        self.mask = None
-
-    def applyMask(self, mask):
-        self.mask = mask
+        self.mask: Tensor | None = None
+        self.warn_once = False
 
     def forward(
         self,
-        input: Float[Tensor, "batch dim"],
+        query: Float[Tensor, "batch dim"],
         context: Float[Tensor, "batch seq_len dim"],
-    ):
+    ) -> tuple[Tensor, Tensor]:
         """
-        input: batch x dim
-        context: batch x sourceL x dim
+        Compute the global attention.
+
+        Args:
+            query: Tensor of shape (batch, dim)
+            context: Tensor of shape (batch, seq_len, dim)
+
+        Returns:
+            tuple: (context_output, attention_weights)
+                context_output: Tensor of shape (batch, dim)
+                attention_weights: Tensor of shape (batch, seq_len)
         """
-        targetT: Float[Tensor, "batch dim 1"] = self.linear_in(input).unsqueeze(
-            2
-        )  # batch x dim x 1
-        # print("targetT.shape", targetT.shape)
+        target = self.linear_in(query).unsqueeze(2)  # shape: (batch, dim, 1)
 
-        # Get attention
-        attn: Float[Tensor, "batch seq_len"] = torch.bmm(context, targetT).squeeze(
-            2
-        )  # batch x sourceL
-        # print("attn_shape", attn.shape)
+        # Compute attention weights
+        attn_weights: Float[Tensor, "batch seq_len"] = torch.bmm(
+            context, target
+        ).squeeze(2)
 
-        # apply mask
+        # Apply mask if set
         if self.mask is not None:
-            # print("mask.shape", self.mask.shape)
-            attn.data.masked_fill_(
-                self.mask.view(-1, self.mask.shape[-1]), -float("inf")
-            )
-            
-        attn = self.softmax(attn)
+            mask = self.mask
+            if mask.shape[-1] > attn_weights.shape[-1]:
+                if not self.warn_once:
+                    self.warn_once = True
+                    log.warn(
+                        f"Attention mask {mask.shape} is greater than the "
+                        f"attention matrix {attn_weights.shape}; truncating to fit. "
+                        "This indicates a potential bug in your code."
+                    )
+                mask = mask[:, :, : attn_weights.shape[-1]]
+            attn_weights.data.masked_fill_(mask.view(-1, mask.shape[-1]), -float("inf"))
 
-        attn3 = attn.view(attn.size(0), 1, attn.size(1))  # batch x 1 x sourceL
+        attn_weights = self.softmax(attn_weights)
 
-        weightedContext = torch.bmm(attn3, context).squeeze(1)  # batch x dim
-        contextCombined = torch.cat((weightedContext, input), 1)
+        # Compute weighted context
+        attn_applied = attn_weights.unsqueeze(1)  # shape: (batch, 1, seq_len)
+        weighted_context = torch.bmm(attn_applied, context).squeeze(
+            1
+        )  # shape: (batch, dim)
 
-        contextOutput = self.tanh(self.linear_out(contextCombined))
+        # Combine weighted context with input query
+        combined_context = torch.cat((weighted_context, query), 1)
+        context_output = self.tanh(self.linear_out(combined_context))
 
-        return contextOutput, attn
+        return context_output, attn_weights

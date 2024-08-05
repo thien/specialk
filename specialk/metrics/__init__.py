@@ -7,6 +7,7 @@ from specialk.metrics.metrics import (
     Meteor,
     Metric,
     Polarity,
+    SacreBLEU,
 )
 from specialk.metrics.style_transfer.style_transfer import (
     Intensity,
@@ -28,4 +29,5 @@ __ALL__ = [
     Intensity,
     Naturalness,
     Preservation,
+    SacreBLEU,
 ]

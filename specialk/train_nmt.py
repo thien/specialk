@@ -1,27 +1,16 @@
 from __future__ import division
 
-import argparse
-from pathlib import Path
-from typing import Optional, Tuple, Union
+from typing import Union
 
 import lightning.pytorch as pl
 import pandas as pd
-import torch
-import torch.nn as nn
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.profilers import AdvancedProfiler
-from torch.autograd import Variable
-from torch.nn.modules.loss import _Loss as Loss
 from torch.utils.data import DataLoader
-from tqdm import tqdm
 
-from datasets import Dataset, load_dataset
+from datasets import Dataset
 from specialk.core.constants import LOGGING_DIR, LOGGING_PERF_NAME, PROJECT_DIR
-from specialk.core.utils import check_torch_device, log, namespace_to_dict
-from specialk.datasets.dataloaders import (
-    init_classification_dataloaders as init_dataloaders,
-)
-from specialk.models.mt_model import RNNModule
+from specialk.core.utils import check_torch_device, log
 from specialk.models.tokenizer import (
     BPEVocabulary,
     SentencePieceVocabulary,
@@ -89,7 +78,7 @@ def main():
     BATCH_SIZE = 64 if DEVICE == "mps" else 32
 
     # init tokenizer
-    tokenizer, tokenizer_filepath = load_tokenizer("sentencepiece")
+    tokenizer, tokenizer_filepath = load_tokenizer("spm")
     log.info("Loaded tokenizer", tokenizer=tokenizer)
 
     # load dataset
@@ -98,7 +87,7 @@ def main():
     path_train = dataset_dir / "corpus_enfr_final.train.parquet"
 
     train_dataset: Dataset = Dataset.from_pandas(
-        pd.read_parquet(path_train).sample(n=1000000, random_state=1)
+        pd.read_parquet(path_train).sample(n=100000, random_state=1)
     )
     valid_dataset: Dataset = Dataset.from_pandas(pd.read_parquet(path_valid))
 

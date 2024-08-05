@@ -148,7 +148,7 @@ class LexicalMetrics(Metric):
         finds ``it v-link ADJ finite/non-finite clause''
 
         eg:
-            "It's unclear what Teresa May is planning."
+            "It's uncear what Teresa May is planning."
 
         params:
             tokens: pos tagged sequence (e.g. `pos_tag(word_tokenize(string_of_article))` )
@@ -383,7 +383,9 @@ class SacreBLEU(AlignmentMetric):
         predictions: List[str],
         references: Union[List[str], List[List[str]]],
     ) -> float:
-        return self.bleu.corpus_score(predictions, references).score
+        return self.bleu.compute(predictions=predictions, references=references)[
+            "score"
+        ]
 
 
 class ChrF(AlignmentMetric):

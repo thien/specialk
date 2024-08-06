@@ -1,5 +1,6 @@
 from typing import List, Tuple
 
+import numpy as np
 import pytest
 
 from specialk.metrics import BLEU, LexicalMetrics, Meteor, Polarity, SacreBLEU
@@ -80,25 +81,16 @@ def test_meteor(meteor):
 
 def test_sacrebleu(sacrebleu):
     test_case = [
+        (["this is a test"], ["this is a test"], 100.0),
         (
-            ["hello world"],
-            ["who are you"],
-            {"bleu1": 1, "bleu2": 0, "bleu3": 0, "bleu4": 0},
-        ),
-        (
-            ["hello world"],
-            ["hello world"],
-            {"bleu1": 1, "bleu2": 0, "bleu3": 0, "bleu4": 0},
-        ),
-        (["hello"], ["hello world"], {"bleu1": 1, "bleu2": 0, "bleu3": 0, "bleu4": 0}),
-        (
-            ["hello world", "dog"],
-            ["hello world", "cat"],
-            {"bleu1": 1, "bleu2": 0, "bleu3": 0, "bleu4": 0},
+            ["this is a test", "hello world"],
+            [["this is a test"], ["hello world hi"]],
+            84.64,
         ),
     ]
-    for pred, actual, _ in test_case:
-        assert sacrebleu.compute(pred, actual) == 0.0
+    for pred, actual, score in test_case:
+        pred_score = sacrebleu.compute(pred, actual)
+        assert np.isclose(pred_score, score, rtol=1e-02, atol=1e-03)
 
 
 def test_syllables(lexical):

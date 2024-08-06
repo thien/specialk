@@ -9,7 +9,8 @@ from torch.autograd import Variable
 from torch.nn.utils.rnn import pack_padded_sequence as pack
 from torch.nn.utils.rnn import pad_packed_sequence as unpack
 
-from . import Constants, modules
+from specialk.core import constants as Constants
+from specialk.models.recurrent.GlobalAttention import GlobalAttention
 
 
 class Encoder(nn.Module):
@@ -107,7 +108,7 @@ class Decoder(nn.Module):
         assert opt.rnn_size % self.num_directions == 0
         self.hidden_size = opt.rnn_size // self.num_directions
 
-        self.attn = modules.GlobalAttention(opt.rnn_size)
+        self.attn = GlobalAttention(opt.rnn_size)
         self.dropout = nn.Dropout(opt.dropout)
 
         self.hidden_size = opt.rnn_size

@@ -27,6 +27,7 @@ class PyTorchTransformerModel(nn.Transformer):
     def __init__(
         self,
         vocab_size: int,
+        decoder_vocab_size: Optional[int] = None,
         max_seq_length: int = 100,
         dim_model: int = 512,
         n_heads: int = 8,
@@ -67,14 +68,17 @@ class PyTorchTransformerModel(nn.Transformer):
         self.input_emb = nn.Embedding(
             num_embeddings=vocab_size, embedding_dim=dim_model
         )
+        if not decoder_vocab_size:
+            decoder_vocab_size = vocab_size
+
         self.output_emb = nn.Embedding(
-            num_embeddings=vocab_size, embedding_dim=dim_model
+            num_embeddings=decoder_vocab_size, embedding_dim=dim_model
         )
         self.pos_encoder = PositionalEncoder(
             dim_model=dim_model, max_seq_length=max_seq_length
         )
         self.max_seq_length = max_seq_length
-        self.generator = nn.Linear(dim_model, vocab_size)
+        self.generator = nn.Linear(dim_model, decoder_vocab_size)
         self.tgt_mask = None
         self.decoder_generator_weight_sharing = decoder_generator_weight_sharing
         self.x_logit_scale = 1.0
@@ -213,9 +217,9 @@ class PyTorchTransformerModel(nn.Transformer):
 class PyTorchTransformerModule(NMTModule):
     def __init__(
         self,
+        vocabulary_size,
         n_warmup_steps: int = 4000,
         name="PyTorchTransformer",
-        vocabulary_size=35000,
         sequence_length=100,
         **kwargs,
     ):
@@ -228,7 +232,9 @@ class PyTorchTransformerModule(NMTModule):
         self.n_warmup_steps = n_warmup_steps
         self.model = PyTorchTransformerModel(
             vocab_size=self.vocabulary_size,
+            decoder_vocab_size=self.decoder_vocabulary_size,
             batch_first=True,
+            max_seq_length=sequence_length,
             **kwargs,
         )
 

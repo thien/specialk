@@ -34,15 +34,47 @@ class NMTModule(pl.LightningModule):
         vocabulary_size: int,
         sequence_length: int,
         label_smoothing: bool = False,
-        tokenizer: Union[Vocabulary, None] = None,
+        tokenizer: Optional[Vocabulary] = None,
+        decoder_tokenizer: Optional[Vocabulary] = None,
+        decoder_vocabulary_size: Optional[int] = None,
         **kwargs,
     ):
+        """Initialize the NMT module.
+
+        Args:
+            name (str): _description_
+            vocabulary_size (int): _description_
+            sequence_length (int): _description_
+            label_smoothing (bool, optional): _description_. Defaults to False.
+            tokenizer (Optional[Vocabulary], optional): _description_. Defaults to None.
+            decoder_tokenizer (Optional[Vocabulary], optional):
+                Tokenizer used for the decoder only. Defaults to None. If it is set to None,
+                then the decoder will use the same vocabulary as the encoder.
+            decoder_vocabulary_size (Optional[int], optional): Vocabulary size of the decoder
+                generator. Defaults to None. If it is set to none, then the decoder vocabulary
+                size is the same as the encoder's vocabulary size.
+        """
         super().__init__()
         self.name = name
         self.vocabulary_size = vocabulary_size
+
         self.sequence_length = sequence_length
         self.label_smoothing = label_smoothing
         self.tokenizer: Union[Vocabulary, None] = tokenizer
+
+        # if we have a separate tokenizer for the decoder,
+        # we'll want to make sure that the decoder vocabulary size is set.
+        self.decoder_tokenizer: Union[Vocabulary, None] = decoder_tokenizer
+        self.decoder_vocabulary_size = decoder_vocabulary_size
+        if not self.decoder_tokenizer:
+            self.decoder_tokenizer = self.tokenizer
+            self.decoder_vocabulary_size = self.vocabulary_size
+        else:
+            if not self.decoder_vocabulary_size:
+                raise Exception(
+                    "You have added a decoder tokenizer, "
+                    "but you have not set the decoder vocabulary size."
+                )
 
         self.model: Union[TransformerModel, Seq2Seq]
         self.criterion = torch.nn.CrossEntropyLoss(ignore_index=PAD)
@@ -104,7 +136,7 @@ class NMTModule(pl.LightningModule):
             "batch_id": batch_idx,
             "eval_loss": loss,
         }
-        if self.tokenizer is not None:
+        if self.decoder_tokenizer is not None:
             metric_dict["bleu"] = self.validation_bleu(y_hat, y)
 
         self.log_dict(
@@ -123,7 +155,7 @@ class NMTModule(pl.LightningModule):
         Returns:
             float: BLEU score.
         """
-        if not self.tokenizer:
+        if not self.decoder_tokenizer:
             return None
         y_hat = y_hat.argmax(dim=-1)
         y_hat = mask_out_special_tokens(y_hat, self.tokenizer.EOS, self.tokenizer.PAD)
@@ -236,7 +268,7 @@ class TransformerModule(NMTModule):
         self.n_warmup_steps = n_warmup_steps
         self.model = TransformerModel(
             n_src_vocab=self.vocabulary_size,
-            n_tgt_vocab=self.vocabulary_size,
+            n_tgt_vocab=self.decoder_vocabulary_size,
             len_max_seq=self.sequence_length,
             **kwargs,
         )
@@ -272,12 +304,17 @@ class TransformerModule(NMTModule):
 
 
 class RNNModule(NMTModule):
-    def __init__(self, vocabulary_size: int, **kwargs):
-        super().__init__(vocabulary_size=vocabulary_size, **kwargs)
+    def __init__(
+        self,
+        **kwargs,
+    ):
+        super().__init__(
+            **kwargs,
+        )
         args = self.patch_args(**kwargs)
         self.model = Seq2Seq(
-            RNNEncoder(args, vocabulary_size),
-            RNNDecoder(args, vocabulary_size),
+            RNNEncoder(args, self.vocabulary_size),
+            RNNDecoder(args, self.decoder_vocabulary_size),
         )
 
     @staticmethod

@@ -2,7 +2,79 @@ import torch
 from torch import LongTensor
 
 from specialk.core.constants import EOS, PAD
-from specialk.models.ops import mask_out_special_tokens
+from specialk.models.ops import mask_out_special_tokens, n_tokens_correct
+
+
+def test_n_tokens_correct_2d():
+    # Test Case 1: Basic test case with no padding
+    pred1 = torch.tensor([[0.1, 0.9], [0.8, 0.2], [0.4, 0.6]])
+    gold1 = torch.tensor([1, 0, 1])
+    pad_token1 = -1
+    assert n_tokens_correct(pred1, gold1, pad_token1) == 2
+
+    # Test Case 2: All predictions are correct
+    pred2 = torch.tensor([[0.1, 0.9], [0.8, 0.2], [0.4, 0.6]])
+    gold2 = torch.tensor([1, 0, 0])
+    pad_token2 = -1
+    assert n_tokens_correct(pred2, gold2, pad_token2) == 3
+
+    # Test Case 3: All predictions are wrong
+    pred3 = torch.tensor([[0.9, 0.1], [0.2, 0.8], [0.6, 0.4]])
+    gold3 = torch.tensor([1, 0, 1])
+    pad_token3 = -1
+    assert n_tokens_correct(pred3, gold3, pad_token3) == 0
+
+    # Test Case 4: Including padding tokens
+    pred4 = torch.tensor([[0.1, 0.9], [0.8, 0.2], [0.4, 0.6], [0.7, 0.3]])
+    gold4 = torch.tensor([1, 0, -1, 1])
+    pad_token4 = -1
+    assert n_tokens_correct(pred4, gold4, pad_token4) == 2
+
+    # Test Case 5: All tokens are padding
+    pred5 = torch.tensor([[0.1, 0.9], [0.8, 0.2], [0.4, 0.6]])
+    gold5 = torch.tensor([-1, -1, -1])
+    pad_token5 = -1
+    assert n_tokens_correct(pred5, gold5, pad_token5) == 0
+
+
+def test_n_tokens_correct_3d():
+    # Test Case 1: Basic test case with no padding
+    pred1 = torch.tensor([[[0.1, 0.9], [0.8, 0.2], [0.4, 0.6]]])
+    gold1 = torch.tensor([[1, 0, 1]])
+    pad_token1 = -1
+    assert n_tokens_correct(pred1, gold1, pad_token1) == 2
+
+    # Test Case 2: All predictions are correct
+    pred2 = torch.tensor([[[0.1, 0.9], [0.8, 0.2], [0.4, 0.6]]])
+    gold2 = torch.tensor([[1, 0, 0]])
+    pad_token2 = -1
+    assert n_tokens_correct(pred2, gold2, pad_token2) == 3
+
+    # Test Case 3: All predictions are wrong
+    pred3 = torch.tensor([[[0.9, 0.1], [0.2, 0.8], [0.6, 0.4]]])
+    gold3 = torch.tensor([[1, 0, 1]])
+    pad_token3 = -1
+    assert n_tokens_correct(pred3, gold3, pad_token3) == 0
+
+    # Test Case 4: Including padding tokens
+    pred4 = torch.tensor([[[0.1, 0.9], [0.8, 0.2], [0.4, 0.6], [0.7, 0.3]]])
+    gold4 = torch.tensor([[1, 0, -1, 1]])
+    pad_token4 = -1
+    assert n_tokens_correct(pred4, gold4, pad_token4) == 2
+
+    # Test Case 5: All tokens are padding
+    pred5 = torch.tensor([[[0.1, 0.9], [0.8, 0.2], [0.4, 0.6]]])
+    gold5 = torch.tensor([[-1, -1, -1]])
+    pad_token5 = -1
+    assert n_tokens_correct(pred5, gold5, pad_token5) == 0
+
+    # Test Case 6: Batch processing with padding
+    pred6 = torch.tensor(
+        [[[0.1, 0.9], [0.8, 0.2], [0.4, 0.6]], [[0.7, 0.3], [0.2, 0.8], [0.6, 0.4]]]
+    )
+    gold6 = torch.tensor([[1, 0, -1], [1, 0, 1]])
+    pad_token6 = -1
+    assert n_tokens_correct(pred6, gold6, pad_token6) == 3
 
 
 def test_mask_out_special_tokens():

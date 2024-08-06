@@ -2,8 +2,9 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
-from . import Constants, Dataset, Models, modules
-from .Beam import Beam
+from specialk.models.recurrent import Models
+from specialk.models.recurrent.GlobalAttention import GlobalAttention
+from specialk.models.recurrent.Beam import Beam
 
 
 class Translator(object):
@@ -235,7 +236,7 @@ class Translator(object):
         padMask = srcBatch.data.eq(Constants.PAD).t()
 
         def apply_context_mask(m):
-            if isinstance(m, modules.GlobalAttention):
+            if isinstance(m, GlobalAttention):
                 m.mask = padMask
 
         #  (2) if a target is specified, compute the 'goldScore'

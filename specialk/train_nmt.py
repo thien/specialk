@@ -112,7 +112,7 @@ def main():
     path_valid = dataset_dir / "corpus_enfr_final.val.parquet"
     path_train = dataset_dir / "corpus_enfr_final.train.parquet"
 
-    df_train = pd.read_parquet(path_train).sample(frac=1)  # shuffle.
+    df_train = pd.read_parquet(path_train).sample(frac=1)[:100000]  # shuffle.
     df_valid = pd.read_parquet(path_valid)
 
     log.info("Loaded dataset", df_train=df_train.shape, df_valid=df_valid.shape)
@@ -138,9 +138,10 @@ def main():
 
     if MODEL == "rnn":
         task = RNNModule(
-            name="lstm",
+            name="lstm_smol",
             vocabulary_size=tokenizer.vocab_size,
             sequence_length=tokenizer.max_length,
+            tokenizer=tokenizer,
         )
         task.model.PAD = tokenizer.PAD
 
@@ -171,7 +172,7 @@ def main():
     profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
     trainer = pl.Trainer(
         accelerator=DEVICE,
-        max_epochs=5,
+        max_epochs=1,
         log_every_n_steps=20,
         logger=logger,
         profiler=profiler,

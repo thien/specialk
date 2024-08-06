@@ -10,11 +10,8 @@ https://github.com/soaxelbrooke/python-bpe/tree/master/bpe
 
 from collections import Counter
 
-try:
-    from typing import Any, Callable, Dict, Iterable, Iterator, List
-except ImportError:
-    pass
 
+from typing import Any, Callable, Dict, Iterable, Iterator, List
 import json
 import os
 

@@ -4,7 +4,7 @@ from torch.autograd import Variable
 from torch.nn.utils.rnn import pack_padded_sequence as pack
 from torch.nn.utils.rnn import pad_packed_sequence as unpack
 
-from . import modules
+from specialk.models.recurrent.GlobalAttention import GlobalAttention
 
 """
 I'm not sure where this is used.

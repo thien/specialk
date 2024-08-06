@@ -11,7 +11,9 @@ from specialk import Constants
 from specialk.core.utils import log
 from specialk.models.classifier.onmt.CNNModels import ConvNet
 from specialk.models.tokenizer import SentencePieceVocabulary
-from specialk.models.transformer.pytorch_transformer import PyTorchTransformerModule
+from specialk.models.transformer.torch.pytorch_transformer import (
+    PyTorchTransformerModule,
+)
 
 dirpath = "tests/tokenizer/test_files"
 dev_path = "/Users/t/Projects/datasets/political/political_data/democratic_only.dev.en_fr.parquet"
@@ -41,7 +43,7 @@ def dataset() -> Dataset:
 @pytest.fixture(scope="session")
 def spm_tokenizer() -> SentencePieceVocabulary:
     return SentencePieceVocabulary.from_file(
-        dir_tokenizer / "sentencepiece" / "enfr.model", max_length=SEQUENCE_LENGTH
+        dir_tokenizer / "sentencepiece" / "enfr_small.model", max_length=SEQUENCE_LENGTH
     )
 
 

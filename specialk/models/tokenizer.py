@@ -424,30 +424,54 @@ class WordVocabulary(Vocabulary):
             lower=self.lower,
             seq_len=self.max_length,
         )
-        for sentence in texts:
+        for sentence in tqdm(texts, desc="Training Tokenizer"):
             for word in self.tokenize(sentence):
                 vocab.add(word)
 
         original_size = vocab.size()
+        require_pruning = True
+        if original_size < self.vocab_size:
+            log.info(
+                f"Vocabulary size at initialisation (n={self.vocab_size})"
+                " is less than the vocabulary size found "
+                f"after training (n={original_size}). Setting to new vocab size."
+            )
+            self.vocab_size = original_size
+            require_pruning = False
 
         # for debugging purposes, show the head distribution of the
         # token freuqencies.
         top_n = 10
-        head_freq = sorted(
+        token_freq = sorted(
             vocab.labelToIdx.keys(),
             key=lambda label: vocab.frequencies[vocab.labelToIdx[label]],
             reverse=True,
-        )[:top_n]
+        )
+        head_freq = token_freq[:top_n]
+        tail_freq = token_freq[-top_n:]
+
         log.debug(
-            "Most frequent tokens found",
+            f"Head of token frequencies (n={top_n})",
             tokens={k: vocab.frequencies[vocab.labelToIdx[k]] for k in head_freq},
         )
-
-        self.vocab = vocab.prune(self.vocab_size)
-        log.info(
-            "Created space-separated token dictionary of size %d (pruned from %d)"
-            % (self.vocab.size(), original_size)
+        log.debug(
+            f"Tail of token frequencies (n={top_n})",
+            tokens={k: vocab.frequencies[vocab.labelToIdx[k]] for k in tail_freq},
         )
+
+        self.vocab = vocab
+        if require_pruning:
+            self.vocab = vocab.prune(self.vocab_size)
+            log.info(
+                "Created space-separated token dictionary of size %d (pruned from %d)"
+                % (self.vocab.size(), original_size)
+            )
+            self.vocab_size = self.vocab.size()
+        else:
+            log.info(
+                "Pruning is skipped as vocabulary size found is "
+                "less than originally provisioned."
+            )
 
     @deprecated
     def make(self, data_path: Union[Path, str]):
@@ -479,14 +503,14 @@ class WordVocabulary(Vocabulary):
         # for debugging purposes, show the head distribution of the
         # token freuqencies.
         top_n = 10
-        head_freq = sorted(
+        token_freq = sorted(
             vocab.labelToIdx.keys(),
             key=lambda label: vocab.frequencies[vocab.labelToIdx[label]],
             reverse=True,
         )[:top_n]
         log.debug(
             "Most frequent tokens found",
-            tokens={k: vocab.frequencies[vocab.labelToIdx[k]] for k in head_freq},
+            tokens={k: vocab.frequencies[vocab.labelToIdx[k]] for k in token_freq},
             filepath=data_path,
         )
 
@@ -521,7 +545,7 @@ class WordVocabulary(Vocabulary):
         self.vocab.writeFile(filepath)
 
     @classmethod
-    def from_file(cls, filepath: Path | str) -> Vocabulary:
+    def from_file(cls, filepath: Path | str) -> WordVocabulary:
         return super().from_file(filepath)
 
     def to_dict(self) -> dict:
@@ -550,6 +574,9 @@ class WordVocabulary(Vocabulary):
         this.vocab.labelToIdx = d["vocab"]["labelToIdx"]
         this.vocab.frequencies = d["vocab"]["frequencies"]
         this.vocab.special = d["vocab"]["special"]
+
+        this.PAD = this.vocab.labelToIdx[Constants.PAD_WORD]
+        this.UNK = this.vocab.labelToIdx[Constants.UNK_WORD]
         return this
 
     def to_tensor(self, text: str) -> torch.LongTensor:

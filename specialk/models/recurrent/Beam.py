@@ -2,7 +2,7 @@ from typing import List, Tuple
 import torch
 from torch import Tensor
 
-from . import Constants
+from specialk import Constants
 
 
 class Beam:

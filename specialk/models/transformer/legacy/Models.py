@@ -216,6 +216,11 @@ class Transformer(nn.Module):
     ):
         super().__init__()
 
+        if n_tgt_vocab is None:
+            n_tgt_vocab = n_src_vocab
+        if n_src_vocab != n_tgt_vocab:
+            emb_src_tgt_weight_sharing = False
+
         self.encoder = Encoder(
             n_src_vocab=n_src_vocab,
             len_max_seq=len_max_seq,

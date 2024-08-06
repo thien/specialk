@@ -6,7 +6,7 @@ import random
 import torch
 from torch.autograd import Variable
 
-from . import Constants
+import specialk.core.constants as Constants
 
 
 class Dataset(object):

@@ -5,6 +5,9 @@ import warnings
 from argparse import Namespace
 from multiprocessing import Pool, cpu_count
 from typing import Any, Dict, List
+import platform
+from pathlib import Path
+
 
 import structlog
 import torch
@@ -58,9 +61,20 @@ def get_len(filepath):
     Reads number of lines in the mose corpus without using python
     to deal with it. This is some order of magnitude faster!
     """
+    if isinstance(filepath, Path):
+        filepath = str(filepath)
+
+    filepath = filepath.replace(" ", r"\ ").replace("(", r"\(").replace(")", r"\)")
+
     command = "wc -l " + filepath
-    process = subprocess.run(command.split(" "), stdout=subprocess.PIPE)
-    value = process.stdout.decode("utf-8").strip().split().pop(0)
+    print(command)
+
+    process = subprocess.run(["wc", "-l", filepath], stdout=subprocess.PIPE)
+    _plt = platform.system()
+    if _plt == "Linux":
+        value = process.stdout.decode("utf-8").strip().split().pop(0)
+    elif _plt == "Darwin":
+        value = process.stdout.decode("utf-8").strip().split().pop(0)
     return int(value)
 
 

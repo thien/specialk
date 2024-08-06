@@ -12,6 +12,33 @@ IntOrPair = Union[int, Pair]
 IntOrTriple = Union[int, Triple]
 
 
+def token_accuracy(pred: Tensor, gold: Tensor, pad_token: int) -> float:
+    accuracy = n_tokens_correct(pred, gold, pad_token)
+    total = gold.ne(pad_token).sum()
+    return accuracy / total
+
+
+def n_tokens_correct(pred: Tensor, gold: Tensor, pad_token: int) -> int:
+    """
+    Calculate the number of correct tokens.
+    This ignores padding tokens; This is not differentible.
+
+    Args:
+        pred (Tensor): The predicted tensor of shape (N, C) where N
+        is the number of tokens and C is the number of classes.
+        gold (Tensor): The ground truth tensor of shape (N,) containing
+        the correct classes for each token.
+        pad_token (int): The token index used for padding.
+
+    Returns:
+        int: The number of correct tokens, excluding padding tokens.
+    """
+    pred_indices = pred.argmax(dim=-1)
+    gold_flat = gold.view(-1)
+    non_pad_mask = gold_flat.ne(pad_token)
+    return pred_indices.eq(gold_flat).masked_select(non_pad_mask).sum().item()
+
+
 def force_pair(v: IntOrPair) -> Pair:
     """Convert v to a pair of int, if it isn't already."""
     if isinstance(v, tuple):

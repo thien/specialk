@@ -1,17 +1,20 @@
 import sentencepiece as spm
 
 import specialk.core.constants as Constants
+from specialk.core.utils import log
 
 special_tokens = ["<blank>", "<unk>", "<s>", "</s>", "<p>", "<sep>", "<cls>"]
 special_tokens = [i for i in special_tokens if i not in {"<unk>"}]
-special_tokens
 
-inp = "/Users/t/Projects/specialk/datasets/machine_translation/corpus_enfr_final.en,/Users/t/Projects/specialk/datasets/machine_translation/corpus_enfr_final.fr"
+inp = f"{Constants.PROJECT_DIR}/datasets/machine_translation/corpus_enfr_final.en,{Constants.PROJECT_DIR}/datasets/machine_translation/corpus_enfr_final.fr"
+log.info("Setting up SPM", src_data=inp)
 
+DEFAULT_VOCAB_SIZE = 35000
+SMALL_VOCAB_SIZE = 10000
 spm.SentencePieceTrainer.train(
     input=inp,
-    model_prefix="frenidentity",
-    vocab_size=35000,
+    model_prefix="frenidentity_small",
+    vocab_size=SMALL_VOCAB_SIZE,
     accept_language="en,fr",
     num_threads=14,
     control_symbols=special_tokens,

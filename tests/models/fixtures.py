@@ -23,6 +23,7 @@ SEQUENCE_LENGTH = 100
 
 torch.manual_seed(1337)
 
+
 @pytest.fixture(scope="session", autouse=True)
 def dataset() -> Dataset:
     try:

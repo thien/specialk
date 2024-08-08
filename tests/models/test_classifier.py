@@ -5,11 +5,13 @@ from torchmetrics.functional import accuracy
 
 from specialk.core.utils import log
 from specialk.models.classifier.onmt.CNNModels import ConvNet
-from tests.models.fixtures import bpe_dataloader  # noqa: F401; noqa: F402
-from tests.models.fixtures import bpe_tokenizer  # noqa: F401; noqa: F402
-from tests.models.fixtures import dataset  # noqa: F401; noqa: F402
-from tests.models.fixtures import word_dataloader  # noqa: F401; noqa: F402
-from tests.models.fixtures import word_tokenizer  # noqa: F401; noqa: F402
+from tests.models.fixtures import (
+    bpe_dataloader,  # noqa: F401; noqa: F402
+    bpe_tokenizer,  # noqa: F401; noqa: F402
+    dataset,  # noqa: F401; noqa: F402
+    word_dataloader,  # noqa: F401; noqa: F402
+    word_tokenizer,  # noqa: F401; noqa: F402
+)
 from tests.tokenizer.test_tokenizer import VOCABULARY_SIZE
 
 dirpath = "tests/tokenizer/test_files"

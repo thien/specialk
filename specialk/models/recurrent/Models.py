@@ -40,7 +40,7 @@ class Encoder(nn.Module):
         )
 
     def load_pretrained_vectors(self, opt: Namespace):
-        """In case you want to use GloVe embeddings."""
+        """In case you want to use alternative embeddings (e.g. GloVe)."""
         if opt.pre_word_vecs_enc:
             self.word_lut.weight.data.copy_(torch.load(opt.pre_word_vecs_enc))
 
@@ -156,7 +156,6 @@ class StackedLSTM(nn.Module):
         prev_hidden, prev_cell = hidden
         new_hidden_states, new_cell_states = [], []
 
-        layer: nn.LSTMCell
         layer_output: Float[Tensor, "batch hidden"]
         new_cell: Float[Tensor, "batch hidden"]
         for i, layer in enumerate(self.layers):
@@ -171,13 +170,9 @@ class StackedLSTM(nn.Module):
 
         stacked_hidden: Float[Tensor, "num_layers batch hidden"]
         stacked_hidden = torch.stack(new_hidden_states)
-
         stacked_cell: Float[Tensor, "num_layers batch hidden"]
         stacked_cell = torch.stack(new_cell_states)
 
-
-        # input shape: (batch_size, hidden_size)
-        # (stacked_hidden, stacked_cell) shapes: both (num_layers, batch_size, hidden_size)
         return input, (stacked_hidden, stacked_cell)
 
     def init_hidden(self, batch_size: int) -> Tuple[Tensor, Tensor]:
@@ -187,7 +182,7 @@ class StackedLSTM(nn.Module):
             batch_size (int): batch size to match input.
 
         Returns:
-            Tuple[Tensor, Tensor]: Dummy hidden and cell tensors. 
+            Tuple[Tensor, Tensor]: Dummy hidden and cell tensors.
         """
         device = self.layers[0].weight_ih.device
         return (
@@ -251,42 +246,45 @@ class Decoder(nn.Module):
         context: Float[Tensor, "n_layers length d*hidden_size"],
         init_output: Float[Tensor, "batch d_model"],
         use_gen: bool = True,
+        keep_attention: bool = False,
     ) -> Tuple[Tensor, Tuple[Tensor, Tensor], Tensor]:
-        """_summary_
+        """Run forward pass on Decoder.
 
         Args:
-            input (Float[Tensor, "batch seq_len"]): _description_
-            hidden (Float[Tensor, &quot;&quot;]): _description_
-            context (Float[Tensor, &quot;&quot;]): _description_
-            init_output (Float[Tensor, &quot;&quot;]): Initial output (usually zeros)
+            input (Float[Tensor]): Input to feed into the Decoder.
+            hidden (Tuple[Tensor, Tensor]): Hidden values from the Encoder.
+            context (Float[Tensor]): Every input hidden value from the Encoder,
+                used to calculate attention.
+            init_output (Float[Tensor]): Initial output (usually zeros).
             use_gen (bool, optional): If set, use generator layer. Defaults to True.
+            keep_attention (bool, optional): If set, store all attention scores. so they
+                can be returned. Defaults to False (because it's expensive to store).
 
         Returns:
             Tuple[Tensor, Tuple[Tensor, Tensor], Tensor]: Tuple containing
-                output:
-                hidden:
-                attn: Attention scores from eac
+                output: Output logits.
+                hidden: Hidden values at each decoder step.
+                attn: Attention scores from each decoder generated output.
         """
 
         emb: Float[Tensor, "seq_len, batch d_emb"] = self.word_lut(input)
-        seq_len, batch_size, d_emb = emb.shape
-        # n.b. you can increase performance if you compute W_ih * x for all
-        # iterations in parallel, but that's only possible if
-        # self.input_feed=False
+        seq_len, _, _ = emb.shape
 
-        # TODO: add flag to determine whether to store attention scores or not.
         outputs, attention_scores = [], []  # store outputs @ each time step.
         output = init_output  # Initialize output with init_output
 
         for i in range(seq_len):
-            if i == 0 or (random.random() < self.teacher_forcing_ratio):
-                # teacher forcing.
+            if i == 0 or self.use_teacher_forcing():
+                # teacher forcing. Note that if i=0, the first
+                # token is EOS anyway.
                 emb_t = emb[i, :, :]
             else:
-                # Use the model's previous output
-                prev_output = outputs[-1] if use_gen else self.generator(outputs[-1])
-                prev_output = prev_output.argmax(dim=-1)
-                emb_t = self.word_lut(prev_output)
+                # Use the model's previously predicted output
+                prev_output = outputs[-1]
+                prev_output_logits = (
+                    prev_output if use_gen else self.generator(prev_output)
+                ).argmax(dim=-1)
+                emb_t = self.word_lut(prev_output_logits)
 
             if self.input_feed:
                 emb_t: Float[Tensor, "batch 2*d_emb"]
@@ -298,14 +296,24 @@ class Decoder(nn.Module):
             if use_gen:
                 output = self.generator(output)
             outputs += [output]
-            attention_scores += [attention]
+            if keep_attention:
+                attention_scores += [attention]
 
         outputs = torch.stack(outputs)  # this is faster than catting tensors.
 
-        attention_scores: Float[Tensor, "seq_len batch d_context"]
-        attention_scores = torch.stack(attention_scores)
+        if keep_attention:
+            attention_scores: Float[Tensor, "seq_len batch d_context"]
+            attention_scores = torch.stack(attention_scores)
 
         return outputs, hidden, attention_scores
+
+    def use_teacher_forcing(self) -> bool:
+        """Check conditions to determine when to use teacher forcing."""
+        if not self.training:  # i.e. we're running evals, inference.
+            return False
+        if random.random() < self.teacher_forcing_ratio:
+            return True
+        return False
 
 
 class NMTModel(nn.Module):
@@ -323,7 +331,10 @@ class NMTModel(nn.Module):
         )
 
     def update_teacher_forcing_ratio(self, epoch: int, total_epochs: int):
-        # Linearly decrease the teacher forcing ratio from 1.0 to 0.5 over the course of training
+        # Linearly decrease the teacher forcing ratio from
+        # 1.0 to 0.5 over the course of training
+
+        # TODO: perhaps use steps instead of epochs.
         self.decoder.teacher_forcing_ratio = max(0.5, 0.9 - (epoch / total_epochs))
 
     def _fix_enc_hidden(self, hidden: Tensor) -> Tensor:
@@ -332,7 +343,12 @@ class NMTModel(nn.Module):
           as a hidden state, if a bidirectional LSTM is used.
 
         Input:
-            hidden: [layers, batch, dim]
+            hidden: [layers*2, batch, dim] if bidirectional,
+                    [layers, batch, dim] otherwise.
+
+        Output:
+            Tensor: [layers, batch, dim*2] if bidirectional,
+                    [layers, batch, dim] otherwise.
         """
         layers, batch, dim = hidden.size()
 
@@ -344,18 +360,26 @@ class NMTModel(nn.Module):
         return hidden
 
     def forward(
-        self, src: Float[Tensor, "batch seq"], tgt: Float[Tensor, "batch seq"]
+        self, x: Float[Tensor, "batch seq"], y: Float[Tensor, "batch seq"]
     ) -> Float[Tensor, "batch seq vocab_size"]:
         """
         Forward pass of RNN training. This includes teacher
         training so this cannot be used for inference.
+
+        Input:
+            x (Tensor): input sequence to decode.
+            y (Tensor): output sequence to learn from,
+                or for teacher training.
+        Returns:
+            Tensor: Output sequence.
         """
 
-        if isinstance(src, Tuple) and isinstance(tgt, Tuple):
-            x, x_length = src
-            y, y_length = tgt
-        else:
-            x, y = src, tgt
+        if isinstance(x, Tuple) or isinstance(y, Tuple):
+            raise Exception(
+                "Forward pass doesn't accept tuples anymore (i.e. "
+                "if you're sending in a Tuple[Tensor, List] where list "
+                "is the length of the sequences, you don't need that anymore!"
+            )
 
         # swap batch relationship order.
         x, y = x.transpose(0, 1), y.transpose(0, 1)
@@ -375,8 +399,7 @@ class NMTModel(nn.Module):
         )
 
         out, _, _ = self.decoder(y, hidden, context, init_output)
-        # reverse tensor order (for batch)
-        out = out.transpose(0, 1)
+        out = out.transpose(0, 1)  # reverse tensor order (for batch)
 
         # resulting tensor may not be contiguous because of all the cats.
         return out.contiguous()

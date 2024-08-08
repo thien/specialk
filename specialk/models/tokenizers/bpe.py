@@ -8,12 +8,10 @@ Modified codebase from:
 https://github.com/soaxelbrooke/python-bpe/tree/master/bpe
 """
 
-from collections import Counter
-
-
-from typing import Any, Callable, Dict, Iterable, Iterator, List
 import json
 import os
+from collections import Counter
+from typing import Any, Callable, Dict, Iterable, Iterator, List
 
 import toolz
 from nltk.tokenize import wordpunct_tokenize

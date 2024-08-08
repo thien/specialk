@@ -4,12 +4,10 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
-
 from specialk.core import constants as Constants
 from specialk.models.recurrent import Models
-from specialk.models.recurrent.GlobalAttention import GlobalAttention
 from specialk.models.recurrent.Beam import Beam
-
+from specialk.models.recurrent.GlobalAttention import GlobalAttention
 
 
 class Translator(object):

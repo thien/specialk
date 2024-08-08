@@ -1,6 +1,7 @@
+import random
 from argparse import Namespace
 from typing import Optional, Tuple, Union
-import random
+
 import torch
 import torch.nn as nn
 from jaxtyping import Float, Int
@@ -232,7 +233,7 @@ class Decoder(nn.Module):
             nn.Linear(opt.rnn_size, vocabulary_size), nn.LogSoftmax(dim=-1)
         )
 
-        self.teacher_forcing_ratio = 0.2 
+        self.teacher_forcing_ratio = 0.2
 
     def load_pretrained_vectors(self, opt: Namespace):
         """In case you have pre-trained word2vec embeddings."""
@@ -313,7 +314,6 @@ class NMTModel(nn.Module):
         super(NMTModel, self).__init__()
         self.encoder: Encoder = encoder
         self.decoder: Decoder = decoder
-
 
     def make_init_decoder_output(self, batch_size: int) -> Tensor:
         """Used for inference."""

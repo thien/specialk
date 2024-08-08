@@ -10,15 +10,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 from jaxtyping import Float, Int
 from torch import Tensor
-
 from torch.utils.data import DataLoader
-
 
 from specialk.core.constants import SOURCE, TARGET
 from specialk.models.classifier.trainer import CNNClassifier, TextClassifier
 from specialk.models.mt_model import NMTModule
-from specialk.models.transformer_model import TransformerModel as transformer
 from specialk.models.ops import token_accuracy
+from specialk.models.transformer_model import TransformerModel as transformer
 
 
 class StyleBackTranslationModel(pl.LightningModule):
@@ -39,7 +37,7 @@ class StyleBackTranslationModel(pl.LightningModule):
         self.classifier: TextClassifier = classifier
         self.target_label: int = self.classifier.refs.tgt_label
 
-        # encoder will always be in eval mode. 
+        # encoder will always be in eval mode.
         # We're only updating the decoder weights.
         self.nmt_model.encoder.eval()
         self.classifier.eval()

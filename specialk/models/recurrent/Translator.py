@@ -2,9 +2,10 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
+from specialk import Constants
 from specialk.models.recurrent import Models
-from specialk.models.recurrent.GlobalAttention import GlobalAttention
 from specialk.models.recurrent.Beam import Beam
+from specialk.models.recurrent.GlobalAttention import GlobalAttention
 
 
 class Translator(object):
@@ -222,7 +223,7 @@ class Translator(object):
         beamSize = self.opt.beam_size
 
         #  (1) run the encoder on the src
-        encStates, context = self.model.encoder(srcBatch)
+        context, encStates = self.model.encoder(srcBatch)
         srcBatch = srcBatch[0]  # drop the lengths needed for encoder
 
         rnnSize = context.size(2)

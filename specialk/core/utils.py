@@ -1,13 +1,12 @@
 import functools
 import logging
+import platform
 import subprocess
 import warnings
 from argparse import Namespace
 from multiprocessing import Pool, cpu_count
-from typing import Any, Dict, List
-import platform
 from pathlib import Path
-
+from typing import Any, Dict, List
 
 import structlog
 import torch

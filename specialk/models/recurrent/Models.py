@@ -1,15 +1,16 @@
-from typing import Tuple
-
+from argparse import Namespace
+from typing import Optional, Tuple, Union
+import random
 import torch
 import torch.nn as nn
-from typing import Optional
-from jaxtyping import Float
+from jaxtyping import Float, Int
 from torch import Tensor
 from torch.autograd import Variable
 from torch.nn.utils.rnn import pack_padded_sequence as pack
 from torch.nn.utils.rnn import pad_packed_sequence as unpack
 
 from specialk.core import constants as Constants
+from specialk.core.utils import log
 from specialk.models.recurrent.GlobalAttention import GlobalAttention
 
 
@@ -18,30 +19,36 @@ class Encoder(nn.Module):
     LSTM Encoder.
     """
 
-    def __init__(self, opt, vocabulary_size: int):
-        self.layers = opt.layers
-        self.num_directions = 2 if opt.brnn else 1
-        assert opt.rnn_size % self.num_directions == 0
-        self.hidden_size = opt.rnn_size // self.num_directions
-        input_size = opt.d_word_vec
-
+    def __init__(self, opt: Namespace, vocabulary_size: int):
         super(Encoder, self).__init__()
+
+        self.layers: int = opt.layers
+        self.num_directions: int = 2 if opt.brnn else 1
+        self.hidden_size: int = opt.rnn_size // self.num_directions
+        assert opt.rnn_size % self.num_directions == 0
+
         self.word_lut = nn.Embedding(
             vocabulary_size, opt.d_word_vec, padding_idx=Constants.PAD
         )
+
         self.rnn = nn.LSTM(
-            input_size,
+            opt.d_word_vec,
             self.hidden_size,
             num_layers=opt.layers,
             dropout=opt.dropout,
             bidirectional=opt.brnn,
         )
 
-    def load_pretrained_vectors(self, opt):
+    def load_pretrained_vectors(self, opt: Namespace):
+        """In case you want to use GloVe embeddings."""
         if opt.pre_word_vecs_enc:
             self.word_lut.weight.data.copy_(torch.load(opt.pre_word_vecs_enc))
 
-    def forward(self, input: Tensor, hidden: Optional[Tensor] = None):
+    def forward(
+        self,
+        input: Union[Tuple[Tensor, Tensor], Tensor],
+        hidden: Optional[Tensor] = None,
+    ):
         """
         if input is a tuple:
             (list of sequences, list of sequence lengths)
@@ -49,31 +56,39 @@ class Encoder(nn.Module):
             list of sequences
         """
         if isinstance(input, tuple):
+            x: Int[Tensor, "length batch"]
             x, x_lengths = input
             emb = pack(self.word_lut(x), x_lengths.cpu())
         else:
             emb = self.word_lut(input)
 
-        outputs, hidden_t = self.rnn(emb, hidden)
+        outputs, (hidden_n, cell_n) = self.rnn(emb, hidden)
 
         if isinstance(input, tuple):
             outputs, _ = unpack(outputs)
 
-        return hidden_t, outputs
+        outputs: Float[Tensor, "batch length d*hidden_size"]
+        hidden_n: Float[Tensor, "d*num_layers length hidden_size"]
+        cell_n: Float[Tensor, "d*num_layers length hidden_size"]
+        # log.info(
+        #     "encoder outputs",
+        #     outputs=outputs.shape,
+        #     hidden=(hidden_n.shape, cell_n.shape),
+        # )
+        return outputs, (hidden_n, cell_n)
 
 
-class StackedLSTM(nn.Module):
-    def __init__(self, num_layers, input_size, rnn_size, dropout):
-        super(StackedLSTM, self).__init__()
+class StackedLegacyLSTM(nn.Module):
+    def __init__(self, num_layers: int, input_size: int, rnn_size: int, dropout: float):
+        super(StackedLegacyLSTM, self).__init__()
         self.dropout = nn.Dropout(dropout)
         self.num_layers = num_layers
         self.layers = nn.ModuleList()
-
-        for i in range(num_layers):
+        for _ in range(num_layers):
             self.layers.append(nn.LSTMCell(input_size, rnn_size))
             input_size = rnn_size
 
-    def forward(self, input, hidden):
+    def forward(self, input: Tensor, hidden: Tensor):
         h_0, c_0 = hidden
         h_1, c_1 = [], []
         for i, layer in enumerate(self.layers):
@@ -90,19 +105,121 @@ class StackedLSTM(nn.Module):
         return input, (h_1, c_1)
 
 
-class Decoder(nn.Module):
-    def __init__(self, opt, vocabulary_size):
-        self.layers = opt.layers
-        self.input_feed = opt.input_feed
-        input_size = opt.d_word_vec
-        if self.input_feed:
-            input_size += opt.rnn_size
+class StackedLSTM(nn.Module):
+    def __init__(
+        self, num_layers: int, input_size: int, hidden_size: int, dropout: float = 0.0
+    ):
+        """_summary_
 
-        super(Decoder, self).__init__()
-        self.word_lut = nn.Embedding(
-            vocabulary_size, opt.d_word_vec, padding_idx=Constants.PAD
+        Args:
+            num_layers (int): _description_
+            input_size (int): _description_
+            hidden_size (int): _description_
+            dropout (float, optional): _description_. Defaults to 0.0.
+        """
+        super(StackedLSTM, self).__init__()
+        self.num_layers = num_layers
+        self.hidden_size = hidden_size
+
+        self.layers = nn.ModuleList(
+            [
+                nn.LSTMCell(input_size if i == 0 else hidden_size, hidden_size)
+                for i in range(num_layers)
+            ]
         )
-        self.rnn = StackedLSTM(opt.layers, input_size, opt.rnn_size, opt.dropout)
+
+        self.dropout = nn.Dropout(dropout) if dropout > 0 else None
+
+    def forward(
+        self,
+        input: Float[Tensor, "batch input_size"],
+        hidden: Tuple[
+            Float[Tensor, "num_layers batch hidden"],
+            Float[Tensor, "num_layers batch hidden"],
+        ],
+    ) -> Tuple[
+        Float[Tensor, "batch input_size"],
+        Tuple[
+            Float[Tensor, "num_layers batch hidden"],
+            Float[Tensor, "num_layers batch hidden"],
+        ],
+    ]:
+        """Run Forward pass on the stacked LSTM.
+
+        Args:
+            input (Tensor): input tensor of shape (batch_size, input_size)
+            hidden (Tuple[Tensor, Tensor]): previous hidden tensors from prev. pass:
+                hidden[0] (prev_hidden) shape: (num_layers, batch_size, hidden_size)
+                hidden[1] (prev_cell) shape: (num_layers, batch_size, hidden_size)
+
+        Returns:
+            Tuple[Tensor, Tuple[Tensor, Tensor]]:
+                input shape: (batch_size, hidden_size)
+                (stacked_hidden, stacked_cell) shapes: both (
+                  num_layers, batch_size, hidden_size)
+        """
+        prev_hidden, prev_cell = hidden
+        # log.info("shapes @ stackedlstm", input=input.shape, prev_hidden=prev_hidden.shape, prev_cell=prev_cell.shape)
+        new_hidden_states, new_cell_states = [], []
+
+        layer: nn.LSTMCell
+        layer_output: Float[Tensor, "batch hidden"]
+        new_cell: Float[Tensor, "batch hidden"]
+        for i, layer in enumerate(self.layers):
+            layer_output, new_cell = layer(input, (prev_hidden[i], prev_cell[i]))
+            input = layer_output
+
+            if self.dropout and i < self.num_layers - 1:
+                input = self.dropout(input)
+
+            new_hidden_states.append(layer_output)
+            new_cell_states.append(new_cell)
+
+        stacked_hidden: Float[Tensor, "num_layers batch hidden"]
+        stacked_hidden = torch.stack(new_hidden_states)
+
+        stacked_cell: Float[Tensor, "num_layers batch hidden"]
+        stacked_cell = torch.stack(new_cell_states)
+
+        # Return:
+        # input shape: (batch_size, hidden_size)
+        # (stacked_hidden, stacked_cell) shapes: both (num_layers, batch_size, hidden_size)
+        return input, (stacked_hidden, stacked_cell)
+
+    def init_hidden(self, batch_size: int) -> Tuple[Tensor, Tensor]:
+        device = self.layers[0].weight_ih.device
+        return (
+            torch.zeros(
+                (self.num_layers, batch_size, self.hidden_size),
+                device=device,
+                requires_grad=False,
+            ),
+            torch.zeros(
+                (self.num_layers, batch_size, self.hidden_size),
+                device=device,
+                requires_grad=False,
+            ),
+        )
+
+
+class Decoder(nn.Module):
+    def __init__(self, opt, vocabulary_size: int):
+        super(Decoder, self).__init__()
+        self.layers: int = opt.layers
+        self.input_feed: bool = opt.input_feed
+        self.input_size: int = opt.d_word_vec
+        if self.input_feed:
+            self.input_size += opt.rnn_size
+        self.dim_embedding: int = opt.d_word_vec
+        self.dim_model: int = opt.rnn_size
+        self.p_dropout: float = opt.dropout
+
+        self.word_lut = nn.Embedding(
+            vocabulary_size, self.dim_embedding, padding_idx=Constants.PAD
+        )
+        self.rnn = StackedLSTM(
+            self.layers, self.input_size, self.dim_model, self.p_dropout
+        )
 
         self.num_directions = 2 if opt.brnn else 1
         assert opt.rnn_size % self.num_directions == 0
@@ -112,7 +229,7 @@ class Decoder(nn.Module):
         self.dropout = nn.Dropout(self.p_dropout)
 
         self.generator = nn.Sequential(
-            nn.Linear(opt.rnn_size, vocabulary_size), nn.LogSoftmax(dim=1)
+            nn.Linear(opt.rnn_size, vocabulary_size), nn.LogSoftmax(dim=-1)
         )
 
         self.teacher_forcing_ratio = 0.2 
@@ -125,13 +242,32 @@ class Decoder(nn.Module):
     def forward(
         self,
         input: Float[Tensor, "batch seq_len"],
-        hidden: Float[Tensor, ""],
-        context: Float[Tensor, ""],
-        init_output: Float[Tensor, ""],
+        hidden: Tuple[
+            Float[Tensor, "d*n_layers batch hidden_size"],
+            Float[Tensor, "d*n_layers batch hidden_size"],
+        ],
+        context: Float[Tensor, "n_layers length d*hidden_size"],
+        init_output: Float[Tensor, "batch d_model"],
         useGen: bool = True,
-    ):
-        emb = self.word_lut(input)
-        # print(context.size())
+    ) -> Tuple[Tensor, Tuple[Tensor, Tensor], Tensor]:
+        """_summary_
+
+        Args:
+            input (Float[Tensor, "batch seq_len"]): _description_
+            hidden (Float[Tensor, &quot;&quot;]): _description_
+            context (Float[Tensor, &quot;&quot;]): _description_
+            init_output (Float[Tensor, &quot;&quot;]): Initial output (usually zeros)
+            useGen (bool, optional): If set, use generator layer. Defaults to True.
+
+        Returns:
+            Tuple[Tensor, Tuple[Tensor, Tensor], Tensor]: Tuple containing
+                output:
+                hidden:
+                attn: Attention scores from eac
+        """
+
+        emb: Float[Tensor, "seq_len, batch d_emb"] = self.word_lut(input)
+        seq_len, batch_size, d_emb = emb.shape
         # n.b. you can increase performance if you compute W_ih * x for all
         # iterations in parallel, but that's only possible if
         # self.input_feed=False
@@ -153,6 +289,7 @@ class Decoder(nn.Module):
                 emb_t = self.word_lut(prev_output)
 
             if self.input_feed:
+                emb_t: Float[Tensor, "batch 2*d_emb"]
                 emb_t = torch.cat([emb_t, output], 1)
 
             output, hidden = self.rnn(emb_t, hidden)
@@ -190,59 +327,57 @@ class NMTModel(nn.Module):
         # Linearly decrease the teacher forcing ratio from 1.0 to 0.5 over the course of training
         self.decoder.teacher_forcing_ratio = max(0.5, 1.0 - (epoch / total_epochs))
 
-    def _fix_enc_hidden(self, h):
-        #  the encoder hidden is  (layers*directions) x batch x dim
-        #  we need to convert it to layers x batch x (directions*dim)
+    def _fix_enc_hidden(self, hidden: Tensor) -> Tensor:
+        """
+        Restructures the encoder output for the decoder
+          as a hidden state, if a bidirectional LSTM is used.
+
+        Input:
+            hidden: [layers, batch, dim]
+        """
+        layers, batch, dim = hidden.size()
+
         if self.encoder.num_directions == 2:
-            return (
-                h.view(h.size(0) // 2, 2, h.size(1), h.size(2))
-                .transpose(1, 2)
-                .contiguous()
-                .view(h.size(0) // 2, h.size(1), h.size(2) * 2)
-            )
-        else:
-            return h
+            num_layers = layers // 2
+            reshaped = hidden.view(num_layers, 2, batch, dim)
+            swapped = reshaped.transpose(1, 2)
+            return swapped.reshape(num_layers, batch, dim * 2)
+        return hidden
 
-    def forward(self, src: Float[Tensor, "batch seq"], tgt: Float[Tensor, "batch seq"]):
+    def forward(
+        self, src: Float[Tensor, "batch seq"], tgt: Float[Tensor, "batch seq"]
+    ) -> Float[Tensor, "batch seq vocab_size"]:
         """
-        Forward pass of RNN training.
+        Forward pass of RNN training. This includes teacher
+        training so this cannot be used for inference.
         """
 
-        if isinstance(src, Tuple):
+        if isinstance(src, Tuple) and isinstance(tgt, Tuple):
             x, x_length = src
-        else:
-            x = src
-            x_length = (x != self.PAD).sum(dim=1)
-
-        if isinstance(tgt, Tuple):
             y, y_length = tgt
         else:
-            y = tgt
-            y_length = (y != self.PAD).sum(dim=1)
+            x, y = src, tgt
 
-        # sort for pack_padded_sequences
-        sorted_lengths, sorted_idx = torch.sort(x_length, descending=True)
-        x = x[sorted_idx]
-        y = y[sorted_idx]
-        y_length = y_length[sorted_idx]
         # swap batch relationship order.
-        x = x.transpose(0, 1)
-        y = y.transpose(0, 1)
+        x, y = x.transpose(0, 1), y.transpose(0, 1)
 
-        sorted_lengths = sorted_lengths.to("cpu")
-        enc_hidden, context = self.encoder((x, sorted_lengths))
-        init_output = self.make_init_decoder_output(context)
+        context: Float[Tensor, "batch length d*hidden"]
+        hddn_n: Float[Tensor, "d*num_layers length hidden"]
+        cell_n: Float[Tensor, "d*num_layers length hidden"]
 
-        enc_hidden = (
-            self._fix_enc_hidden(enc_hidden[0]),
-            self._fix_enc_hidden(enc_hidden[1]),
+        context, (hddn_n, cell_n) = self.encoder(x)
+
+        init_output: Float[Tensor, "batch hidden"]
+        init_output = self.make_init_decoder_output(x.shape[0])
+
+        hidden = (
+            self._fix_enc_hidden(hddn_n),
+            self._fix_enc_hidden(cell_n),
         )
 
-        out, dec_hidden, _attn = self.decoder(y, enc_hidden, context, init_output)
-        # reverse tensor relationship order
+        out, _, _ = self.decoder(y, hidden, context, init_output)
+        # reverse tensor order (for batch)
         out = out.transpose(0, 1)
-        # reverse order
-        _, reversed_idx = torch.sort(sorted_idx)
-        out = out[reversed_idx]
 
-        return out
+        # resulting tensor may not be contiguous because of all the cats.
+        return out.contiguous()

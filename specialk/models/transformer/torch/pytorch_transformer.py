@@ -44,14 +44,20 @@ class PyTorchTransformerModel(nn.Transformer):
 
         Args:
             vocab_size (int): Vocabulary size of tokenizer.
-            max_seq_length (int, optional): Maximum sequence length. Defaults to 100.
-            dim_model (int, optional): The number of expected features in the encoder/decoder inputs. Defaults to 512.
-            n_heads (int, optional): The number of self-attention heads. Defaults to 8.
+            max_seq_length (int, optional): Maximum sequence length.
+                Defaults to 100.
+            dim_model (int, optional): The number of expected features in the
+                encoder/decoder inputs. Defaults to 512.
+            n_heads (int, optional): The number of self-attention heads.
+                Defaults to 8.
             dim_feedforward (int, optional): Dimension of the FFM. Defaults to 2048.
-            num_encoder_layers (int, optional): Number of attn layers in the encoder. Defaults to 6.
-            num_decoder_layers (int, optional): Number of attn layers in the decoder. Defaults to 6.
+            num_encoder_layers (int, optional): Number of attn layers in the encoder.
+                Defaults to 6.
+            num_decoder_layers (int, optional): Number of attn layers in the decoder.
+                Defaults to 6.
             dropout (float, optional): Dropout value. Defaults to 0.1.
-            decoder_generator_weight_sharing (bool, optional): If set, shares weight between deocder and generator. Defaults to True.
+            decoder_generator_weight_sharing (bool, optional): If set, shares weight
+                between deocder and generator. Defaults to True.
         """
         super(PyTorchTransformerModel, self).__init__(
             d_model=dim_model,
@@ -64,25 +70,25 @@ class PyTorchTransformerModel(nn.Transformer):
         )
         self.name = name
         self.model_type = "Transformer"
+        self.max_seq_length = max_seq_length
         self.dim_model = dim_model
-        self.input_emb = nn.Embedding(
-            num_embeddings=vocab_size, embedding_dim=dim_model
-        )
+        self.tgt_mask = None
+        self.decoder_generator_weight_sharing = decoder_generator_weight_sharing
+        self.x_logit_scale = 1.0
+        self.dropout = dropout
         if not decoder_vocab_size:
             decoder_vocab_size = vocab_size
 
+        self.input_emb = nn.Embedding(
+            num_embeddings=vocab_size, embedding_dim=dim_model
+        )
         self.output_emb = nn.Embedding(
             num_embeddings=decoder_vocab_size, embedding_dim=dim_model
         )
         self.pos_encoder = PositionalEncoder(
             dim_model=dim_model, max_seq_length=max_seq_length
         )
-        self.max_seq_length = max_seq_length
         self.generator = nn.Linear(dim_model, decoder_vocab_size)
-        self.tgt_mask = None
-        self.decoder_generator_weight_sharing = decoder_generator_weight_sharing
-        self.x_logit_scale = 1.0
-        self.dropout = dropout
         self.init_weights()
 
     def generate_square_subsequent_mask(self, size: int) -> Tensor:

@@ -31,7 +31,7 @@ monolingual_tokenizer_de: Path = (
 )
 dataset_path = PROJECT_DIR / "tests/test_files/datasets/en_fr.parquet"
 
-BATCH_SIZE = 3
+BATCH_SIZE = 7
 SEQUENCE_LENGTH = 50
 
 torch.manual_seed(1337)
@@ -124,6 +124,7 @@ def test_rnn_inference_separate_tokenizers(word_dataloader_separate):
 
 def test_rnn_inference(spm_dataloader):
     dataloader, tokenizer = spm_dataloader
+
     model = RNNModule(
         name="rnn_1",
         vocabulary_size=tokenizer.vocab_size,
@@ -139,12 +140,47 @@ def test_rnn_inference(spm_dataloader):
     y_hat = m(x, y)
 
     # flatten tensors for loss function.
-    y_hat: Float[Tensor, "batch_size*seq_length, vocab"] = y_hat.view(
-        -1, y_hat.size(-1)
-    )
-    y: Int[Tensor, "batch_size*vocab"] = y.view(-1)
+    y_hat: Float[Tensor, "batch_size vocab"] = y_hat.view(-1, y_hat.size(-1))
+    y: Int[Tensor, "batch_size"] = y.view(-1)
 
-    log.info("Y Shapes", y_hat=y_hat.shape, y=y.shape)
+    assert y_hat.shape == torch.Size(
+        [BATCH_SIZE * SEQUENCE_LENGTH, tokenizer.vocab_size]
+    )
+    assert y.shape == torch.Size([BATCH_SIZE * SEQUENCE_LENGTH])
+
+    loss = F.cross_entropy(y_hat, y, ignore_index=model.model.PAD, reduction="sum")
+    loss.backward()
+
+
+def test_rnn_inference_brnn(spm_dataloader):
+    dataloader, tokenizer = spm_dataloader
+
+    model = RNNModule(
+        name="rnn_1",
+        vocabulary_size=tokenizer.vocab_size,
+        brnn=True,
+        sequence_length=SEQUENCE_LENGTH,
+    )
+    model.model.PAD = tokenizer.PAD
+
+    batch: dict = next(iter(dataloader))
+    x: torch.Tensor = batch[SOURCE].squeeze(1)
+    y: torch.Tensor = batch[TARGET].squeeze(1)
+
+    m = model.model
+    y_hat = m(x, y)
+
+    log.info("yhat", yhat=y_hat.shape)
+
+    # flatten tensors for loss function.
+    y_hat: Float[Tensor, "batch_size vocab"] = y_hat.view(-1, y_hat.size(-1))
+    y: Int[Tensor, "batch_size"] = y.view(-1)
+
+    assert y_hat.shape == torch.Size(
+        [BATCH_SIZE * SEQUENCE_LENGTH, tokenizer.vocab_size]
+    )
+    assert y.shape == torch.Size([BATCH_SIZE * SEQUENCE_LENGTH])
+
     loss = F.cross_entropy(y_hat, y, ignore_index=model.model.PAD, reduction="sum")
     loss.backward()
 

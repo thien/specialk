@@ -364,7 +364,6 @@ class SentencePieceVocabulary(Vocabulary):
         is_single_instance = False
 
         if isinstance(tokens, Tensor):
-            log.info("TOKENS", shape=tokens.shape)
             if tokens.dim() == 1:
                 is_single_instance = True
                 tokens = tokens.unsqueeze(0)
@@ -385,8 +384,7 @@ class SentencePieceVocabulary(Vocabulary):
         else:
             raise TypeError("tokens must be a torch.LongTensor or a list of integers")
 
-        text = self.vocab.decode(tokens)
-        print("TEXT", text)
+        text = self.vocab.decode(tokens) 
         if is_single_instance:
             return text[0]
         return text

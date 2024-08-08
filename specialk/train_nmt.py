@@ -154,6 +154,19 @@ def main_debug():
     )
     log.info("Created dataset dataloaders.")
 
+    hyperparams = {
+        "batch_size": BATCH_SIZE,
+        "src_tokenizer": src_tokenizer.__class__.__name__,
+        "tgt_tokenizer": tgt_tokenizer.__class__.__name__,
+        "dataset": "machine_translation",
+        "src_tokenizer_path": src_tokenizer_filepath,
+        "tgt_tokenizer_path": tgt_tokenizer_filepath,
+        "max_sequence_length": src_tokenizer.max_length,
+        "dataset_path": path_train,
+        # "optimiser": task.opt
+    }
+    log.info("Hyperparams", hyperparams=hyperparams)
+
     if MODEL == "rnn":
         task = RNNModule(
             name="lstm_smol",
@@ -182,20 +195,10 @@ def main_debug():
             dim_model=128,
         )
 
+    log.info("model initialized", model=task)
+
     logger = TensorBoardLogger(LOGGING_DIR, name="nmt_model_dummy")
-    logger.log_hyperparams(
-        params={
-            "batch_size": BATCH_SIZE,
-            "src_tokenizer": src_tokenizer.__class__.__name__,
-            "tgt_tokenizer": tgt_tokenizer.__class__.__name__,
-            "dataset": "machine_translation",
-            "src_tokenizer_path": src_tokenizer_filepath,
-            "tgt_tokenizer_path": tgt_tokenizer_filepath,
-            "max_sequence_length": src_tokenizer.max_length,
-            "dataset_path": path_train,
-            # "optimiser": task.opt
-        }
-    )
+    logger.log_hyperparams(params=hyperparams)
 
     profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
     trainer = pl.Trainer(
@@ -273,19 +276,18 @@ def main():
             n_heads=8,
             dim_model=512,
         )
-
+    log.info("model initialized", model=task)
+    hyperparams = {
+        "batch_size": BATCH_SIZE,
+        "tokenizer": tokenizer.__class__.__name__,
+        "dataset": "machine_translation",
+        "tokenizer_path": tokenizer_filepath,
+        "max_sequence_length": tokenizer.max_length,
+        "dataset_path": path_train,
+    }
+    log.info("Hyperparams", hyperparams=hyperparams)
     logger = TensorBoardLogger(LOGGING_DIR, name="nmt_model")
-    logger.log_hyperparams(
-        params={
-            "batch_size": BATCH_SIZE,
-            "tokenizer": tokenizer.__class__.__name__,
-            "dataset": "machine_translation",
-            "tokenizer_path": tokenizer_filepath,
-            "max_sequence_length": tokenizer.max_length,
-            "dataset_path": path_train,
-        }
-    )
-
+    logger.log_hyperparams(params=hyperparams)
     trainer = pl.Trainer(
         accelerator=DEVICE,
         max_epochs=3,

@@ -108,10 +108,8 @@ class Decoder(nn.Module):
         assert opt.rnn_size % self.num_directions == 0
         self.hidden_size = opt.rnn_size // self.num_directions
 
-        self.attn = GlobalAttention(opt.rnn_size)
-        self.dropout = nn.Dropout(opt.dropout)
-
-        self.hidden_size = opt.rnn_size
+        self.attention = GlobalAttention(opt.rnn_size)
+        self.dropout = nn.Dropout(self.p_dropout)
 
         self.generator = nn.Sequential(
             nn.Linear(opt.rnn_size, vocabulary_size), nn.LogSoftmax(dim=1)
@@ -143,14 +141,19 @@ class Decoder(nn.Module):
                 emb_t = torch.cat([emb_t, output], 1)
 
             output, hidden = self.rnn(emb_t, hidden)
-            output, attn = self.attn(output, context.transpose(0, 1))
+            output, attention = self.attention(output, context)
             output = self.dropout(output)
             if useGen:
                 output = self.generator(output)
             outputs += [output]
+            attention_scores += [attention]
 
-        outputs = torch.stack(outputs)
-        return outputs, hidden, attn
+        outputs = torch.stack(outputs)  # this is faster than catting tensors.
+
+        attention_scores: Float[Tensor, "seq_len batch d_context"]
+        attention_scores = torch.stack(attention_scores)
+
+        return outputs, hidden, attention_scores
 
 
 class NMTModel(nn.Module):

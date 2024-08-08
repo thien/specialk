@@ -6,7 +6,6 @@ import torch
 import torch.nn as nn
 from jaxtyping import Float, Int
 from torch import Tensor
-from torch.autograd import Variable
 from torch.nn.utils.rnn import pack_padded_sequence as pack
 from torch.nn.utils.rnn import pad_packed_sequence as unpack
 
@@ -71,11 +70,6 @@ class Encoder(nn.Module):
         outputs: Float[Tensor, "batch length d*hidden_size"]
         hidden_n: Float[Tensor, "d*num_layers length hidden_size"]
         cell_n: Float[Tensor, "d*num_layers length hidden_size"]
-        # log.info(
-        #     "encoder outputs",
-        #     outputs=outputs.shape,
-        #     hidden=(hidden_n.shape, cell_n.shape),
-        # )
         return outputs, (hidden_n, cell_n)
 
 
@@ -160,7 +154,6 @@ class StackedLSTM(nn.Module):
                   num_layers, batch_size, hidden_size)
         """
         prev_hidden, prev_cell = hidden
-        # log.info("shapes @ stackedlstm", input=input.shape, prev_hidden=prev_hidden.shape, prev_cell=prev_cell.shape)
         new_hidden_states, new_cell_states = [], []
 
         layer: nn.LSTMCell
@@ -182,12 +175,20 @@ class StackedLSTM(nn.Module):
         stacked_cell: Float[Tensor, "num_layers batch hidden"]
         stacked_cell = torch.stack(new_cell_states)
 
-        # Return:
+
         # input shape: (batch_size, hidden_size)
         # (stacked_hidden, stacked_cell) shapes: both (num_layers, batch_size, hidden_size)
         return input, (stacked_hidden, stacked_cell)
 
     def init_hidden(self, batch_size: int) -> Tuple[Tensor, Tensor]:
+        """Initialise start hidden values.
+
+        Args:
+            batch_size (int): batch size to match input.
+
+        Returns:
+            Tuple[Tensor, Tensor]: Dummy hidden and cell tensors. 
+        """
         device = self.layers[0].weight_ih.device
         return (
             torch.zeros(
@@ -249,7 +250,7 @@ class Decoder(nn.Module):
         ],
         context: Float[Tensor, "n_layers length d*hidden_size"],
         init_output: Float[Tensor, "batch d_model"],
-        useGen: bool = True,
+        use_gen: bool = True,
     ) -> Tuple[Tensor, Tuple[Tensor, Tensor], Tensor]:
         """_summary_
 
@@ -258,7 +259,7 @@ class Decoder(nn.Module):
             hidden (Float[Tensor, &quot;&quot;]): _description_
             context (Float[Tensor, &quot;&quot;]): _description_
             init_output (Float[Tensor, &quot;&quot;]): Initial output (usually zeros)
-            useGen (bool, optional): If set, use generator layer. Defaults to True.
+            use_gen (bool, optional): If set, use generator layer. Defaults to True.
 
         Returns:
             Tuple[Tensor, Tuple[Tensor, Tensor], Tensor]: Tuple containing
@@ -282,11 +283,9 @@ class Decoder(nn.Module):
                 # teacher forcing.
                 emb_t = emb[i, :, :]
             else:
-                prev_output = outputs[-1]
-                if not useGen:
-                    prev_output = self.generator(outputs[-1])
-                prev_output = prev_output.argmax(dim=-1)
                 # Use the model's previous output
+                prev_output = outputs[-1] if use_gen else self.generator(outputs[-1])
+                prev_output = prev_output.argmax(dim=-1)
                 emb_t = self.word_lut(prev_output)
 
             if self.input_feed:
@@ -296,7 +295,7 @@ class Decoder(nn.Module):
             output, hidden = self.rnn(emb_t, hidden)
             output, attention = self.attention(output, context)
             output = self.dropout(output)
-            if useGen:
+            if use_gen:
                 output = self.generator(output)
             outputs += [output]
             attention_scores += [attention]

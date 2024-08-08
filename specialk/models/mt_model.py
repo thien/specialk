@@ -102,7 +102,7 @@ class NMTModule(pl.LightningModule):
         self.log_dict(
             {
                 "train_acc": accuracy,
-                "batch_id": batch_idx,
+                "train_batch_id": batch_idx,
                 "train_loss": loss,
             },
             batch_size=x.size(0),
@@ -133,11 +133,11 @@ class NMTModule(pl.LightningModule):
 
         metric_dict = {
             "eval_acc": accuracy,
-            "batch_id": batch_idx,
+            "eval_batch_id": batch_idx,
             "eval_loss": loss,
         }
         if self.decoder_tokenizer is not None:
-            metric_dict["bleu"] = self.validation_bleu(y_hat, y)
+            metric_dict["eval_bleu"] = self.validation_bleu(y_hat, y)
 
         self.log_dict(
             metric_dict,
@@ -145,7 +145,7 @@ class NMTModule(pl.LightningModule):
         )
         return loss, accuracy
 
-    def validation_bleu(self, y_hat: Tensor, y: Tensor) -> float:
+    def validation_bleu(self, y_hat: Tensor, y: Tensor) -> Union[float, None]:
         """Calculates BLEU score @ validation phase.
 
         Args:
@@ -155,12 +155,15 @@ class NMTModule(pl.LightningModule):
         Returns:
             float: BLEU score.
         """
-        if not self.decoder_tokenizer:
+        tokenizer = self.decoder_tokenizer
+        if not tokenizer:
             return None
-        y_hat = y_hat.argmax(dim=-1)
-        y_hat = mask_out_special_tokens(y_hat, self.tokenizer.EOS, self.tokenizer.PAD)
-        predictions = self.tokenizer.detokenize(y_hat.tolist())
-        references = self.tokenizer.detokenize(y.tolist())
+
+        y_hat = y_hat.argmax(dim=-1)  # greedy as a reference check.
+        y_hat = mask_out_special_tokens(y_hat, tokenizer.EOS, tokenizer.PAD)
+
+        predictions: List[str] = tokenizer.detokenize(y_hat)
+        references: List[str] = tokenizer.detokenize(y)
         return bleu.compute(predictions, references)
 
     def validation_step(self, batch: dict, batch_idx: int):
@@ -171,13 +174,11 @@ class NMTModule(pl.LightningModule):
 
     def test_step(self, batch: dict, batch_idx: int):
         loss, acc = self._shared_eval_step(batch, batch_idx)
-        metrics = {"val_acc": acc, "val_loss": loss}
+        metrics = {"test_acc": acc, "test_loss": loss}
         self.log_dict(metrics, batch_size=batch[SOURCE].size(0))
         return metrics
 
-    def predict_step(
-        self, batch: dict, batch_idx: int, dataloader_idx=0
-    ) -> torch.Tensor:
+    def predict_step(self, **kwargs) -> torch.Tensor:
         raise NotImplementedError
 
     def loss(

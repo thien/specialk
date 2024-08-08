@@ -1,25 +1,3 @@
-"""
-Global attention module that computes a parameterized convex combination of a matrix
-based on an input query vector.
-
-The attention mechanism can be visualized as:
-
-    H_1 H_2 H_3 ... H_n
-     q   q   q       q
-       |  |   |       |
-         \ |   |      /
-                 .....
-             \   |  /
-                     a
-
-It constructs a unit mapping:
-    $$(H_1 + H_n, q) => (a)$$
-Where H is of shape `batch x seq_len x dim` and q is of shape `batch x dim`.
-
-The full definition is:
-    $$\tanh(W_2 [(softmax((W_1 q + b_1) H) H), q] + b_2)$$
-"""
-
 import torch
 import torch.nn as nn
 from einops import einsum
@@ -38,7 +16,6 @@ class GlobalAttention(nn.Module):
         self.tanh = nn.Tanh()
         self.mask: Tensor | None = None
         self.warn_once = False
-        self.debug_flag = True
 
     def forward(
         self,

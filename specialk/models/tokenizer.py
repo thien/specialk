@@ -384,7 +384,7 @@ class SentencePieceVocabulary(Vocabulary):
         else:
             raise TypeError("tokens must be a torch.LongTensor or a list of integers")
 
-        text = self.vocab.decode(tokens) 
+        text = self.vocab.decode(tokens)
         if is_single_instance:
             return text[0]
         return text
@@ -437,11 +437,21 @@ class SentencePieceVocabulary(Vocabulary):
 class WordVocabulary(Vocabulary):
     """White-space level tokenization, leveraging Moses."""
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.vocab: onmt.Dict
+    def __init__(self, max_length: int, **kwargs):
+        self.vocab = onmt.Dict(seq_len=max_length)
+        super().__init__(max_length=max_length, **kwargs)
         self.mt = MosesTokenizer(lang="en")
         self.md = MosesDetokenizer(lang="en")
+
+    @property
+    def max_length(self):
+        # max length is actually stored in our vocab object,
+        # so don't keep track of it in our WordVocabulary.
+        return self.vocab.seq_length
+
+    @max_length.setter
+    def max_length(self, new_value: int):
+        self.vocab.seq_length = new_value
 
     def fit(self, texts: Iterable[str]):
         vocab = onmt.Dict(
@@ -616,14 +626,15 @@ class WordVocabulary(Vocabulary):
         this.UNK = this.vocab.labelToIdx[Constants.UNK_WORD]
         return this
 
-    def to_tensor(self, text: str) -> torch.LongTensor:
+    def to_tensor(self, text: Union[str, List[str]]) -> Tensor:
         """Converts string to text to tensor of input.
 
         Args:
             text (str): Raw string of input.
 
         Returns:
-            torch.LongTensor: List of indices corresponding to the token index from the vocab.
+            torch.LongTensor: List of indices corresponding to
+            the token index from the vocab.
         """
         if isinstance(text, str):
             text: str
@@ -638,7 +649,6 @@ class WordVocabulary(Vocabulary):
                 )
             )
         else:
-            # import numpy as np
             tokens = [
                 self.vocab.convertToIdx(
                     self.tokenize(line),
@@ -650,7 +660,6 @@ class WordVocabulary(Vocabulary):
                 )
                 for line in text
             ]
-            # tokens = np.array(tokens)
             return torch.LongTensor(tokens)
 
     def tokenize(self, text: str) -> List[str]:

@@ -6,6 +6,7 @@ import pytest
 import torch
 
 from specialk.core.constants import PROJECT_DIR
+from specialk.core.utils import log
 from specialk.datasets.preprocess import load_file
 from specialk.models.mt_model import NMTModule
 from specialk.models.tokenizer import (
@@ -28,6 +29,17 @@ def word_tokenizer():
     text = load_file(SRC_VOCAB, None)
     tokenizer.fit(text)
     return tokenizer
+
+
+def test_word_tokenizer_seq_len_change(word_tokenizer):
+    text = ["hello world"]
+    tensor_before = word_tokenizer.to_tensor(text)
+    new_size = 28
+    log.info("i'm here")
+    word_tokenizer.max_length = new_size
+    tensor_after = word_tokenizer.to_tensor(text)
+    assert tensor_after.shape == torch.Size([1, new_size])
+    assert tensor_after.shape != tensor_before.shape
 
 
 def test_word_vocabulary(word_tokenizer):

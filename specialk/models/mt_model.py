@@ -2,7 +2,7 @@ from __future__ import division
 
 from argparse import Namespace
 from pathlib import Path
-from typing import Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import lightning.pytorch as pl
 import torch
@@ -12,6 +12,7 @@ from jaxtyping import Float, Int
 from torch import Tensor
 
 from specialk.core.constants import PAD, SOURCE, TARGET
+from specialk.core.utils import log
 from specialk.metrics.metrics import SacreBLEU
 from specialk.models.ops import mask_out_special_tokens
 from specialk.models.recurrent.Models import Decoder as RNNDecoder

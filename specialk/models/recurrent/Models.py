@@ -233,7 +233,7 @@ class Decoder(nn.Module):
             nn.Linear(opt.rnn_size, vocabulary_size), nn.LogSoftmax(dim=-1)
         )
 
-        self.teacher_forcing_ratio = 0.2
+        self.teacher_forcing_ratio = 0.9
 
     def load_pretrained_vectors(self, opt: Namespace):
         """In case you have pre-trained word2vec embeddings."""
@@ -325,7 +325,7 @@ class NMTModel(nn.Module):
 
     def update_teacher_forcing_ratio(self, epoch: int, total_epochs: int):
         # Linearly decrease the teacher forcing ratio from 1.0 to 0.5 over the course of training
-        self.decoder.teacher_forcing_ratio = max(0.5, 1.0 - (epoch / total_epochs))
+        self.decoder.teacher_forcing_ratio = max(0.5, 0.9 - (epoch / total_epochs))
 
     def _fix_enc_hidden(self, hidden: Tensor) -> Tensor:
         """

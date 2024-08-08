@@ -115,7 +115,10 @@ class Decoder(nn.Module):
             nn.Linear(opt.rnn_size, vocabulary_size), nn.LogSoftmax(dim=1)
         )
 
-    def load_pretrained_vectors(self, opt):
+        self.teacher_forcing_ratio = 0.2 
+
+    def load_pretrained_vectors(self, opt: Namespace):
+        """In case you have pre-trained word2vec embeddings."""
         if opt.pre_word_vecs_dec:
             self.word_lut.weight.data.copy_(torch.load(opt.pre_word_vecs_dec))
 
@@ -133,10 +136,22 @@ class Decoder(nn.Module):
         # iterations in parallel, but that's only possible if
         # self.input_feed=False
 
-        outputs = []
-        output = init_output
-        for emb_t in emb.split(1):
-            emb_t = emb_t.squeeze(0)
+        # TODO: add flag to determine whether to store attention scores or not.
+        outputs, attention_scores = [], []  # store outputs @ each time step.
+        output = init_output  # Initialize output with init_output
+
+        for i in range(seq_len):
+            if i == 0 or (random.random() < self.teacher_forcing_ratio):
+                # teacher forcing.
+                emb_t = emb[i, :, :]
+            else:
+                prev_output = outputs[-1]
+                if not useGen:
+                    prev_output = self.generator(outputs[-1])
+                prev_output = prev_output.argmax(dim=-1)
+                # Use the model's previous output
+                emb_t = self.word_lut(prev_output)
+
             if self.input_feed:
                 emb_t = torch.cat([emb_t, output], 1)
 
@@ -162,10 +177,18 @@ class NMTModel(nn.Module):
         self.encoder: Encoder = encoder
         self.decoder: Decoder = decoder
 
-    def make_init_decoder_output(self, context):
-        batch_size = context.size(1)
-        h_size = (batch_size, self.decoder.hidden_size)
-        return Variable(context.data.new(*h_size).zero_(), requires_grad=False)
+
+    def make_init_decoder_output(self, batch_size: int) -> Tensor:
+        """Used for inference."""
+        return torch.zeros(
+            (batch_size, self.decoder.hidden_size),
+            device=self.decoder.word_lut.weight.device,
+            requires_grad=False,
+        )
+
+    def update_teacher_forcing_ratio(self, epoch: int, total_epochs: int):
+        # Linearly decrease the teacher forcing ratio from 1.0 to 0.5 over the course of training
+        self.decoder.teacher_forcing_ratio = max(0.5, 1.0 - (epoch / total_epochs))
 
     def _fix_enc_hidden(self, h):
         #  the encoder hidden is  (layers*directions) x batch x dim

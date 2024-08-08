@@ -364,3 +364,15 @@ class RNNModule(NMTModule):
         args.input_feed = input_feed
         args.pre_word_vecs_dec = pre_word_vecs_dec
         return args
+
+    def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
+        self.model.update_teacher_forcing_ratio(
+            self.current_epoch, self.trainer.max_epochs
+        )
+        self.log_dict(
+            {
+                "teacher_forcing_ratio": self.model.decoder.teacher_forcing_ratio,
+            },
+            batch_size=batch[SOURCE].size(0),
+        )
+        return super().training_step(batch, batch_idx)

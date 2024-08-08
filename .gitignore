@@ -38,3 +38,6 @@ tensorboard_logs
 /models/
 .envrc
 tb_logs
+*.parquet
+*.arrow
+*.ts

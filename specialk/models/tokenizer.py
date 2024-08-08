@@ -10,6 +10,7 @@ from typing import Any, Iterable, List, Optional, Union
 import sentencepiece as spm
 import torch
 from sacremoses import MosesDetokenizer, MosesTokenizer
+from torch import Tensor
 from tqdm import tqdm
 
 import specialk.core.constants as Constants
@@ -94,7 +95,10 @@ class Vocabulary:
     def to_tensor(self, text: str) -> torch.LongTensor:
         raise NotImplementedError
 
-    def tokenize(text: str) -> List[str]:
+    def tokenize(self, text: str) -> List[str]:
+        raise NotImplementedError
+
+    def detokenize(self, tokens: Union[Tensor, List]) -> List[str]:
         raise NotImplementedError
 
     def to_dict(self) -> dict:
@@ -355,9 +359,37 @@ class SentencePieceVocabulary(Vocabulary):
         return self.vocab.encode(text, out_type=str)
 
     def detokenize(
-        self, tokens: List[List[int]], specials=True
+        self, tokens: Union[List[List[int]], List[int], Tensor], specials=True
     ) -> Iterable[str | List[str]]:
-        return self.vocab.decode(tokens)
+        is_single_instance = False
+
+        if isinstance(tokens, Tensor):
+            log.info("TOKENS", shape=tokens.shape)
+            if tokens.dim() == 1:
+                is_single_instance = True
+                tokens = tokens.unsqueeze(0)
+            elif tokens.dim() == 2:
+                if tokens.shape[0] == 1:
+                    is_single_instance = True
+            elif tokens.dim() > 2:
+                raise ValueError("Input tensor must be 1D or 2D")
+            tokens = tokens.tolist()
+
+        elif isinstance(tokens, list):
+            if isinstance(tokens[0], int):
+                is_single_instance = True
+                tokens = [tokens]
+            elif not isinstance(tokens[0], list):
+                raise ValueError(f"Input list must be 1D or 2D, got {type(tokens[0])}")
+
+        else:
+            raise TypeError("tokens must be a torch.LongTensor or a list of integers")
+
+        text = self.vocab.decode(tokens)
+        print("TEXT", text)
+        if is_single_instance:
+            return text[0]
+        return text
 
     def to_tensor(self, text: str | List[str]) -> Iterable[List[int]]:
         if isinstance(text, str):
@@ -473,6 +505,11 @@ class WordVocabulary(Vocabulary):
                 "less than originally provisioned."
             )
 
+        self.PAD = self.vocab.labelToIdx[Constants.PAD_WORD]
+        self.BOS = self.vocab.labelToIdx[Constants.SOS_WORD]
+        self.EOS = self.vocab.labelToIdx[Constants.EOS_WORD]
+        self.UNK = self.vocab.labelToIdx[Constants.UNK_WORD]
+
     @deprecated
     def make(self, data_path: Union[Path, str]):
         """
@@ -576,6 +613,8 @@ class WordVocabulary(Vocabulary):
         this.vocab.special = d["vocab"]["special"]
 
         this.PAD = this.vocab.labelToIdx[Constants.PAD_WORD]
+        this.BOS = this.vocab.labelToIdx[Constants.SOS_WORD]
+        this.EOS = this.vocab.labelToIdx[Constants.EOS_WORD]
         this.UNK = this.vocab.labelToIdx[Constants.UNK_WORD]
         return this
 
@@ -621,16 +660,19 @@ class WordVocabulary(Vocabulary):
         Ensure that Moses Tokenization is used here."""
         return [word for word in self.mt.tokenize(text, return_str=True).split()]
 
-    def detokenize(self, tokens: torch.LongTensor, specials=True) -> str:
-        """Returns detokenized string.
+    def detokenize(
+        self, tokens: Union[torch.LongTensor, list], specials=True
+    ) -> List[str]:
+        """Returns detokenized string(s).
 
         Args:
-            tokens (torch.LongTensor): Tensor of integer values corresponding
-            to indexes of tokens.
-            specials (bool, optional): If unset, then removes special tokens from output. Defaults to True.
+            tokens (Union[torch.LongTensor, List[int], List[List[int]]]): Tensor or
+                list of integer values corresponding to indexes of tokens.
+            specials (bool, optional): If unset, then removes special tokens from
+                output. Defaults to True.
 
         Returns:
-            str: plain text value.
+            Union[str, List[str]]: Plain text value(s).
 
         Example:
             text = "récompensée et toi"
@@ -642,10 +684,35 @@ class WordVocabulary(Vocabulary):
             >>> word_vocab.detokenize(tokens, specials=False)
             "récompensée et toi"
         """
-        labels = [self.vocab.idxToLabel[t.item()] for t in tokens]
+        is_single_instance = False
+
+        if isinstance(tokens, torch.Tensor):
+            if tokens.dim() == 1:
+                tokens = tokens.unsqueeze(0)
+                is_single_instance = True
+            elif tokens.dim() > 2:
+                raise ValueError("Input tensor must be 1D or 2D")
+
+        elif isinstance(tokens, list):
+            if isinstance(tokens[0], int):
+                tokens = [tokens]
+                is_single_instance = True
+            elif not isinstance(tokens[0], list):
+                raise ValueError("Input list must be 1D or 2D")
+
+        else:
+            raise TypeError("tokens must be a torch.LongTensor or a list of integers")
+
+        tokens = tokens.tolist()
+        labels = [[self.vocab.idxToLabel[t] for t in batch] for batch in tokens]
+
         if not specials:
-            labels = [t for t in labels if t not in self.SPECIALS]
-        return self.md.detokenize(labels)
+            labels = [[t for t in batch if t not in self.SPECIALS] for batch in labels]
+        labels = [self.md.detokenize(batch) for batch in labels]
+
+        if is_single_instance:
+            labels = labels[0]
+        return labels
 
     def __repr__(self) -> str:
         return f"WordVocabulary(vocab_size={self.vocab_size}, max_length={self.max_length}, lower={self.lower})"

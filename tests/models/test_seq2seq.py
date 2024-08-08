@@ -300,36 +300,27 @@ def test_transformer_inference_separate_tokenizers(word_dataloader_separate):
 
 def test_pt_transformer_inference(spm_dataloader):
     dataloader, tokenizer = spm_dataloader
-    model = PyTorchTransformerModule(
+    module = PyTorchTransformerModule(
         name="transformer_1",
         vocabulary_size=tokenizer.vocab_size,
+        tokenizer=tokenizer,
         sequence_length=SEQUENCE_LENGTH,
         dim_model=8,
         n_heads=2,
         num_encoder_layers=1,
         num_decoder_layers=1,
     )
-    model.model: PyTorchTransformerModel
+    module.eval()
+    model: PyTorchTransformerModel = module.model
     model.PAD = 0
-    model.eval()
 
     batch: dict = next(iter(dataloader))
     x: torch.Tensor = batch[SOURCE].squeeze(1)
     y: torch.Tensor = batch[TARGET].squeeze(1)
-    batch_size: int = x.shape[0]
-
-    len_x = (x == PAD).sum(dim=1)
-    len_y = (y == PAD).sum(dim=1)
-
-    assert len_x.shape[0] == batch_size
-
-    log.info("shapes", x=x.shape, len_x=len_x.shape, y=y.shape, len_y=len_y.shape)
 
     # forward pass
-    # x = model.
-    y_hat: Float[Tensor, "batch seq_length vocab"] = model.model.forward(x, y)
-
-    log.info("shapes", y=y.shape, y_hat=y_hat.shape)
+    y_hat: Float[Tensor, "batch seq_length vocab"]
+    y_hat = model.forward(x, y)
 
     # flatten tensors for loss function.
     y_hat: Float[Tensor, "batch_size*seq_length, vocab"] = y_hat.view(

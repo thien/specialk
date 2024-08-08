@@ -255,7 +255,7 @@ def main():
 
     if MODEL == "rnn":
         task = RNNModule(
-            name="lstm_smol",
+            name="lstm",
             vocabulary_size=tokenizer.vocab_size,
             sequence_length=tokenizer.max_length,
             tokenizer=tokenizer,
@@ -268,8 +268,8 @@ def main():
             vocabulary_size=tokenizer.vocab_size,
             sequence_length=tokenizer.max_length,
             tokenizer=tokenizer,
-            num_encoder_layers=3,
-            num_decoder_layers=3,
+            num_encoder_layers=4,
+            num_decoder_layers=4,
             n_heads=8,
             dim_model=512,
         )
@@ -286,13 +286,11 @@ def main():
         }
     )
 
-    profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
     trainer = pl.Trainer(
         accelerator=DEVICE,
-        max_epochs=1,
+        max_epochs=3,
         log_every_n_steps=20,
         logger=logger,
-        profiler=profiler,
     )
 
     trainer.fit(

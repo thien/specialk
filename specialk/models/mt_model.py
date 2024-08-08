@@ -236,7 +236,7 @@ class NMTModule(pl.LightningModule):
         return n_correct
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
-        return torch.optim.Adam(self.model.parameters(), lr=0.02)
+        return torch.optim.Adam(self.model.parameters(), lr=0.002)
 
     def generate(self, batch: dict, batch_idx: int) -> torch.Tensor:
         """

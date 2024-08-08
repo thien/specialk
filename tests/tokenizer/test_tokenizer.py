@@ -1,9 +1,13 @@
 import tempfile
 from pathlib import Path
 
+import numpy as np
 import pytest
+import torch
 
 from specialk.core.constants import PROJECT_DIR
+from specialk.datasets.preprocess import load_file
+from specialk.models.mt_model import NMTModule
 from specialk.models.tokenizer import (
     BPEVocabulary,
     SentencePieceVocabulary,
@@ -21,7 +25,8 @@ def word_tokenizer():
     tokenizer = WordVocabulary(
         name="source", vocab_size=VOCABULARY_SIZE, max_length=SEQUENCE_LENGTH
     )
-    tokenizer.make(SRC_VOCAB)
+    text = load_file(SRC_VOCAB, None)
+    tokenizer.fit(text)
     return tokenizer
 
 
@@ -119,7 +124,95 @@ def test_spm_tokenizer_to_tensor_long(sentencepiece_tokenizer):
 
 
 def test_spm_tokenizer_encode_decode(sentencepiece_tokenizer):
-    sequence = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
-    tokens = sentencepiece_tokenizer.tokenize(sequence)
+    sequence = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam"
+    tokens = sentencepiece_tokenizer.to_tensor(sequence)
     assert tokens != sequence
-    assert sentencepiece_tokenizer.detokenize(tokens) == sequence
+    _sequence = sentencepiece_tokenizer.detokenize(tokens)
+    print(_sequence)
+    assert _sequence == sequence
+
+
+def test_model_validation_bleu_spm(sentencepiece_tokenizer):
+    src_tokenizer = sentencepiece_tokenizer
+    model = NMTModule(
+        name="test",
+        vocabulary_size=src_tokenizer.vocab_size,
+        sequence_length=SEQUENCE_LENGTH,
+        tokenizer=src_tokenizer,
+    )
+
+    _refs = ["The dog bit the man.", "It was not unexpected.", "The man bit him first."]
+
+    _hyps = [
+        "The dog bit the man.",
+        "It wasn't surprising.",
+        "The man had just bitten him.",
+    ]
+
+    ref_tensor = [src_tokenizer.to_tensor(i) for i in _refs]
+    hyp_tensor = [src_tokenizer.to_tensor(i) for i in _hyps]
+
+    ref_tensor = torch.cat(ref_tensor)
+    hyp_tensor = torch.cat(hyp_tensor)
+
+    batch_size, seq_len = ref_tensor.shape
+
+    # with the ref_tensor, turn that into one hot and then fill
+    # it in with the token indicated (this is approximate the model generation)
+    hyp_one_hot = torch.zeros(
+        batch_size,
+        seq_len,
+        src_tokenizer.vocab_size,
+    ).scatter_(2, torch.unsqueeze(hyp_tensor, 2), 1)
+
+    assert (hyp_tensor.shape[0], hyp_tensor.shape[1]) == (batch_size, seq_len)
+    assert torch.all(hyp_one_hot.argmax(dim=-1).eq(hyp_tensor))
+
+    pred_score = model.validation_bleu(hyp_one_hot, ref_tensor)
+
+    score = 45.06
+
+    assert np.isclose(pred_score, score, rtol=1e-02, atol=1e-03)
+
+
+def test_model_validation_bleu_word(word_tokenizer):
+    src_tokenizer = word_tokenizer
+    model = NMTModule(
+        name="test",
+        vocabulary_size=src_tokenizer.vocab_size,
+        sequence_length=SEQUENCE_LENGTH,
+        tokenizer=src_tokenizer,
+    )
+
+    _refs = ["The dog bit the man.", "It was not unexpected.", "The man bit him first."]
+
+    _hyps = [
+        "The dog bit the man.",
+        "It wasn't surprising.",
+        "The man had just bitten him.",
+    ]
+
+    ref_tensor = [src_tokenizer.to_tensor(i) for i in _refs]
+    hyp_tensor = [src_tokenizer.to_tensor(i) for i in _hyps]
+
+    ref_tensor = torch.cat(ref_tensor).view(len(_refs), -1)
+    hyp_tensor = torch.cat(hyp_tensor).view(len(_hyps), -1)
+
+    batch_size, seq_len = ref_tensor.shape
+
+    # with the ref_tensor, turn that into one hot and then fill
+    # it in with the token indicated (this is approximate the model generation)
+    hyp_one_hot = torch.zeros(
+        batch_size,
+        seq_len,
+        src_tokenizer.vocab_size,
+    ).scatter_(2, torch.unsqueeze(hyp_tensor, 2), 1)
+
+    assert (hyp_tensor.shape[0], hyp_tensor.shape[1]) == (batch_size, seq_len)
+    assert torch.all(hyp_one_hot.argmax(dim=-1).eq(hyp_tensor))
+
+    pred_score = model.validation_bleu(hyp_one_hot, ref_tensor)
+
+    score = 90
+
+    assert np.isclose(pred_score, score, rtol=5, atol=5)

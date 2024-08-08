@@ -1,8 +1,7 @@
-import math
-
-import torch.nn as nn
 import torch.optim as optim
 from torch.nn.utils import clip_grad_norm_
+
+from specialk.core.utils import log
 
 
 class Optim(object):
@@ -43,7 +42,7 @@ class Optim(object):
 
         if self.start_decay:
             self.lr = self.lr * self.lr_decay
-            print("Decaying learning rate to %g" % self.lr)
+            log.info("Decaying learning rate to %g" % self.lr)
 
         self.last_ppl = ppl
         self.optimizer.param_groups[0]["lr"] = self.lr

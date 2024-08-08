@@ -1,7 +1,7 @@
 from __future__ import division
 
 from pathlib import Path
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 import lightning.pytorch as pl
 import pandas as pd
@@ -37,12 +37,15 @@ def init_dataloader(
     tokenizer: Vocabulary,
     batch_size: int,
     shuffle: bool,
-    back_translation: bool = False,
+    decoder_tokenizer: Optional[Vocabulary] = None,
 ):
+    if decoder_tokenizer is None:
+        decoder_tokenizer = tokenizer
+
     def tokenize(example):
         # perform tokenization at this stage.
         example[SOURCE] = tokenizer.to_tensor(example[SOURCE]).squeeze(0)
-        example[TARGET] = tokenizer.to_tensor(example[TARGET]).squeeze(0)
+        example[TARGET] = decoder_tokenizer.to_tensor(example[TARGET]).squeeze(0)
         return example
 
     tokenized_dataset = dataset.with_format("torch").map(tokenize, batched=True)
@@ -88,10 +91,124 @@ def load_tokenizer(
     return tokenizer, tokenizer_filepath
 
 
+def load_mono_tokenizer() -> Tuple[WordVocabulary, WordVocabulary, Path, Path]:
+    dir_tokenizer = PROJECT_DIR / "assets" / "tokenizer"
+    src_tokenizer_filepath: Path = dir_tokenizer / "de_small_word_moses"
+    src_tokenizer = WordVocabulary.from_file(src_tokenizer_filepath)
+    tgt_tokenizer_filepath: Path = dir_tokenizer / "en_small_word_moses"
+    tgt_tokenizer = WordVocabulary.from_file(tgt_tokenizer_filepath)
+    return src_tokenizer, tgt_tokenizer, src_tokenizer_filepath, tgt_tokenizer_filepath
+
+
 def invert_df_columns(df: pd.DataFrame) -> pd.DataFrame:
     df[SOURCE], df[TARGET] = df[TARGET], df[SOURCE]
     df["source_lang"], df["target_lang"] = df["target_lang"], df["source_lang"]
     return df
+
+
+def main_debug():
+    BATCH_SIZE = 64 if DEVICE == "mps" else 32
+    MAX_SEQ_LEN = 50
+    MODEL = "rnn"
+    if MODEL == "rnn":
+        BATCH_SIZE = 192
+        MAX_SEQ_LEN = 30
+    MODEL = "transformer"
+
+    # init tokenizer
+    src_tokenizer, tgt_tokenizer, src_tokenizer_filepath, tgt_tokenizer_filepath = (
+        load_mono_tokenizer()
+    )
+    log.info("Loaded tokenizers", src=src_tokenizer, tgt=tgt_tokenizer)
+
+    # load dataset
+    dataset_dir = PROJECT_DIR / "datasets" / "machine_translation" / "parquets"
+    path_valid = dataset_dir / "de_en_30k_valid.parquet"
+    path_train = dataset_dir / "de_en_30k_train.parquet"
+
+    df_train = pd.read_parquet(path_train).sample(frac=1)  # shuffle.
+    df_valid = pd.read_parquet(path_valid)
+
+    log.info("Loaded dataset", df_train=df_train.shape, df_valid=df_valid.shape)
+
+    train_dataset: Dataset = Dataset.from_pandas(df_train)
+    valid_dataset: Dataset = Dataset.from_pandas(df_valid)
+
+    src_tokenizer.max_length = MAX_SEQ_LEN
+    tgt_tokenizer.max_length = MAX_SEQ_LEN
+
+    # create dataloaders
+    train_dataloader, _ = init_dataloader(
+        train_dataset,
+        src_tokenizer,
+        BATCH_SIZE,
+        decoder_tokenizer=tgt_tokenizer,
+        shuffle=True,
+    )
+    val_dataloader, _ = init_dataloader(
+        valid_dataset,
+        src_tokenizer,
+        BATCH_SIZE,
+        decoder_tokenizer=tgt_tokenizer,
+        shuffle=False,
+    )
+    log.info("Created dataset dataloaders.")
+
+    if MODEL == "rnn":
+        task = RNNModule(
+            name="lstm_smol",
+            vocabulary_size=src_tokenizer.vocab_size,
+            decoder_vocabulary_size=tgt_tokenizer.vocab_size,
+            sequence_length=src_tokenizer.max_length,
+            tokenizer=src_tokenizer,
+            decoder_tokenizer=tgt_tokenizer,
+            rnn_size=128,
+            d_word_vec=128,
+            brnn=True,
+        )
+        task.model.PAD = src_tokenizer.PAD
+
+    else:
+        task = TransformerModule(
+            name="transformer_smol",
+            vocabulary_size=src_tokenizer.vocab_size,
+            decoder_vocabulary_size=tgt_tokenizer.vocab_size,
+            sequence_length=src_tokenizer.max_length,
+            tokenizer=src_tokenizer,
+            decoder_tokenizer=tgt_tokenizer,
+            num_encoder_layers=3,
+            num_decoder_layers=3,
+            n_heads=4,
+            dim_model=128,
+        )
+
+    logger = TensorBoardLogger(LOGGING_DIR, name="nmt_model_dummy")
+    logger.log_hyperparams(
+        params={
+            "batch_size": BATCH_SIZE,
+            "src_tokenizer": src_tokenizer.__class__.__name__,
+            "tgt_tokenizer": tgt_tokenizer.__class__.__name__,
+            "dataset": "machine_translation",
+            "src_tokenizer_path": src_tokenizer_filepath,
+            "tgt_tokenizer_path": tgt_tokenizer_filepath,
+            "max_sequence_length": src_tokenizer.max_length,
+            "dataset_path": path_train,
+            # "optimiser": task.opt
+        }
+    )
+
+    profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
+    trainer = pl.Trainer(
+        accelerator=DEVICE,
+        max_epochs=20,
+        log_every_n_steps=10,
+        logger=logger,
+        profiler=profiler,
+    )
+
+    trainer.fit(
+        task, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader
+    )
 
 
 def main():
@@ -184,4 +301,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if DEVICE == "cuda":
+        main()
+    else:
+        main_debug()

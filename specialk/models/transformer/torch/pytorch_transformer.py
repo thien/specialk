@@ -170,7 +170,7 @@ class PyTorchTransformerModel(nn.Transformer):
             y (Tensor): Output sequence to train.
 
         Returns:
-            Tensor: output tokens to
+            Tensor: output logits.
         """
         y_hat = self._forward(x, y)
         y_hat_tokens: Float[Tensor, "batch seq generator"] = self.generator(y_hat)
@@ -203,7 +203,7 @@ class PyTorchTransformerModel(nn.Transformer):
     ):
         """Run decoder stage. This is needed for different decoding strategies."""
         if tgt_mask is None:
-            tgt_mask = self.generate_square_subsequent_mask(y.size(1)).to(y.device)
+            tgt_mask = self.generate_square_subsequent_mask(y.size(1))
 
         y_padding_mask = self.create_pad_mask(y)
 

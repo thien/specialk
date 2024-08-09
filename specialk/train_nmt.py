@@ -195,6 +195,10 @@ def main_debug():
             dim_model=128,
         )
 
+    if DEVICE == "cuda":
+        # compile for gains.
+        task = torch.compile(task)
+
     log.info("model initialized", model=task)
 
     logger = TensorBoardLogger(LOGGING_DIR, name=f"nmt_model_dummy/{task.name}")

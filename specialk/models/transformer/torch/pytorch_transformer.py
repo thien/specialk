@@ -261,13 +261,13 @@ class PyTorchTransformerModule(NMTModule):
             lr=0.001,
         )
         # TODO implement NoamOptimizer instead.
-        return ScheduledOptim(
-            optimizer=torch.optim.Adam(
-                filter(lambda x: x.requires_grad, self.model.parameters()),
-                betas=(0.9, 0.98),
-                eps=1e-09,
-                lr=0.01,
-            ),
-            d_model=self.model.dim_model,
-            n_warmup_steps=self.n_warmup_steps,
-        )
+        # return ScheduledOptim(
+        #     optimizer=torch.optim.Adam(
+        #         filter(lambda x: x.requires_grad, self.model.parameters()),
+        #         betas=(0.9, 0.98),
+        #         eps=1e-09,
+        #         lr=0.01,
+        #     ),
+        #     d_model=self.model.dim_model,
+        #     n_warmup_steps=self.n_warmup_steps,
+        # )

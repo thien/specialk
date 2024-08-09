@@ -132,13 +132,13 @@ class PyTorchTransformerModel(nn.Transformer):
         Returns:
             Tensor: output tokens by model space.
         """
-
+        y = y[:, :-1]  # make it causal.
         # create masks
         length = self.max_seq_length
         x_pad_mask = self.create_pad_mask(x)
         y_pad_mask = self.create_pad_mask(y)
         x_mask = torch.zeros((length, length), device=x.device).type(torch.bool)
-        y_mask = self.generate_square_subsequent_mask(length)
+        y_mask = self.generate_square_subsequent_mask(y.shape[-1]).bool()
 
         x_emb: Float[Tensor, "batch seq_len d_embed"] = self.pos_encoder(
             self.input_emb(x) * np.sqrt(self.dim_model)
@@ -156,6 +156,7 @@ class PyTorchTransformerModel(nn.Transformer):
             memory_key_padding_mask=x_pad_mask,
             tgt_is_causal=True,
         )
+
         return y_hat
 
     def forward(
@@ -173,8 +174,16 @@ class PyTorchTransformerModel(nn.Transformer):
             Tensor: output logits.
         """
         y_hat = self._forward(x, y)
+
         y_hat_tokens: Float[Tensor, "batch seq generator"] = self.generator(y_hat)
-        return F.log_softmax(y_hat_tokens, dim=-1)
+
+        # y_hat will return predicted tokens of y[1:], so we'll
+        # copy over the original SOS token.
+        sos_one_hot = torch.zeros_like(y_hat_tokens[:, 0, :])
+        sos_one_hot = sos_one_hot.scatter(1, y[:, 0].unsqueeze(0).T, 1).unsqueeze(1)
+
+        y_hat_logits = F.log_softmax(y_hat_tokens, dim=-1)
+        return torch.cat([sos_one_hot, y_hat_logits], dim=1)
 
     def encode(
         self,
@@ -212,8 +221,8 @@ class PyTorchTransformerModel(nn.Transformer):
         )
 
         return self.decoder(
-            y_emb,
-            memory,
+            tgt=y_emb,
+            memory=memory,
             tgt_mask=tgt_mask,
             tgt_key_padding_mask=y_padding_mask,
             memory_key_padding_mask=memory_key_padding_mask,

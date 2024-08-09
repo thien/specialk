@@ -109,10 +109,8 @@ def invert_df_columns(df: pd.DataFrame) -> pd.DataFrame:
 def main_debug():
     BATCH_SIZE = 64 if DEVICE == "mps" else 32
     MAX_SEQ_LEN = 50
-    MODEL = "rnn"
-    if MODEL == "rnn":
-        BATCH_SIZE = 192
-        MAX_SEQ_LEN = 30
+    BATCH_SIZE = 192
+    MAX_SEQ_LEN = 30
     MODEL = "transformer"
 
     # init tokenizer

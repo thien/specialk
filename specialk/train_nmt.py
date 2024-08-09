@@ -197,7 +197,7 @@ def main_debug():
 
     log.info("model initialized", model=task)
 
-    logger = TensorBoardLogger(LOGGING_DIR, name="nmt_model_dummy")
+    logger = TensorBoardLogger(LOGGING_DIR, name=f"nmt_model_dummy/{task.name}")
     logger.log_hyperparams(params=hyperparams)
 
     profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)

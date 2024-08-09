@@ -5,6 +5,7 @@ from typing import Optional, Tuple, Union
 
 import lightning.pytorch as pl
 import pandas as pd
+import torch
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.profilers import AdvancedProfiler
 from torch.utils.data import DataLoader

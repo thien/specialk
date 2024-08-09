@@ -1,12 +1,13 @@
-from specialk.models.recurrent import Models
-from specialk.models.recurrent.Beam import Beam
-
-from specialk.models.recurrent.Optim import Optim
-from specialk.models.recurrent.Translator import Translator as Translator
+from specialk.models.recurrent import models
+from specialk.models.recurrent.beam import Beam
+from specialk.models.recurrent.attention import Attention
+from specialk.models.recurrent.optim import Optim
+from specialk.models.recurrent.translator import Translator
 
 __all__ = [
-    Models,
+    models,
     Optim,
     Translator,
     Beam,
+    Attention
 ]

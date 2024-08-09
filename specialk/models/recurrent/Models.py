@@ -10,8 +10,8 @@ from torch.nn.utils.rnn import pack_padded_sequence as pack
 from torch.nn.utils.rnn import pad_packed_sequence as unpack
 
 from specialk.core import constants as Constants
-from specialk.core.utils import log
-from specialk.models.recurrent.GlobalAttention import GlobalAttention
+from specialk.core import log
+from specialk.models.recurrent.attention import Attention
 
 
 class Encoder(nn.Module):
@@ -162,7 +162,7 @@ class StackedLSTM(nn.Module):
             layer_output, new_cell = layer(input, (prev_hidden[i], prev_cell[i]))
             input = layer_output
 
-            if self.dropout and i < self.num_layers - 1:
+            if self.dropout and i + 1 != self.num_layers:
                 input = self.dropout(input)
 
             new_hidden_states.append(layer_output)
@@ -222,7 +222,7 @@ class Decoder(nn.Module):
         assert opt.rnn_size % self.num_directions == 0
         self.hidden_size = opt.rnn_size // self.num_directions
 
-        self.attention = GlobalAttention(opt.rnn_size)
+        self.attention = Attention(opt.rnn_size)
         self.dropout = nn.Dropout(self.p_dropout)
 
         self.generator = nn.Sequential(

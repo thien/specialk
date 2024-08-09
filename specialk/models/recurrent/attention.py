@@ -7,7 +7,7 @@ from torch import Tensor
 from specialk.core.utils import log
 
 
-class GlobalAttention(nn.Module):
+class Attention(nn.Module):
     def __init__(self, dim: int):
         super().__init__()
         self.linear_in = nn.Linear(dim, dim, bias=False)

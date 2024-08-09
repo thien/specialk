@@ -14,10 +14,10 @@ from torch import Tensor
 from tqdm import tqdm
 
 import specialk.core.constants as Constants
-import specialk.models.classifier.onmt as onmt
+from specialk.models.tokenizers import WordDictionary
+from specialk.models.tokenizers import BytePairEncoder
 from specialk.core.utils import deprecated, load_dataset, log
 from specialk.datasets.preprocess import parse as bpe_parse
-from specialk.models.tokenizers.bpe import Encoder as BPEEncoder
 
 
 class Vocabulary:
@@ -51,7 +51,7 @@ class Vocabulary:
             CLS_TOKEN (Optional[str], optional):  A special token representing the class of the input (used by BERT for instance). Defaults to Constants.CLS_TOKEN.
             BLO_TOKEN (Optional[str], optional):  A special token representing the separation of paragraph blocks. Defaults to Constants.BLO_WORD.
         Returns:
-            onmt.Dict: Vocabulary file.
+            WordDictionary: Vocabulary file.
         """
         self.name = name
         self.filename = filename
@@ -185,12 +185,12 @@ class BPEVocabulary(Vocabulary):
     def __init__(self, name: str, pct_bpe: float, **kwargs):
         super().__init__(name, **kwargs)
         self.pct_bpe = pct_bpe
-        self.vocab: BPEEncoder
+        self.vocab: BytePairEncoder
 
     @deprecated
     def make(self, data_path: Union[Path, str]) -> None:
-        log.info("Creating BPEEncoder.")
-        src_bpe = BPEEncoder(
+        log.info("Creating BytePairEncoder.")
+        src_bpe = BytePairEncoder(
             vocab_size=self.vocab_size,
             pct_bpe=self.pct_bpe,
             ngram_min=1,
@@ -205,10 +205,10 @@ class BPEVocabulary(Vocabulary):
 
         src_bpe.fit(dataset)
         self.vocab = src_bpe
-        log.info("Finished training BPEEncoder.")
+        log.info("Finished training BytePairEncoder.")
 
     def fit(self, texts: Iterable[str]):
-        src_bpe = BPEEncoder(
+        src_bpe = BytePairEncoder(
             vocab_size=self.vocab_size,
             pct_bpe=self.pct_bpe,
             ngram_min=1,
@@ -221,7 +221,7 @@ class BPEVocabulary(Vocabulary):
 
         src_bpe.fit(texts)
         self.vocab = src_bpe
-        log.info("Finished training BPEEncoder.")
+        log.info("Finished training BytePairEncoder.")
 
     def to_tensor(self, text: Union[str, List[str]]) -> Iterable[List[int]]:
         """_summary_
@@ -240,7 +240,7 @@ class BPEVocabulary(Vocabulary):
 
     @deprecated
     def load(self):
-        self.vocab = BPEEncoder.load(self.filename)
+        self.vocab = BytePairEncoder.load(self.filename)
 
     @deprecated
     def save(self, filepath: Optional[Union[Path, str]] = None):
@@ -256,7 +256,7 @@ class BPEVocabulary(Vocabulary):
     @classmethod
     def from_dict(cls, d: dict) -> BPEVocabulary:
         this = cls(**d["kwargs"])
-        this.vocab = BPEEncoder.from_dict(d["vocab"])
+        this.vocab = BytePairEncoder.from_dict(d["vocab"])
         return this
 
     def to_dict(self) -> dict:
@@ -438,7 +438,7 @@ class WordVocabulary(Vocabulary):
     """White-space level tokenization, leveraging Moses."""
 
     def __init__(self, max_length: int, **kwargs):
-        self.vocab = onmt.Dict(seq_len=max_length)
+        self.vocab = WordDictionary(seq_len=max_length)
         super().__init__(max_length=max_length, **kwargs)
         self.mt = MosesTokenizer(lang="en")
         self.md = MosesDetokenizer(lang="en")
@@ -454,7 +454,7 @@ class WordVocabulary(Vocabulary):
         self.vocab.seq_length = new_value
 
     def fit(self, texts: Iterable[str]):
-        vocab = onmt.Dict(
+        vocab = WordDictionary(
             [
                 self.PAD_TOKEN,
                 self.UNK_TOKEN,
@@ -527,7 +527,7 @@ class WordVocabulary(Vocabulary):
             data_path: path of file to use (this is text data).
         """
         log.info("Creating WordVocabulary")
-        vocab = onmt.Dict(
+        vocab = WordDictionary(
             [
                 self.PAD_TOKEN,
                 self.UNK_TOKEN,
@@ -608,7 +608,7 @@ class WordVocabulary(Vocabulary):
     @classmethod
     def from_dict(cls, d: dict) -> WordVocabulary:
         this = cls(**d["kwargs"])
-        this.vocab = onmt.Dict(
+        this.vocab = WordDictionary(
             None, lower=d["kwargs"]["lower"], seq_len=d["kwargs"]["max_length"]
         )
         # loading ints from json

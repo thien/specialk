@@ -144,13 +144,16 @@ def conv3d(
             kernel_length,
         ),
         stride=(a, b, c * str_h, c, d * str_w, d, d * str_w, e, e * str_l),
-    )  # new tensor with additional dimension for out_height, output_width, output_length.
+    )  # new tensor with additional dimension for out_height,
+    # output_width, output_length.
 
     # return out @ weights
+    out_shape = "batch in_c out_h kernel_h out_w kernel_w out_l kernel_l"
+    weights_shape = "out_c in_c kernel_h kernel_w kernel_l"
     return einops.einsum(
         out,
         weights,
-        "batch in_c out_h kernel_h out_w kernel_w out_l kernel_l, out_c in_c kernel_h kernel_w kernel_l -> batch out_c out_h out_w out_l",
+        f"{out_shape}, {weights_shape} -> batch out_c out_h out_w out_l",
     )
 
 

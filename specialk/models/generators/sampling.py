@@ -4,7 +4,7 @@ import torch
 from jaxtyping import Float, Int
 from torch import tensor as Tensor
 
-from specialk.models.decoders.beam import Beam
+from specialk.models.generators.beam import Beam
 from specialk.models.mt_model import NMTModule
 from specialk.models.tokenizer import Vocabulary
 

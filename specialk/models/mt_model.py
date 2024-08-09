@@ -15,9 +15,9 @@ from specialk.core.constants import PAD, SOURCE, TARGET
 from specialk.core.utils import log
 from specialk.metrics.metrics import SacreBLEU
 from specialk.models.ops import mask_out_special_tokens
-from specialk.models.recurrent.Models import Decoder as RNNDecoder
-from specialk.models.recurrent.Models import Encoder as RNNEncoder
-from specialk.models.recurrent.Models import NMTModel as Seq2Seq
+from specialk.models.recurrent.models import Decoder as RNNDecoder
+from specialk.models.recurrent.models import Encoder as RNNEncoder
+from specialk.models.recurrent.models import NMTModel as Seq2Seq
 from specialk.models.tokenizer import Vocabulary
 from specialk.models.transformer.legacy.Models import Transformer as TransformerModel
 from specialk.models.transformer.legacy.Models import get_sinusoid_encoding_table
@@ -306,13 +306,8 @@ class TransformerModule(NMTModule):
 
 
 class RNNModule(NMTModule):
-    def __init__(
-        self,
-        **kwargs,
-    ):
-        super().__init__(
-            **kwargs,
-        )
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         args = self.patch_args(**kwargs)
         self.model = Seq2Seq(
             RNNEncoder(args, self.vocabulary_size),

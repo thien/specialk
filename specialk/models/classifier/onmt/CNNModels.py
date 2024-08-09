@@ -6,9 +6,6 @@ import torch.nn as nn
 from specialk.core.constants import PAD
 from specialk.core.utils import log
 
-# from specialk.models.ops import MaxPool3d
-
-
 class ConvNet(nn.Module):
     def __init__(
         self,

@@ -16,7 +16,7 @@ class Dict(object):
         self.special = []
 
         if data is not None:
-            if type(data) == str:
+            if isinstance(data, str):
                 self.loadFile(data)
             else:
                 self.addSpecials(data)

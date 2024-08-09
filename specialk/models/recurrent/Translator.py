@@ -3,9 +3,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 
 from specialk import Constants
-from specialk.models.recurrent import Models
-from specialk.models.recurrent.Beam import Beam
-from specialk.models.recurrent.GlobalAttention import GlobalAttention
+from specialk.models.recurrent import models, Beam, Attention
 
 
 class Translator(object):
@@ -21,9 +19,9 @@ class Translator(object):
             self.src_dict = checkpoint["dicts"]["src"]
             self.tgt_dict = checkpoint["dicts"]["tgt"]
 
-            encoder = Models.Encoder(model_opt, self.src_dict)
-            decoder = Models.Decoder(model_opt, self.tgt_dict)
-            model = Models.NMTModel(encoder, decoder)
+            encoder = models.Encoder(model_opt, self.src_dict)
+            decoder = models.Decoder(model_opt, self.tgt_dict)
+            model = models.NMTModel(encoder, decoder)
 
             # @ change here.
             generator = nn.Sequential(
@@ -237,7 +235,7 @@ class Translator(object):
         padMask = srcBatch.data.eq(Constants.PAD).t()
 
         def apply_context_mask(m):
-            if isinstance(m, GlobalAttention):
+            if isinstance(m, Attention):
                 m.mask = padMask
 
         #  (2) if a target is specified, compute the 'goldScore'

@@ -1,3 +1,4 @@
+import warnings
 from pathlib import Path
 
 import pandas as pd
@@ -5,6 +6,7 @@ import pytest
 import torch
 import torch.nn.functional as F
 from jaxtyping import Float, Int
+from lightning.pytorch import Trainer
 from torch import Tensor, nn
 from torch.utils.data import DataLoader
 
@@ -39,7 +41,7 @@ torch.manual_seed(1337)
 
 @pytest.fixture(scope="session", autouse=True)
 def dataset() -> Dataset:
-    return Dataset.from_pandas(pd.read_parquet(dataset_path))
+    return Dataset.from_pandas(pd.read_parquet(dataset_path)[:10])
 
 
 @pytest.fixture(scope="session")
@@ -63,8 +65,8 @@ def de_word_tokenizer() -> WordVocabulary:
 def spm_dataloader(dataset: Dataset, spm_tokenizer: SentencePieceVocabulary):
     def tokenize(example):
         # perform tokenization at this stage.
-        example[SOURCE] = spm_tokenizer.to_tensor(example[SOURCE])
-        example[TARGET] = spm_tokenizer.to_tensor(example[TARGET])
+        example[SOURCE] = spm_tokenizer.to_tensor(example[SOURCE]).squeeze(0)
+        example[TARGET] = spm_tokenizer.to_tensor(example[TARGET]).squeeze(0)
         return example
 
     tokenized_dataset = dataset.with_format("torch").map(tokenize)
@@ -80,8 +82,8 @@ def word_dataloader_separate(
 ):
     def tokenize(example):
         # perform tokenization at this stage.
-        example[SOURCE] = de_word_tokenizer.to_tensor(example[SOURCE])
-        example[TARGET] = en_word_tokenizer.to_tensor(example[TARGET])
+        example[SOURCE] = de_word_tokenizer.to_tensor(example[SOURCE]).squeeze(0)
+        example[TARGET] = en_word_tokenizer.to_tensor(example[TARGET]).squeeze(0)
         return example
 
     tokenized_dataset = dataset.with_format("torch").map(tokenize)
@@ -99,12 +101,14 @@ def test_rnn_inference_separate_tokenizers(word_dataloader_separate):
         sequence_length=SEQUENCE_LENGTH,
         tokenizer=src_tokenizer,
         decoder_tokenizer=tgt_tokenizer,
+        rnn_size=1,
+        d_word_vec=1,
     )
     model.model.PAD = src_tokenizer.PAD
 
     batch: dict = next(iter(dataloader))
-    x: torch.Tensor = batch[SOURCE].squeeze(1)
-    y: torch.Tensor = batch[TARGET].squeeze(1)
+    x: torch.Tensor = batch[SOURCE]
+    y: torch.Tensor = batch[TARGET]
 
     m = model.model
     y_hat = m(x, y)
@@ -129,12 +133,14 @@ def test_rnn_inference(spm_dataloader):
         name="rnn_1",
         vocabulary_size=tokenizer.vocab_size,
         sequence_length=SEQUENCE_LENGTH,
+        rnn_size=1,
+        d_word_vec=1,
     )
     model.model.PAD = tokenizer.PAD
 
     batch: dict = next(iter(dataloader))
-    x: torch.Tensor = batch[SOURCE].squeeze(1)
-    y: torch.Tensor = batch[TARGET].squeeze(1)
+    x: torch.Tensor = batch[SOURCE]
+    y: torch.Tensor = batch[TARGET]
 
     m = model.model
     y_hat = m(x, y)
@@ -160,12 +166,14 @@ def test_rnn_inference_brnn(spm_dataloader):
         vocabulary_size=tokenizer.vocab_size,
         brnn=True,
         sequence_length=SEQUENCE_LENGTH,
+        rnn_size=2,
+        d_word_vec=1,
     )
     model.model.PAD = tokenizer.PAD
 
     batch: dict = next(iter(dataloader))
-    x: torch.Tensor = batch[SOURCE].squeeze(1)
-    y: torch.Tensor = batch[TARGET].squeeze(1)
+    x: torch.Tensor = batch[SOURCE]
+    y: torch.Tensor = batch[TARGET]
 
     m = model.model
     y_hat = m(x, y)
@@ -191,14 +199,16 @@ def test_rnn_inference_mps(spm_dataloader):
         name="rnn_1",
         vocabulary_size=tokenizer.vocab_size,
         sequence_length=SEQUENCE_LENGTH,
+        rnn_size=1,
+        d_word_vec=1,
     )
     device = "mps"
     model.model.to(device)
     model.model.PAD = tokenizer.PAD
 
     batch: dict = next(iter(dataloader))
-    x: torch.Tensor = batch[SOURCE].squeeze(1).to(device)
-    y: torch.Tensor = batch[TARGET].squeeze(1).to(device)
+    x: torch.Tensor = batch[SOURCE].to(device)
+    y: torch.Tensor = batch[TARGET].to(device)
 
     m = model.model
     y_hat = m(x, y)
@@ -212,6 +222,75 @@ def test_rnn_inference_mps(spm_dataloader):
     log.info("Y Shapes", y_hat=y_hat.shape, y=y.shape)
     loss = F.cross_entropy(y_hat, y, ignore_index=model.model.PAD, reduction="sum")
     loss.backward()
+
+
+def test_save_load_rnn_checkpoint(spm_dataloader, tmp_path):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        checkpoint_path = tmp_path / "checkpoint.ckpt"
+        dataloader, tokenizer = spm_dataloader
+        module = RNNModule(
+            name="rnn_1",
+            vocabulary_size=tokenizer.vocab_size,
+            sequence_length=SEQUENCE_LENGTH,
+            rnn_size=1,
+            d_word_vec=1,
+        )
+
+        trainer = Trainer(max_epochs=1, accelerator="cpu", logger=False)
+        trainer.fit(module, train_dataloaders=dataloader)
+
+        m = module.model
+
+        # generate temporary path to save checkpoint and load from.
+        trainer.save_checkpoint(checkpoint_path)
+
+        ckpt_module = RNNModule.load_from_checkpoint(checkpoint_path)
+        m2 = ckpt_module.model
+
+        torch.testing.assert_close(
+            m.decoder.word_lut.weight, m2.decoder.word_lut.weight
+        )
+        torch.testing.assert_close(
+            m.encoder.word_lut.weight, m2.encoder.word_lut.weight
+        )
+
+
+def test_save_load_transformer_checkpoint(spm_dataloader, tmp_path):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        checkpoint_path = tmp_path / "checkpoint.ckpt"
+        dataloader, tokenizer = spm_dataloader
+        module = PyTorchTransformerModule(
+            name="transformer_2",
+            vocabulary_size=tokenizer.vocab_size,
+            sequence_length=SEQUENCE_LENGTH,
+            dim_model=1,
+            n_heads=1,
+            num_encoder_layers=1,
+            num_decoder_layers=1,
+            tokenizer=tokenizer,
+        )
+        trainer = Trainer(max_epochs=1, accelerator="cpu", logger=False)
+        trainer.fit(module, train_dataloaders=dataloader)
+
+        # generate temporary path to save checkpoint and load from.
+        trainer.save_checkpoint(checkpoint_path)
+        ckpt_module = PyTorchTransformerModule.load_from_checkpoint(checkpoint_path)
+
+        m = module.model
+        m2 = ckpt_module.model
+
+        torch.testing.assert_close(m.input_emb.weight, m2.input_emb.weight)
+        torch.testing.assert_close(m.output_emb.weight, m2.output_emb.weight)
+
+        # since we bundled the tokenizer in the module;
+        # it gets included in the checkpoint dump.
+        ckpt_tokenizer = ckpt_module.tokenizer
+        text = "hello"
+        tokens = tokenizer.to_tensor(text)
+        ckpt_tokens = ckpt_tokenizer.to_tensor(text)
+        torch.testing.assert_close(tokens, ckpt_tokens)
 
 
 def test_transformer_inference(spm_dataloader):
@@ -234,8 +313,8 @@ def test_transformer_inference(spm_dataloader):
     model.eval()
 
     batch: dict = next(iter(dataloader))
-    x: torch.Tensor = batch[SOURCE].squeeze(1)
-    y: torch.Tensor = batch[TARGET].squeeze(1)
+    x: torch.Tensor = batch[SOURCE]
+    y: torch.Tensor = batch[TARGET]
 
     len_x = torch.arange(SEQUENCE_LENGTH).repeat((BATCH_SIZE, 1))
     len_x = len_x.masked_fill((x == PAD), 0)
@@ -305,8 +384,8 @@ def test_pt_transformer_inference(spm_dataloader):
         vocabulary_size=tokenizer.vocab_size,
         tokenizer=tokenizer,
         sequence_length=SEQUENCE_LENGTH,
-        dim_model=8,
-        n_heads=2,
+        dim_model=2,
+        n_heads=1,
         num_encoder_layers=1,
         num_decoder_layers=1,
     )
@@ -315,8 +394,8 @@ def test_pt_transformer_inference(spm_dataloader):
     model.PAD = 0
 
     batch: dict = next(iter(dataloader))
-    x: torch.Tensor = batch[SOURCE].squeeze(1)
-    y: torch.Tensor = batch[TARGET].squeeze(1)
+    x: torch.Tensor = batch[SOURCE]
+    y: torch.Tensor = batch[TARGET]
 
     # forward pass
     y_hat: Float[Tensor, "batch seq_length vocab"]

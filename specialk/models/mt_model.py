@@ -79,6 +79,13 @@ class NMTModule(pl.LightningModule):
 
         self.model: Union[TransformerModel, Seq2Seq]
         self.criterion = torch.nn.CrossEntropyLoss(ignore_index=PAD)
+        self.save_hyperparameters(
+            # "name",
+            # "vocabulary_size",
+            # "sequence_length",
+            # "label_smoothing",
+            # "decoder_vocabulary_size",
+        )
 
     def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
         """Run Training step.
@@ -275,17 +282,17 @@ class TransformerModule(NMTModule):
             **kwargs,
         )
 
-    def configure_optimizers(self) -> torch.optim.Optimizer:
-        return ScheduledOptim(
-            optimizer=torch.optim.Adam(
-                filter(lambda x: x.requires_grad, self.model.parameters()),
-                betas=(0.9, 0.98),
-                eps=1e-09,
-                lr=0.01,
-            ),
-            d_model=self.model.encoder.d_model,
-            n_warmup_steps=self.n_warmup_steps,
-        )
+    # def configure_optimizers(self) -> torch.optim.Optimizer:
+    #     return ScheduledOptim(
+    #         optimizer=torch.optim.Adam(
+    #             filter(lambda x: x.requires_grad, self.model.parameters()),
+    #             betas=(0.9, 0.98),
+    #             eps=1e-09,
+    #             lr=0.01,
+    #         ),
+    #         d_model=self.model.encoder.layer_stack[0].pos_ffn.w_1.weight.shape[0],
+    #         n_warmup_steps=self.n_warmup_steps,
+    #     )
 
     def change_pos_enc_len(self, seq_len: int, pad_token: int = PAD):
         """Change the maximum sequence length of the transformer input.
@@ -313,6 +320,14 @@ class RNNModule(NMTModule):
             RNNEncoder(args, self.vocabulary_size),
             RNNDecoder(args, self.decoder_vocabulary_size),
         )
+        # self.save_hyperparameters(
+        #     "rnn_size",
+        #     "d_word_vec",
+        #     "dropout",
+        #     "pre_word_vecs_enc",
+        #     "input_feed",
+        #     "pre_word_vecs_dec",
+        # )
 
     @staticmethod
     def patch_args(

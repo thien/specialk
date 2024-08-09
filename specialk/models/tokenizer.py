@@ -14,10 +14,9 @@ from torch import Tensor
 from tqdm import tqdm
 
 import specialk.core.constants as Constants
-from specialk.models.tokenizers import WordDictionary
-from specialk.models.tokenizers import BytePairEncoder
 from specialk.core.utils import deprecated, load_dataset, log
 from specialk.datasets.preprocess import parse as bpe_parse
+from specialk.models.tokenizers import BytePairEncoder, WordDictionary
 
 
 class Vocabulary:
@@ -98,7 +97,9 @@ class Vocabulary:
     def tokenize(self, text: str) -> List[str]:
         raise NotImplementedError
 
-    def detokenize(self, tokens: Union[Tensor, List]) -> List[str]:
+    def detokenize(
+        self, tokens: Union[Tensor, List], specials: Optional[bool] = True
+    ) -> List[str]:
         raise NotImplementedError
 
     def to_dict(self) -> dict:

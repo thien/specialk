@@ -15,8 +15,10 @@ from specialk.core.constants import (
     LOGGING_DIR,
     LOGGING_PERF_NAME,
     PROJECT_DIR,
+    RNN,
     SOURCE,
     TARGET,
+    TRANSFORMER,
 )
 from specialk.core.utils import check_torch_device, log
 from specialk.models.mt_model import RNNModule
@@ -39,6 +41,8 @@ def init_dataloader(
     batch_size: int,
     shuffle: bool,
     decoder_tokenizer: Optional[Vocabulary] = None,
+    n_workers: int = 8,
+    persistent_workers: bool = True,
 ):
     if decoder_tokenizer is None:
         decoder_tokenizer = tokenizer
@@ -53,9 +57,9 @@ def init_dataloader(
     dataloader = DataLoader(
         tokenized_dataset,
         batch_size=batch_size,
-        persistent_workers=True,
+        persistent_workers=persistent_workers,
         shuffle=shuffle,
-        num_workers=8,
+        num_workers=n_workers,
     )
     return dataloader, tokenizer
 
@@ -63,7 +67,7 @@ def init_dataloader(
 def load_tokenizer(
     option: str = "word", max_length: int = 100
 ) -> Tuple[Union[BPEVocabulary, WordVocabulary, SentencePieceVocabulary], Path]:
-    """_summary_
+    """Load tokenizer.
 
     Args:
         option (str, optional): _description_. Defaults to "word".
@@ -89,6 +93,9 @@ def load_tokenizer(
         tokenizer = SentencePieceVocabulary.from_file(
             tokenizer_filepath, max_length=max_length
         )
+    else:
+        raise Exception("valid option not selected.")
+    log.info("Loaded tokenizer", tokenizer=tokenizer, filepath=str(tokenizer_filepath))
     return tokenizer, tokenizer_filepath
 
 
@@ -107,34 +114,100 @@ def invert_df_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def main_debug():
-    BATCH_SIZE = 64 if DEVICE == "mps" else 32
-    MAX_SEQ_LEN = 50
-    BATCH_SIZE = 192
-    MAX_SEQ_LEN = 30
-    MODEL = "transformer"
+def main():
+    PROD = DEVICE == "cuda"
+    MODEL = RNN
+    DATASET_DIR = PROJECT_DIR / "datasets" / "machine_translation" / "parquets"
+    if PROD:
+        TASK_NAME = "nmt_model"
+        # dataset configs
+        PATH_VALID = DATASET_DIR / "corpus_enfr_final.val.parquet"
+        PATH_TRAIN = DATASET_DIR / "corpus_enfr_final.train.parquet"
+        BACK_TRANSLATION = True
 
-    # init tokenizer
-    src_tokenizer, tgt_tokenizer, src_tokenizer_filepath, tgt_tokenizer_filepath = (
-        load_mono_tokenizer()
-    )
-    log.info("Loaded tokenizers", src=src_tokenizer, tgt=tgt_tokenizer)
+        BATCH_SIZE = 64 if DEVICE == "mps" else 32
+        MAX_SEQ_LEN = 100
+        MODEL = "rnn"
+        if MODEL == RNN:
+            BATCH_SIZE = 192
+            MAX_SEQ_LEN = 75
+        N_EPOCHS = 3
+        LOG_EVERY_N_STEPS = 20
+        # model configs
+        RNN_CONFIG = {
+            "name": "lstm",
+            "brnn": True,
+        }
+        TRANSFORMER_CONFIG = {
+            "name": "transformer",
+            "num_encoder_layers": 6,
+            "num_decoder_layers": 6,
+            "n_heads": 8,
+            "dim_model": 512,
+        }
+        src_tokenizer, src_tokenizer_filepath = load_tokenizer("spm", MAX_SEQ_LEN)
+        tgt_tokenizer, tgt_tokenizer_filepath = src_tokenizer, src_tokenizer_filepath
+
+        TOKENIZER_CONFIG = {
+            "vocabulary_size": src_tokenizer.vocab_size,
+            "decoder_vocabulary_size": tgt_tokenizer.vocab_size,
+            "sequence_length": src_tokenizer.max_length,
+            "tokenizer": src_tokenizer,
+            "decoder_tokenizer": tgt_tokenizer,
+        }
+    else:
+        TASK_NAME = "nmt_model_dummy"
+        PATH_VALID = DATASET_DIR / "de_en_30k_valid.parquet"
+        PATH_TRAIN = DATASET_DIR / "de_en_30k_train.parquet"
+        BACK_TRANSLATION = False
+        BATCH_SIZE = 64 if DEVICE == "mps" else 32
+        BATCH_SIZE = 192
+        MAX_SEQ_LEN = 30
+        src_tokenizer, tgt_tokenizer, src_tokenizer_filepath, tgt_tokenizer_filepath = (
+            load_mono_tokenizer()
+        )
+        RNN_CONFIG = {
+            "name": "lstm_smol",
+            "rnn_size": 128,
+            "d_word_vec": 128,
+            "brnn": True,
+        }
+        TRANSFORMER_CONFIG = {
+            "name": "transformer_smol",
+            "num_encoder_layers": 3,
+            "num_decoder_layers": 3,
+            "n_heads": 4,
+            "dim_model": 128,
+        }
+        N_EPOCHS = 30
+        LOG_EVERY_N_STEPS = 20
+
+    TOKENIZER_CONFIG = {
+        "tokenizer": src_tokenizer,
+        "decoder_tokenizer": tgt_tokenizer,
+        "vocabulary_size": src_tokenizer.vocab_size,
+        "decoder_vocabulary_size": tgt_tokenizer.vocab_size,
+        "sequence_length": src_tokenizer.max_length,
+    }
+    RNN_CONFIG = {**RNN_CONFIG, **TOKENIZER_CONFIG}
+    TRANSFORMER_CONFIG = {**TRANSFORMER_CONFIG, **TOKENIZER_CONFIG}
 
     # load dataset
-    dataset_dir = PROJECT_DIR / "datasets" / "machine_translation" / "parquets"
-    path_valid = dataset_dir / "de_en_30k_valid.parquet"
-    path_train = dataset_dir / "de_en_30k_train.parquet"
-
-    df_train = pd.read_parquet(path_train).sample(frac=1)  # shuffle.
-    df_valid = pd.read_parquet(path_valid)
-
+    log.info("Loading datasets", train=str(PATH_TRAIN), valid=str(PATH_VALID))
+    df_train = pd.read_parquet(PATH_TRAIN).sample(frac=1)  # shuffle.
+    df_valid = pd.read_parquet(PATH_VALID)
     log.info("Loaded dataset", df_train=df_train.shape, df_valid=df_valid.shape)
+
+    if BACK_TRANSLATION:
+        log.info("Inverting columns to allow for backtranslation.")
+        df_train = invert_df_columns(df_train)
+        df_valid = invert_df_columns(df_valid)
+        log.info("Backtranslation flag enabled.")
+    else:
+        log.info("Backtranslation is disabled.")
 
     train_dataset: Dataset = Dataset.from_pandas(df_train)
     valid_dataset: Dataset = Dataset.from_pandas(df_valid)
-
-    src_tokenizer.max_length = MAX_SEQ_LEN
-    tgt_tokenizer.max_length = MAX_SEQ_LEN
 
     # create dataloaders
     train_dataloader, _ = init_dataloader(
@@ -153,6 +226,17 @@ def main_debug():
     )
     log.info("Created dataset dataloaders.")
 
+    if MODEL == RNN:
+        task = RNNModule(**RNN_CONFIG)
+        # is this needed?
+        task.model.PAD = src_tokenizer.PAD
+    else:
+        task = TransformerModule(**TRANSFORMER_CONFIG)
+    if DEVICE == "cuda":
+        # compile for gains.
+        task = torch.compile(task)
+    log.info("model initialized.", model=task)
+
     hyperparams = {
         "batch_size": BATCH_SIZE,
         "src_tokenizer": src_tokenizer.__class__.__name__,
@@ -161,149 +245,17 @@ def main_debug():
         "src_tokenizer_path": src_tokenizer_filepath,
         "tgt_tokenizer_path": tgt_tokenizer_filepath,
         "max_sequence_length": src_tokenizer.max_length,
-        "dataset_path": path_train,
-        # "optimiser": task.opt
+        "dataset_train_path": PATH_TRAIN,
+        "dataset_valid_path": PATH_VALID,
     }
-    log.info("Hyperparams", hyperparams=hyperparams)
+    log.info("Showing hyperparameters.", hyperparams=hyperparams)
 
-    if MODEL == "rnn":
-        task = RNNModule(
-            name="lstm_smol",
-            vocabulary_size=src_tokenizer.vocab_size,
-            decoder_vocabulary_size=tgt_tokenizer.vocab_size,
-            sequence_length=src_tokenizer.max_length,
-            tokenizer=src_tokenizer,
-            decoder_tokenizer=tgt_tokenizer,
-            rnn_size=128,
-            d_word_vec=128,
-            brnn=True,
-        )
-        task.model.PAD = src_tokenizer.PAD
-
-    else:
-        task = TransformerModule(
-            name="transformer_smol",
-            vocabulary_size=src_tokenizer.vocab_size,
-            decoder_vocabulary_size=tgt_tokenizer.vocab_size,
-            sequence_length=src_tokenizer.max_length,
-            tokenizer=src_tokenizer,
-            decoder_tokenizer=tgt_tokenizer,
-            num_encoder_layers=3,
-            num_decoder_layers=3,
-            n_heads=4,
-            dim_model=128,
-        )
-
-    if DEVICE == "cuda":
-        # compile for gains.
-        task = torch.compile(task)
-
-    log.info("model initialized", model=task)
-
-    logger = TensorBoardLogger(LOGGING_DIR, name=f"nmt_model_dummy/{task.name}")
-    logger.log_hyperparams(params=hyperparams)
-
-    profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
-    trainer = pl.Trainer(
-        accelerator=DEVICE,
-        max_epochs=30,
-        log_every_n_steps=10,
-        logger=logger,
-        profiler=profiler,
-        precision="bf16-mixed",
-    )
-
-    trainer.fit(
-        task, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader
-    )
-
-
-def main():
-    BATCH_SIZE = 64 if DEVICE == "mps" else 32
-    BACK_TRANSLATION = True
-    MAX_SEQ_LEN = 100
-    MODEL = "rnn"
-    if MODEL == "rnn":
-        BATCH_SIZE = 192
-        MAX_SEQ_LEN = 75
-
-    # init tokenizer
-    tokenizer, tokenizer_filepath = load_tokenizer("spm", MAX_SEQ_LEN)
-    log.info("Loaded tokenizer", tokenizer=tokenizer)
-
-    # load dataset
-    dataset_dir = PROJECT_DIR / "datasets" / "machine_translation" / "parquets"
-    path_valid = dataset_dir / "corpus_enfr_final.val.parquet"
-    path_train = dataset_dir / "corpus_enfr_final.train.parquet"
-
-    log.info("Loading datasets", train=str(path_train), valid=str(path_valid))
-    df_train = pd.read_parquet(path_train).sample(frac=1)  # shuffle.
-    df_valid = pd.read_parquet(path_valid)
-
-    log.info("Loaded dataset", df_train=df_train.shape, df_valid=df_valid.shape)
-
-    if BACK_TRANSLATION:
-        log.info("Inverting columns to allow for backtranslation.")
-        df_train = invert_df_columns(df_train)
-        df_valid = invert_df_columns(df_valid)
-        log.info("Backtranslation flag enabled.")
-    else:
-        log.info("Backtranslation is disabled.")
-
-    train_dataset: Dataset = Dataset.from_pandas(df_train)
-    valid_dataset: Dataset = Dataset.from_pandas(df_valid)
-
-    # create dataloaders
-    train_dataloader, _ = init_dataloader(
-        train_dataset, tokenizer, BATCH_SIZE, shuffle=True
-    )
-    val_dataloader, _ = init_dataloader(
-        valid_dataset, tokenizer, BATCH_SIZE, shuffle=False
-    )
-    log.info("Created dataset dataloaders.")
-
-    if MODEL == "rnn":
-        task = RNNModule(
-            name="lstm",
-            vocabulary_size=tokenizer.vocab_size,
-            sequence_length=tokenizer.max_length,
-            tokenizer=tokenizer,
-        )
-        task.model.PAD = tokenizer.PAD
-
-    else:
-        task = TransformerModule(
-            name="transformer",
-            vocabulary_size=tokenizer.vocab_size,
-            sequence_length=tokenizer.max_length,
-            tokenizer=tokenizer,
-            num_encoder_layers=6,
-            num_decoder_layers=6,
-            n_heads=8,
-            dim_model=512,
-        )
-    log.info("model initialized", model=task)
-    hyperparams = {
-        "batch_size": BATCH_SIZE,
-        "tokenizer": tokenizer.__class__.__name__,
-        "dataset": "machine_translation",
-        "tokenizer_path": tokenizer_filepath,
-        "max_sequence_length": tokenizer.max_length,
-        "dataset_path": path_train,
-    }
-
-    if DEVICE == "cuda":
-        # compile for gains.
-        task = torch.compile(task)
-        log.info("compiled torch model.")
-
-    log.info("Hyperparams", hyperparams=hyperparams)
-    logger = TensorBoardLogger(LOGGING_DIR, name="nmt_model/{task.name}")
+    logger = TensorBoardLogger(LOGGING_DIR, name=f"{TASK_NAME}/{task.name}")
     logger.log_hyperparams(params=hyperparams)
     trainer = pl.Trainer(
         accelerator=DEVICE,
-        max_epochs=3,
-        log_every_n_steps=20,
+        max_epochs=N_EPOCHS,
+        log_every_n_steps=LOG_EVERY_N_STEPS,
         logger=logger,
         precision="bf16-mixed",
     )
@@ -314,7 +266,4 @@ def main():
 
 
 if __name__ == "__main__":
-    if DEVICE == "cuda":
-        main()
-    else:
-        main_debug()
+    main()

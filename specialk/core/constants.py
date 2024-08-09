@@ -25,6 +25,9 @@ CLS_TOKEN = "<cls>"
 SOURCE = "source"
 TARGET = "target"
 
+RNN = "rnn"
+TRANSFORMER = "transformer"
+
 
 def get_tokens() -> List[str]:
     g = globals()

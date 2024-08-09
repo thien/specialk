@@ -163,8 +163,8 @@ class NMTModule(pl.LightningModule):
         y_hat = y_hat.argmax(dim=-1)  # greedy as a reference check.
         y_hat = mask_out_special_tokens(y_hat, tokenizer.EOS, tokenizer.PAD)
 
-        predictions: List[str] = tokenizer.detokenize(y_hat)
-        references: List[str] = tokenizer.detokenize(y)
+        predictions: List[str] = tokenizer.detokenize(y_hat, specials=False)
+        references: List[str] = tokenizer.detokenize(y, specials=False)
         return bleu.compute(predictions, references)
 
     def validation_step(self, batch: dict, batch_idx: int):

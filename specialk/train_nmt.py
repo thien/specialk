@@ -207,10 +207,11 @@ def main_debug():
     profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
     trainer = pl.Trainer(
         accelerator=DEVICE,
-        max_epochs=20,
+        max_epochs=30,
         log_every_n_steps=10,
         logger=logger,
         profiler=profiler,
+        precision="bf16-mixed",
     )
 
     trainer.fit(

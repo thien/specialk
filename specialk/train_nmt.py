@@ -236,12 +236,14 @@ def main():
     path_valid = dataset_dir / "corpus_enfr_final.val.parquet"
     path_train = dataset_dir / "corpus_enfr_final.train.parquet"
 
+    log.info("Loading datasets", train=str(path_train), valid=str(path_valid))
     df_train = pd.read_parquet(path_train).sample(frac=1)  # shuffle.
     df_valid = pd.read_parquet(path_valid)
 
     log.info("Loaded dataset", df_train=df_train.shape, df_valid=df_valid.shape)
 
     if BACK_TRANSLATION:
+        log.info("Inverting columns to allow for backtranslation.")
         df_train = invert_df_columns(df_train)
         df_valid = invert_df_columns(df_valid)
         log.info("Backtranslation flag enabled.")
@@ -275,8 +277,8 @@ def main():
             vocabulary_size=tokenizer.vocab_size,
             sequence_length=tokenizer.max_length,
             tokenizer=tokenizer,
-            num_encoder_layers=4,
-            num_decoder_layers=4,
+            num_encoder_layers=6,
+            num_decoder_layers=6,
             n_heads=8,
             dim_model=512,
         )
@@ -289,14 +291,21 @@ def main():
         "max_sequence_length": tokenizer.max_length,
         "dataset_path": path_train,
     }
+
+    if DEVICE == "cuda":
+        # compile for gains.
+        task = torch.compile(task)
+        log.info("compiled torch model.")
+
     log.info("Hyperparams", hyperparams=hyperparams)
-    logger = TensorBoardLogger(LOGGING_DIR, name="nmt_model")
+    logger = TensorBoardLogger(LOGGING_DIR, name="nmt_model/{task.name}")
     logger.log_hyperparams(params=hyperparams)
     trainer = pl.Trainer(
         accelerator=DEVICE,
         max_epochs=3,
         log_every_n_steps=20,
         logger=logger,
+        precision="bf16-mixed",
     )
 
     trainer.fit(

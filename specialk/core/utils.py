@@ -1,5 +1,5 @@
 import functools
-import logging
+
 import platform
 import subprocess
 import warnings
@@ -7,16 +7,14 @@ from argparse import Namespace
 from multiprocessing import Pool, cpu_count
 from pathlib import Path
 from typing import Any, Dict, List
+from specialk.core.logging import log
 
-import structlog
 import torch
 from tqdm import tqdm
 
 """
 Misc. functions used by a variety of parts of the library.
 """
-
-log = structlog.get_logger()
 
 
 def deprecated(func):

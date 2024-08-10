@@ -79,13 +79,7 @@ class NMTModule(pl.LightningModule):
 
         self.model: Union[TransformerModel, Seq2Seq]
         self.criterion = torch.nn.CrossEntropyLoss(ignore_index=PAD)
-        self.save_hyperparameters(
-            # "name",
-            # "vocabulary_size",
-            # "sequence_length",
-            # "label_smoothing",
-            # "decoder_vocabulary_size",
-        )
+        self.save_hyperparameters()
 
     def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
         """Run Training step.
@@ -320,14 +314,6 @@ class RNNModule(NMTModule):
             RNNEncoder(args, self.vocabulary_size),
             RNNDecoder(args, self.decoder_vocabulary_size),
         )
-        # self.save_hyperparameters(
-        #     "rnn_size",
-        #     "d_word_vec",
-        #     "dropout",
-        #     "pre_word_vecs_enc",
-        #     "input_feed",
-        #     "pre_word_vecs_dec",
-        # )
 
     @staticmethod
     def patch_args(
@@ -388,3 +374,6 @@ class RNNModule(NMTModule):
             batch_size=batch[SOURCE].size(0),
         )
         return super().training_step(batch, batch_idx)
+
+    def configure_optimizers(self) -> torch.optim.Optimizer:
+        return torch.optim.Adam(self.model.parameters(), lr=0.001)

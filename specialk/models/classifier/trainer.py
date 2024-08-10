@@ -134,7 +134,8 @@ class CNNClassifier(TextClassifier):
 
         if batch_size < self.min_batch_size:
             log.error(
-                f"batch size (currently set to {batch_size}) should be at least {self.min_batch_size}."
+                f"batch size (currently set to {batch_size}) "
+                f"should be at least {self.min_batch_size}."
             )
 
         # wrap into one-hot encoding of tokens for activation.
@@ -196,7 +197,7 @@ class CNNClassifier(TextClassifier):
     def predict_step(
         self, batch: dict, batch_idx: int, dataloader_idx=0
     ) -> torch.Tensor:
-        x = batch["text"]
+        x = batch["text"]  # assumes text is tokenized.
         y_hat = self.model(x)
         return y_hat.squeeze(-1)
 

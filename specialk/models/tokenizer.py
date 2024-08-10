@@ -38,17 +38,30 @@ class Vocabulary:
         """
         Args:
             name (str): name of vocabulary.
-            data_file (Union[Path,str]): path of file containing training data to use for the vocabulary.
-            filename (Union[Path,str]): path of vocabulary file to either load from, or save to.
+            data_file (Union[Path,str]): path of file containing training
+                data to use for the vocabulary.
+            filename (Union[Path,str]): path of vocabulary file to either 
+                load from, or save to.
             vocab_size (int, Optional): If set, sets cap on vocabulary size.
             max_length (int): maxiumum token length of a sequence.
-            BOS_TOKEN (Optional[str], optional): A special token representing the beginning of a sentence. Defaults to Constants.SOS_WORD.
-            EOS_TOKEN (Optional[str], optional): A special token representing the end of a sentence. Defaults to Constants.EOS_WORD.
-            UNK_TOKEN (Optional[str], optional):  A special token representing an out-of-vocabulary token. Defaults to Constants.UNK_WORD.
-            SEP_TOKEN (Optional[str], optional): A special token separating two different sentences in the same input (used by BERT for instance).. Defaults to Constants.UNK_WORD.
-            PAD_TOKEN (Optional[str], optional): A special token used to make arrays of tokens the same size for batching purpose. Will then be ignored by attention mechanisms or loss computation. Defaults to Constants.SEP_WORD.
-            CLS_TOKEN (Optional[str], optional):  A special token representing the class of the input (used by BERT for instance). Defaults to Constants.CLS_TOKEN.
-            BLO_TOKEN (Optional[str], optional):  A special token representing the separation of paragraph blocks. Defaults to Constants.BLO_WORD.
+            BOS_TOKEN (Optional[str], optional): A special token representing 
+                the beginning of a sentence. Defaults to Constants.SOS_WORD.
+            EOS_TOKEN (Optional[str], optional): A special token representing 
+                the end of a sentence. Defaults to Constants.EOS_WORD.
+            UNK_TOKEN (Optional[str], optional):  A special token representing 
+                an out-of-vocabulary token. Defaults to Constants.UNK_WORD.
+            SEP_TOKEN (Optional[str], optional): A special token separating two 
+                different sentences in the same input (used by BERT for instance).. 
+                Defaults to Constants.UNK_WORD.
+            PAD_TOKEN (Optional[str], optional): A special token used to make 
+                arrays of tokens the same size for batching purpose. Will then be 
+                ignored by attention mechanisms or loss computation. Defaults to 
+                Constants.SEP_WORD.
+            CLS_TOKEN (Optional[str], optional):  A special token representing the 
+                class of the input (used by BERT for instance). Defaults to 
+                Constants.CLS_TOKEN.
+            BLO_TOKEN (Optional[str], optional):  A special token representing the
+                separation of paragraph blocks. Defaults to Constants.BLO_WORD.
         Returns:
             WordDictionary: Vocabulary file.
         """

@@ -8,7 +8,7 @@ from multiprocessing import Pool, cpu_count
 from pathlib import Path
 from typing import Any, Dict, List
 from specialk.core.logging import log
-
+import hashlib
 import torch
 from tqdm import tqdm
 
@@ -102,3 +102,19 @@ def namespace_to_dict(ns: Namespace) -> Dict[str, Any]:
     #         log.error(f"key {key} is not a string in namespace")
     # return d
     return {k: v for k, v in ns._get_kwargs()}
+
+def hash(src: List[str], tgt: List[str]) -> str:
+    """Generate hash of dataset.
+
+    Args:
+        src (List[str]): src dataset.
+        tgt (List[str]): tgt dataset.
+
+    Returns:
+        str: md5 checksum of the dataset.
+    """
+    m = hashlib.md5()
+    for x, y in zip(src, tgt):
+        m.update(x.encode())
+        m.update(y.encode())
+    return str(m.hexdigest())

@@ -2,7 +2,6 @@
 Various Wrapper functions for evaluation metrics, regarding text datasets.
 """
 
-import hashlib
 from pathlib import Path
 from typing import List, Optional, Union
 
@@ -11,6 +10,7 @@ import numpy as np
 from gensim.models.word2vec import Word2Vec
 from tqdm import tqdm
 
+from specialk.core.utils import hash
 import specialk.metrics.style_transfer.cnn as cnn
 import specialk.metrics.style_transfer.content_preservation as preserv
 from specialk.metrics import AlignmentMetric, Metric
@@ -60,17 +60,30 @@ class Naturalness(StyleMetric):
 
 
 class Preservation(StyleMetric, AlignmentMetric):
+    """To use, init a style lexicon of the whole corpora, and then
+        use that for test cases.
+    """
     def __init__(
         self,
-        dir_cache: str,
-        dir_w2v: Optional[str] = None,
-        path_lexicon: Optional[str] = None,
+        dir_cache: Union[Path, str],
+        dir_w2v: Optional[Union[Path, str]] = None,
+        path_lexicon: Optional[Union[Path, str]] = None,
         enable_cache: bool = True,
     ):
+        if isinstance(dir_cache, str):
+            dir_cache = Path(dir_cache)
+        if isinstance(dir_w2v, str):
+            dir_w2v = Path(dir_w2v)
+        if isinstance(path_lexicon, str):
+            path_lexicon = Path(path_lexicon)
+
         self.cache_dir = dir_cache
-        self.dir_w2v = dir_w2v
-        self.dir_lexicon = path_lexicon
-        self.style_lexicon: StyleLexicon
+        self.dir_w2v: Path = dir_w2v if dir_w2v else self.cache_dir / "embeddings"
+        self.dir_lexicon: Path = (
+            path_lexicon if path_lexicon else self.cache_dir / "style_lexicons"
+        )
+
+        self.style_lexicon = StyleLexicon()
         self.w2v: Word2Vec
         self.enable_cache = enable_cache
 
@@ -97,16 +110,29 @@ class Preservation(StyleMetric, AlignmentMetric):
         return word2vec.wv.wmdistance(prediction, reference)
 
     def init_style_lexicon(
-        self, checksum: str, predictions: list[str], references: List[str]
+        self, style_1: list[str], style_2: List[str], checksum: Optional[str] = None
     ):
+        """Learn Style lexicon given the predictions and references.
+
+        Args:
+            prediction (str): Prediction text.
+            reference (str): Reference text to compare to.
+            checksum (Optional[str]): checksum representing the training data.
+                If a checksum is passed in, then we'll load that dataset.
+                Otherwise, we'll make a dataset, and save it.
+        """
+
         # init style lexicon
+        checksum = hash(style_1, style_2)
+
         path_style_lexicon: Path = self.dir_lexicon / checksum
         if path_style_lexicon.exists():
             self.style_lexicon = StyleLexicon.from_json(path_style_lexicon)
         else:
-            self.style_lexicon.create(predictions, references)
+            self.style_lexicon.create(style_1, style_2)
             if self.enable_cache:
                 self.style_lexicon.save(path_style_lexicon)
+        return checksum
 
     def init_w2v(self, checksum: str, predictions: list[str], references: List[str]):
         path_w2v = self.dir_w2v / checksum
@@ -136,16 +162,16 @@ class Preservation(StyleMetric, AlignmentMetric):
             NotImplementedError: _description_
         """
         if not checksum:
-            checksum = self.hash(predictions, references)
+            checksum = hash(predictions, references)
 
-        self.init_style_lexicon(checksum, predictions, references)
+        self.init_style_lexicon(predictions, references, checksum=checksum)
 
         # mask input and output texts
         src_masked = preserv.mark_style_words(
-            predictions, style_tokens=self.style_lexicon, mask_style=True
+            predictions, style_tokens=self.style_lexicon.lexicon, mask_style=True
         )
         tgt_masked = preserv.mark_style_words(
-            references, style_tokens=self.style_lexicon, mask_style=True
+            references, style_tokens=self.style_lexicon.lexicon, mask_style=True
         )
 
         # init w2v
@@ -156,8 +182,3 @@ class Preservation(StyleMetric, AlignmentMetric):
             self.word_movers_distance(src, tgt, self.w2v)
             for src, tgt in tqdm(zip(src_masked, tgt_masked))
         ]
-
-    @staticmethod
-    def hash(src: list[str], tgt: list[str]) -> str:
-        """Returns an md5 hash of the documents."""
-        return str(hashlib.md5(str([x for x in zip(src, tgt)]).encode()).hexdigest())

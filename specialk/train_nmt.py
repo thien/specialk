@@ -116,7 +116,8 @@ def invert_df_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 def main():
     PROD = DEVICE == "cuda"
-    MODEL = RNN
+    PROD = True
+    MODEL = TRANSFORMER
     DATASET_DIR = PROJECT_DIR / "datasets" / "machine_translation" / "parquets"
     if PROD:
         TASK_NAME = "nmt_model"
@@ -127,7 +128,6 @@ def main():
 
         BATCH_SIZE = 64 if DEVICE == "mps" else 32
         MAX_SEQ_LEN = 100
-        MODEL = "rnn"
         if MODEL == RNN:
             BATCH_SIZE = 192
             MAX_SEQ_LEN = 75
@@ -168,7 +168,7 @@ def main():
         )
         RNN_CONFIG = {
             "name": "lstm_smol",
-            "rnn_size": 128,
+            "rnn_size": 192,
             "d_word_vec": 128,
             "brnn": True,
         }
@@ -247,6 +247,7 @@ def main():
         "max_sequence_length": src_tokenizer.max_length,
         "dataset_train_path": PATH_TRAIN,
         "dataset_valid_path": PATH_VALID,
+        "learning_rate": task.configure_optimizers().defaults["lr"],
     }
     log.info("Showing hyperparameters.", hyperparams=hyperparams)
 

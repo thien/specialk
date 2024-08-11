@@ -54,7 +54,7 @@ def init_dataloader(
     if decoder_tokenizer is None:
         decoder_tokenizer = tokenizer
 
-    n_map_workers = 0 if DEVICE == "cuda" else n_workers
+    n_map_workers = None if DEVICE == "cuda" else n_workers
 
     def tokenize(example):
         example[SOURCE] = tokenizer.to_tensor(example[SOURCE]).squeeze(0)

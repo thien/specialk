@@ -41,11 +41,14 @@ def init_dataloader(
     batch_size: int,
     shuffle: bool,
     decoder_tokenizer: Optional[Vocabulary] = None,
-    n_workers: int = 8,
+    n_workers: int = 4,
     persistent_workers: bool = True,
+    cache_path: Optional[Path] = None,
 ):
     if decoder_tokenizer is None:
         decoder_tokenizer = tokenizer
+
+    n_map_workers = 0 if DEVICE == "cuda" else n_workers
 
     def tokenize(example):
         # perform tokenization at this stage.
@@ -53,7 +56,9 @@ def init_dataloader(
         example[TARGET] = decoder_tokenizer.to_tensor(example[TARGET]).squeeze(0)
         return example
 
-    tokenized_dataset = dataset.with_format("torch").map(tokenize, batched=True)
+    tokenized_dataset = dataset.with_format("torch").map(
+        tokenize, batched=True, num_proc=n_map_workers, cache_file_name=str(cache_path)
+    )
     dataloader = DataLoader(
         tokenized_dataset,
         batch_size=batch_size,
@@ -119,6 +124,10 @@ def main():
     PROD = True
     MODEL = TRANSFORMER
     DATASET_DIR = PROJECT_DIR / "datasets" / "machine_translation" / "parquets"
+    # make cache dir
+    CACHE_DIR = PROJECT_DIR / "cache"
+    DATASET_CACHE_DIR = CACHE_DIR / "datasets"
+    DATASET_CACHE_DIR.mkdir(exist_ok=True)
     if PROD:
         TASK_NAME = "nmt_model"
         # dataset configs
@@ -126,7 +135,7 @@ def main():
         PATH_TRAIN = DATASET_DIR / "corpus_enfr_final.train.parquet"
         BACK_TRANSLATION = True
 
-        BATCH_SIZE = 64 if DEVICE == "mps" else 32
+        BATCH_SIZE = 64
         MAX_SEQ_LEN = 100
         if MODEL == RNN:
             BATCH_SIZE = 192
@@ -144,6 +153,7 @@ def main():
             "num_decoder_layers": 6,
             "n_heads": 8,
             "dim_model": 512,
+            "n_warmup_steps": 4000,
         }
         src_tokenizer, src_tokenizer_filepath = load_tokenizer("spm", MAX_SEQ_LEN)
         tgt_tokenizer, tgt_tokenizer_filepath = src_tokenizer, src_tokenizer_filepath
@@ -178,6 +188,7 @@ def main():
             "num_decoder_layers": 3,
             "n_heads": 4,
             "dim_model": 128,
+            "n_warmup_steps": 80,
         }
         N_EPOCHS = 30
         LOG_EVERY_N_STEPS = 20
@@ -216,6 +227,7 @@ def main():
         BATCH_SIZE,
         decoder_tokenizer=tgt_tokenizer,
         shuffle=True,
+        cache_path=DATASET_CACHE_DIR / PATH_TRAIN.name,
     )
     val_dataloader, _ = init_dataloader(
         valid_dataset,
@@ -223,6 +235,7 @@ def main():
         BATCH_SIZE,
         decoder_tokenizer=tgt_tokenizer,
         shuffle=False,
+        cache_path=DATASET_CACHE_DIR / PATH_VALID.name,
     )
     log.info("Created dataset dataloaders.")
 
@@ -253,12 +266,15 @@ def main():
 
     logger = TensorBoardLogger(LOGGING_DIR, name=f"{TASK_NAME}/{task.name}")
     logger.log_hyperparams(params=hyperparams)
+    profiler = None
+    if PROD:
+        profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
     trainer = pl.Trainer(
         accelerator=DEVICE,
         max_epochs=N_EPOCHS,
         log_every_n_steps=LOG_EVERY_N_STEPS,
         logger=logger,
-        precision="bf16-mixed",
+        profiler=profiler,
     )
 
     trainer.fit(

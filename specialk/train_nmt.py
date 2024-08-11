@@ -277,14 +277,17 @@ def main():
         # profiling will slow prod down.
         profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
 
+    REVIEW_RATE = len(train_dataloader) // 4  # for debugging purposes.
+    if PROD:
+        REVIEW_RATE = len(train_dataloader) // 24  # takes around 24 hours per epoch
+
     trainer = pl.Trainer(
         accelerator=DEVICE,
         max_epochs=N_EPOCHS,
         log_every_n_steps=LOG_EVERY_N_STEPS,
         logger=logger,
         profiler=profiler,
-        val_check_interval=len(train_dataloader)
-        // 4,  # runs eval 4 times in a given epoch.
+        val_check_interval=REVIEW_RATE,
     )
 
     trainer.fit(

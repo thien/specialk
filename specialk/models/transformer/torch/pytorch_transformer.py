@@ -15,6 +15,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from jaxtyping import Bool, Float, Int
+from schedulefree import AdamWScheduleFree
 from torch import Tensor
 
 import specialk.core.constants as Constants
@@ -254,11 +255,15 @@ class PyTorchTransformerModule(NMTModule):
         )
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
-        return torch.optim.Adam(
-            filter(lambda x: x.requires_grad, self.model.parameters()),
-            betas=(0.9, 0.98),
-            eps=1e-09,
-            lr=0.001,
+        # return torch.optim.Adam(
+        #     filter(lambda x: x.requires_grad, self.model.parameters()),
+        #     betas=(0.9, 0.98),
+        #     eps=1e-09,
+        #     lr=0.001,
+        # )
+
+        return AdamWScheduleFree(
+            self.model.parameters(), lr=0.001, warmup_steps=self.n_warmup_steps
         )
         # TODO implement NoamOptimizer instead.
         # return ScheduledOptim(

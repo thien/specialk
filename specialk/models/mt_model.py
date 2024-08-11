@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from jaxtyping import Float, Int
+from schedulefree import AdamWScheduleFree
 from torch import Tensor
 
 from specialk.core.constants import PAD, SOURCE, TARGET
@@ -239,7 +240,8 @@ class NMTModule(pl.LightningModule):
         return n_correct
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
-        return torch.optim.Adam(self.model.parameters(), lr=0.001)
+        return AdamWScheduleFree(self.model.parameters(), lr=0.001, warmup_steps=40)
+        # return torch.optim.AdamW(self.model.parameters(), lr=0.001)
 
     def generate(self, batch: dict, batch_idx: int) -> torch.Tensor:
         """
@@ -287,6 +289,23 @@ class TransformerModule(NMTModule):
     #         d_model=self.model.encoder.layer_stack[0].pos_ffn.w_1.weight.shape[0],
     #         n_warmup_steps=self.n_warmup_steps,
     #     )
+
+    # def configure_optimizers(self) -> torch.optim.Optimizer:
+    #     opt = torch.optim.AdamW(params=self.parameters(), lr=0.01)
+    #     scheduler = CosineAnnealingLR(opt, T_max=10, eta_min=1e-6, last_epoch=-1)
+
+    #     return {
+    #         "optimizer": opt,
+    #         "lr_scheduler": {
+    #             "scheduler": scheduler,
+    #             "interval": "step",
+    #             "monitor": "val_loss",
+    #         },
+    #     }
+
+    def lr_scheduler_step(self, epoch):
+        scheduler.step()
+        return {"lr": scheduler.get_last_lr()}
 
     def change_pos_enc_len(self, seq_len: int, pad_token: int = PAD):
         """Change the maximum sequence length of the transformer input.

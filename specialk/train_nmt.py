@@ -283,6 +283,8 @@ def main():
         log_every_n_steps=LOG_EVERY_N_STEPS,
         logger=logger,
         profiler=profiler,
+        val_check_interval=len(train_dataloader)
+        // 4,  # runs eval 4 times in a given epoch.
     )
 
     trainer.fit(

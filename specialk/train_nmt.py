@@ -43,21 +43,29 @@ def init_dataloader(
     decoder_tokenizer: Optional[Vocabulary] = None,
     n_workers: int = 4,
     persistent_workers: bool = True,
-    cache_path: Optional[Path] = None,
-):
+    cache_path: Optional[Union[Path, str]] = None,
+) -> Tuple[DataLoader, Tuple[Vocabulary, Vocabulary]]:
+    """
+    Prepare dataset into model interpretable data.
+
+    In other words, performs tokenization, shuffling (if needed),
+    and creates DataLoaders for the datasets.
+    """
     if decoder_tokenizer is None:
         decoder_tokenizer = tokenizer
 
     n_map_workers = 0 if DEVICE == "cuda" else n_workers
 
     def tokenize(example):
-        # perform tokenization at this stage.
         example[SOURCE] = tokenizer.to_tensor(example[SOURCE]).squeeze(0)
         example[TARGET] = decoder_tokenizer.to_tensor(example[TARGET]).squeeze(0)
         return example
 
+    if isinstance(cache_path, Path):
+        cache_path = str(cache_path)
+
     tokenized_dataset = dataset.with_format("torch").map(
-        tokenize, batched=True, num_proc=n_map_workers, cache_file_name=str(cache_path)
+        tokenize, batched=True, num_proc=n_map_workers, cache_file_name=cache_path
     )
     dataloader = DataLoader(
         tokenized_dataset,
@@ -66,7 +74,7 @@ def init_dataloader(
         shuffle=shuffle,
         num_workers=n_workers,
     )
-    return dataloader, tokenizer
+    return dataloader, (tokenizer, decoder_tokenizer)
 
 
 def load_tokenizer(
@@ -114,6 +122,7 @@ def load_mono_tokenizer() -> Tuple[WordVocabulary, WordVocabulary, Path, Path]:
 
 
 def invert_df_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """This is for backtranslation."""
     df[SOURCE], df[TARGET] = df[TARGET], df[SOURCE]
     df["source_lang"], df["target_lang"] = df["target_lang"], df["source_lang"]
     return df
@@ -121,7 +130,6 @@ def invert_df_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 def main():
     PROD = DEVICE == "cuda"
-    PROD = True
     MODEL = TRANSFORMER
     DATASET_DIR = PROJECT_DIR / "datasets" / "machine_translation" / "parquets"
     # make cache dir
@@ -245,10 +253,7 @@ def main():
         task.model.PAD = src_tokenizer.PAD
     else:
         task = TransformerModule(**TRANSFORMER_CONFIG)
-    if DEVICE == "cuda":
-        # compile for gains.
-        task = torch.compile(task)
-    log.info("model initialized.", model=task)
+    log.info("model initialised.", model=task)
 
     hyperparams = {
         "batch_size": BATCH_SIZE,
@@ -262,13 +267,16 @@ def main():
         "dataset_valid_path": PATH_VALID,
         "learning_rate": task.configure_optimizers().defaults["lr"],
     }
-    log.info("Showing hyperparameters.", hyperparams=hyperparams)
+    log.info("Hyperparameters initialised.", hyperparams=hyperparams)
 
     logger = TensorBoardLogger(LOGGING_DIR, name=f"{TASK_NAME}/{task.name}")
     logger.log_hyperparams(params=hyperparams)
+
     profiler = None
     if PROD:
+        # profiling will slow prod down.
         profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
+
     trainer = pl.Trainer(
         accelerator=DEVICE,
         max_epochs=N_EPOCHS,

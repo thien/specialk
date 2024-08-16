@@ -2,12 +2,15 @@
 #    uv pip compile - -o requirements.txt
 -e file:///Users/t/Projects/specialk
 absl-py==0.7.0
+    # via rouge-score
 aiohttp==3.9.5
     # via
     #   datasets
     #   fsspec
 aiosignal==1.3.1
     # via aiohttp
+annotated-types==0.7.0
+    # via pydantic
 antlr4-python3-runtime==4.8
     # via hydra-core
 appnope==0.1.4
@@ -20,12 +23,20 @@ attrs==23.2.0
     # via aiohttp
 bayesian-optimization==1.0.1
 beautifulsoup4==4.7.1
+better-exceptions==0.3.3
 bitarray==2.9.2
     # via fairseq
+blis==0.7.11
+    # via thinc
 build==1.2.1
     # via poetry
 cachecontrol==0.14.0
     # via poetry
+catalogue==2.0.10
+    # via
+    #   spacy
+    #   srsly
+    #   thinc
 certifi==2024.6.2
     # via requests
 cffi==1.16.0
@@ -40,18 +51,35 @@ click==8.1.7
     # via
     #   nltk
     #   sacremoses
+    #   typer
+cloudpathlib==0.18.1
+    # via weasel
 colorama==0.4.6
-    # via sacrebleu
+    # via
+    #   pytest-watch
+    #   sacrebleu
 comm==0.2.2
-    # via ipykernel
+    # via
+    #   ipykernel
+    #   ipywidgets
+confection==0.1.5
+    # via
+    #   thinc
+    #   weasel
 crashtest==0.4.1
     # via
     #   cleo
     #   poetry
+cymem==2.0.8
+    # via
+    #   preshed
+    #   spacy
+    #   thinc
 cython==3.0.10
     # via fairseq
 datasets==2.20.0
     # via evaluate
+de-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/de_core_news_sm-3.7.0/de_core_news_sm-3.7.0-py3-none-any.whl
 debugpy==1.8.1
     # via ipykernel
 decorator==5.1.1
@@ -61,11 +89,15 @@ dill==0.3.8
     #   datasets
     #   evaluate
     #   multiprocess
+    #   pandarallel
 distlib==0.3.8
     # via virtualenv
+docopt==0.6.2
+    # via pytest-watch
 dulwich==0.21.7
     # via poetry
 einops==0.8.0
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
 evaluate==0.4.2
 exceptiongroup==1.2.1
     # via
@@ -76,12 +108,14 @@ executing==2.0.1
 fairseq==0.12.2
 fastjsonschema==2.20.0
     # via poetry
+fasttext @ git+https://github.com/facebookresearch/fastText.git@1142dc4c4ecbc19cc16eee5cdd28472e689267e6
 filelock==3.13.1
     # via
     #   cachecontrol
     #   datasets
     #   huggingface-hub
     #   torch
+    #   transformers
     #   virtualenv
 frozenlist==1.4.1
     # via
@@ -95,11 +129,14 @@ fsspec==2024.2.0
     #   lightning
     #   pytorch-lightning
     #   torch
+ftfy==6.2.3
 gensim==4.3.2
 huggingface-hub==0.23.4
     # via
     #   datasets
     #   evaluate
+    #   tokenizers
+    #   transformers
 hydra-core==1.0.7
     # via fairseq
 idna==3.7
@@ -119,14 +156,19 @@ installer==0.7.0
 ipykernel==6.29.4
 ipynb==0.5.1
 ipython==8.18.1
-    # via ipykernel
+    # via
+    #   ipykernel
+    #   ipywidgets
+ipywidgets==8.1.3
 jaraco-classes==3.4.0
     # via keyring
 jaxtyping==0.2.31
 jedi==0.19.1
     # via ipython
 jinja2==3.1.3
-    # via torch
+    # via
+    #   spacy
+    #   torch
 joblib==1.4.2
     # via
     #   nltk
@@ -138,8 +180,14 @@ jupyter-core==5.7.2
     # via
     #   ipykernel
     #   jupyter-client
+jupyterlab-widgets==3.0.11
+    # via ipywidgets
 keyring==24.3.1
     # via poetry
+langcodes==3.4.0
+    # via spacy
+language-data==1.2.0
+    # via langcodes
 lightning==2.3.1
 lightning-utilities==0.11.3.post0
     # via
@@ -148,12 +196,19 @@ lightning-utilities==0.11.3.post0
     #   torchmetrics
 lxml==5.2.2
     # via sacrebleu
+marisa-trie==1.2.0
+    # via language-data
+markdown-it-py==3.0.0
+    # via rich
 markupsafe==2.1.5
     # via jinja2
 matplotlib-inline==0.1.7
     # via
     #   ipykernel
     #   ipython
+mdurl==0.1.2
+    # via markdown-it-py
+memory-profiler==0.61.0
 more-itertools==10.3.0
     # via jaraco-classes
 mpmath==1.3.0
@@ -168,17 +223,25 @@ multiprocess==0.70.16
     # via
     #   datasets
     #   evaluate
+murmurhash==1.0.10
+    # via
+    #   preshed
+    #   spacy
+    #   thinc
 nest-asyncio==1.6.0
     # via ipykernel
 networkx==3.2.1
     # via torch
 nltk==3.8.1
+    # via rouge-score
 numpy==1.26.4
     # via
     #   bayesian-optimization
+    #   blis
     #   datasets
     #   evaluate
     #   fairseq
+    #   fasttext
     #   gensim
     #   lightning
     #   pandas
@@ -186,12 +249,17 @@ numpy==1.26.4
     #   pyarrow
     #   pyemd
     #   pytorch-lightning
+    #   rouge-score
     #   sacrebleu
     #   scikit-learn
     #   scipy
+    #   spacy
     #   tensorboardx
+    #   thinc
     #   torchmetrics
+    #   torchtext
     #   torchvision
+    #   transformers
 omegaconf==2.0.6
     # via
     #   fairseq
@@ -208,12 +276,18 @@ packaging==24.1
     #   poetry
     #   pytest
     #   pytorch-lightning
+    #   spacy
     #   tensorboardx
+    #   thinc
     #   torchmetrics
+    #   transformers
+    #   weasel
+pandarallel==1.6.5
 pandas==2.2.2
     # via
     #   datasets
     #   evaluate
+    #   pandarallel
 parso==0.8.4
     # via jedi
 pexpect==4.9.0
@@ -222,6 +296,7 @@ pexpect==4.9.0
     #   poetry
 pillow==10.2.0
     # via torchvision
+pip==21.2.3
 pkginfo==1.11.1
     # via poetry
 platformdirs==4.2.2
@@ -239,15 +314,23 @@ poetry-core==1.9.0
     #   poetry-plugin-export
 poetry-plugin-export==1.8.0
     # via poetry
+polars==1.4.1
 portalocker==2.8.2
     # via sacrebleu
 pot==0.9.3
+preshed==3.0.9
+    # via
+    #   spacy
+    #   thinc
 prompt-toolkit==3.0.47
     # via ipython
 protobuf==5.27.1
     # via tensorboardx
 psutil==6.0.0
-    # via ipykernel
+    # via
+    #   ipykernel
+    #   memory-profiler
+    #   pandarallel
 ptyprocess==0.7.0
     # via pexpect
 pure-eval==0.2.2
@@ -256,11 +339,23 @@ pyarrow==16.1.0
     # via datasets
 pyarrow-hotfix==0.6
     # via datasets
+pybind11==2.13.3
+    # via fasttext
 pycparser==2.22
     # via cffi
+pydantic==2.8.2
+    # via
+    #   confection
+    #   spacy
+    #   thinc
+    #   weasel
+pydantic-core==2.20.1
+    # via pydantic
 pyemd==1.0.0
 pygments==2.18.0
-    # via ipython
+    # via
+    #   ipython
+    #   rich
 pyproject-hooks==1.1.0
     # via
     #   build
@@ -268,6 +363,8 @@ pyproject-hooks==1.1.0
 pytelegrambotapi==4.20.0
     # via telebot
 pytest==8.2.2
+    # via pytest-watch
+pytest-watch==4.2.0
 python-dateutil==2.9.0.post0
     # via
     #   jupyter-client
@@ -283,6 +380,7 @@ pyyaml==6.0.1
     #   lightning
     #   omegaconf
     #   pytorch-lightning
+    #   transformers
 pyzmq==26.0.3
     # via
     #   ipykernel
@@ -295,6 +393,7 @@ regex==2024.5.15
     #   nltk
     #   sacrebleu
     #   sacremoses
+    #   transformers
 requests==2.32.3
     # via
     #   cachecontrol
@@ -304,12 +403,23 @@ requests==2.32.3
     #   poetry
     #   pytelegrambotapi
     #   requests-toolbelt
+    #   spacy
     #   telebot
+    #   torchdata
+    #   torchtext
+    #   transformers
+    #   weasel
 requests-toolbelt==1.0.0
     # via poetry
+rich==13.7.1
+    # via typer
+rouge-score==0.1.2
 sacrebleu==2.4.2
     # via fairseq
 sacremoses==0.1.1
+safetensors==0.4.3
+    # via transformers
+schedulefree==1.2.7
 scikit-learn==1.5.0
     # via bayesian-optimization
 scipy==1.12.0
@@ -320,18 +430,42 @@ scipy==1.12.0
     #   scikit-learn
 sentencepiece==0.2.0
 setuptools==70.1.1
-    # via lightning-utilities
+    # via
+    #   fasttext
+    #   lightning-utilities
+    #   marisa-trie
+    #   spacy
+    #   thinc
 shellingham==1.5.4
-    # via poetry
+    # via
+    #   poetry
+    #   typer
 six==1.16.0
     # via
     #   absl-py
     #   asttokens
     #   python-dateutil
+    #   rouge-score
 smart-open==7.0.4
-    # via gensim
+    # via
+    #   gensim
+    #   weasel
 soupsieve==2.5
     # via beautifulsoup4
+spacy==3.7.5
+    # via
+    #   de-core-news-sm
+    #   en-core-web-sm
+spacy-legacy==3.0.12
+    # via spacy
+spacy-loggers==1.0.5
+    # via spacy
+srsly==2.4.8
+    # via
+    #   confection
+    #   spacy
+    #   thinc
+    #   weasel
 stack-data==0.6.3
     # via ipython
 structlog==24.2.0
@@ -341,8 +475,12 @@ tabulate==0.9.0
     # via sacrebleu
 telebot==0.0.5
 tensorboardx==2.6.2.2
+thinc==8.2.5
+    # via spacy
 threadpoolctl==3.5.0
     # via scikit-learn
+tokenizers==0.19.1
+    # via transformers
 tomli==2.0.1
     # via
     #   build
@@ -357,14 +495,18 @@ torch==2.3.1
     #   lightning
     #   pytorch-lightning
     #   torchaudio
+    #   torchdata
     #   torchmetrics
+    #   torchtext
     #   torchvision
 torchaudio==2.3.1
     # via fairseq
+torchdata==0.7.1
 torchmetrics==1.4.0.post0
     # via
     #   lightning
     #   pytorch-lightning
+torchtext==0.18.0
 torchvision==0.18.1
 tornado==6.4.1
     # via
@@ -380,37 +522,64 @@ tqdm==4.66.4
     #   nltk
     #   pytorch-lightning
     #   sacremoses
+    #   spacy
+    #   torchtext
+    #   transformers
 traitlets==5.14.3
     # via
     #   comm
     #   ipykernel
     #   ipython
+    #   ipywidgets
     #   jupyter-client
     #   jupyter-core
     #   matplotlib-inline
+transformers==4.43.3
 trove-classifiers==2024.5.22
     # via poetry
 typeguard==2.13.3
     # via jaxtyping
+typer==0.12.3
+    # via
+    #   spacy
+    #   weasel
 typing-extensions==4.12.2
     # via
+    #   cloudpathlib
     #   huggingface-hub
     #   ipython
     #   lightning
     #   lightning-utilities
     #   omegaconf
+    #   pydantic
+    #   pydantic-core
     #   pytorch-lightning
     #   torch
+    #   typer
 tzdata==2024.1
     # via pandas
 urllib3==2.2.1
     # via
     #   dulwich
     #   requests
+    #   torchdata
 virtualenv==20.26.3
     # via poetry
+wasabi==1.1.3
+    # via
+    #   spacy
+    #   thinc
+    #   weasel
+watchdog==4.0.1
+    # via pytest-watch
 wcwidth==0.2.13
-    # via prompt-toolkit
+    # via
+    #   ftfy
+    #   prompt-toolkit
+weasel==0.4.1
+    # via spacy
+widgetsnbextension==4.0.11
+    # via ipywidgets
 wrapt==1.16.0
     # via smart-open
 xattr==1.1.0

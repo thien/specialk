@@ -18,9 +18,23 @@ CLEAN = "clean"
 REASON = "reason"
 
 
-def most_frequent_item_numpy(arr: np.array) -> Any:
+def most_frequent_item_numpy(arr: np.array, k=5) -> Any:
     """Return the most frequent item in the array."""
+
     unique, counts = np.unique(arr, return_counts=True)
+
+    # Calculate percentages
+    percentages = counts / len(arr) * 100
+
+    # Sort items by frequency (descending order)
+    sorted_indices = np.argsort(counts)[::-1]
+
+    # Print top 5 items with percentages
+    print("Top 5 items and their percentages:")
+    for i in range(min(k, len(unique))):
+        index = sorted_indices[i]
+        print(f"{unique[index]}: {percentages[index]:.2f}%")
+
     return unique[np.argmax(counts)]
 
 

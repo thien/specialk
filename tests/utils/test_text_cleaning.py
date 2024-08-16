@@ -1,6 +1,6 @@
 from specialk.core.sanitisation import fix_unicode, normalize_punctuation
 import pytest
-from specialk.datasets.filters import PreTrainingFilter, is_valid_text, CLEAN, REASON
+from specialk.datasets.filters import ParallelPreTrainingFilter, is_valid_text, CLEAN, REASON
 import pandas as pd
 from specialk.core.constants import URL_TOKEN
 
@@ -114,7 +114,7 @@ def test_pretraining_filter_sanity_check():
     )
 
     # Initialize PreTrainingFilter
-    ptf = PreTrainingFilter(df, "source", "target")
+    ptf = ParallelPreTrainingFilter(df, "source", "target")
 
     # Run sanity check
     ptf.filter_sanity_check()
@@ -136,7 +136,7 @@ def test_pretraining_filter_sanity_check():
 
 def test_pretraining_filter_empty_dataframe():
     df = pd.DataFrame(columns=["source", "target", CLEAN, REASON])
-    ptf = PreTrainingFilter(df, "source", "target")
+    ptf = ParallelPreTrainingFilter(df, "source", "target")
     ptf.filter_sanity_check()
     assert len(ptf.df) == 0
 
@@ -150,6 +150,6 @@ def test_pretraining_filter_all_valid():
             REASON: [None] * 3,
         }
     )
-    ptf = PreTrainingFilter(df, "source", "target")
+    ptf = ParallelPreTrainingFilter(df, "source", "target")
     ptf.filter_sanity_check()
     assert ptf.df[CLEAN].all()

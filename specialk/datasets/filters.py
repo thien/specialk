@@ -101,49 +101,36 @@ class PreTrainingFilter:
         log.info("Running sanity check")
         with bound_contextvars(filter="sanity_check"):
             rows = self._get_valid_rows()
-            texts = self.df.loc[rows, self.col]
-            texts_valid = np.array(ParallelProcessor.process(is_valid_text, texts))
+            texts_valid = np.array(
+                ParallelProcessor.process(is_valid_text, self.df.loc[rows, self.col])
+            )
 
             valid_series = pd.Series(texts_valid, index=rows[rows].index)
-            invalid_series = valid_series[
-                ~valid_series
-            ]  # only want the negative values.
+            invalid_series = valid_series[~valid_series]
 
             self.df.loc[invalid_series.index, CLEAN] = False
             self.df.loc[invalid_series.index, REASON] = f"{self.col} fails sanity check"
 
-            n_total, n_valid = texts_valid.size, texts_valid.sum()
-            n_dropped = n_total - n_valid
+            self.log_difference(texts_valid, self.col)
 
-            log.info(
-                f"calculated {((n_valid/n_total)*100):.2f}% {self.col} rows valid",
-                total=n_total,
-                valid=n_valid,
-                dropped=n_dropped,
-            )
         log.info("Finished running sanity checks.")
 
     def filter_valid_html_parseable(self) -> None:
         """Perform is_valid_text on given column."""
         rows = self._get_valid_rows()
-        texts = self.df.loc[rows, self.col]
-        texts_valid = np.array(ParallelProcessor.process(can_parse_html_pattern, texts))
+        texts_valid = np.array(
+            ParallelProcessor.process(
+                can_parse_html_pattern, self.df.loc[rows, self.col]
+            )
+        )
 
         valid_series = pd.Series(texts_valid, index=rows[rows].index)
-        invalid_series = valid_series[~valid_series]  # only want the negative values.
+        invalid_series = valid_series[~valid_series]
 
         self.df.loc[invalid_series.index, CLEAN] = False
         self.df.loc[invalid_series.index, REASON] = f"{self.col} cannot parse HTML"
 
-        n_total, n_valid = texts_valid.size, texts_valid.sum()
-        n_dropped = n_total - n_valid
-
-        log.info(
-            f"calculated {((n_valid/n_total)*100):.2f}% {self.col} rows valid",
-            total=n_total,
-            valid=n_valid,
-            dropped=n_dropped,
-        )
+        self.log_difference(texts_valid, self.col)
 
     def filter_lang_id(
         self,
@@ -174,17 +161,22 @@ class PreTrainingFilter:
                 f"{self.col} low confidence (<{prob_threshold}) for {lang} on lang_id"
             )
 
-            n_total, n_valid = high_conf_label.size, high_conf_label.sum()
-            n_dropped = n_total - n_valid
-
-            log.info(
-                f"calculated {((n_valid/n_total)*100):.2f}% {self.col} rows valid",
-                total=n_total,
-                valid=n_valid,
-                dropped=n_dropped,
-            )
+            self.log_difference(high_conf_label, self.col)
 
             log.info("Finished running Language ID on rows.")
+
+    @staticmethod
+    def log_difference(results: np.array, column: str):
+        """Pretty render log difference in changes."""
+        n_total, n_valid = results.size, results.sum()
+        n_dropped = n_total - n_valid
+
+        log.info(
+            f"calculated {((n_valid/n_total)*100):.2f}% {column} rows valid",
+            total=n_total,
+            valid=n_valid,
+            dropped=n_dropped,
+        )
 
 
 class ParallelPreTrainingFilter(PreTrainingFilter):

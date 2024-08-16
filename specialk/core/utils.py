@@ -47,8 +47,9 @@ def check_torch_device() -> str:
 
 def load_dataset(path: str) -> List[str]:
     data = []
-    with open(path) as f:
-        for line in f:
+    len_file = get_len(path)
+    with open(path, mode="r", encoding="utf-8") as f:
+        for line in tqdm(f, total=len_file):
             data.append(line.strip())
     return data
 
@@ -62,9 +63,6 @@ def get_len(filepath):
         filepath = str(filepath)
 
     filepath = filepath.replace(" ", r"\ ").replace("(", r"\(").replace(")", r"\)")
-
-    command = "wc -l " + filepath
-    print(command)
 
     process = subprocess.run(["wc", "-l", filepath], stdout=subprocess.PIPE)
     _plt = platform.system()
@@ -102,6 +100,7 @@ def namespace_to_dict(ns: Namespace) -> Dict[str, Any]:
     #         log.error(f"key {key} is not a string in namespace")
     # return d
     return {k: v for k, v in ns._get_kwargs()}
+
 
 def hash(src: List[str], tgt: List[str]) -> str:
     """Generate hash of dataset.

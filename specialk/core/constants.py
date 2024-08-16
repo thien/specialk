@@ -21,6 +21,7 @@ EOS_WORD = "</s>"
 BLO_WORD = "<p>"  # paragraph block
 SEP_WORD = "<sep>"
 CLS_TOKEN = "<cls>"
+URL_TOKEN = "<URL>"
 
 SOURCE = "source"
 TARGET = "target"

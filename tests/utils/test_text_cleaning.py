@@ -123,9 +123,9 @@ def test_pretraining_filter_sanity_check():
     expected_clean = [True, False, False, False]
     expected_reasons = [
         None,
-        "src fails sanity check",
-        "tgt fails sanity check",
-        "src fails sanity check",
+        "source fails sanity check",
+        "target fails sanity check",
+        "source fails sanity check",
     ]
 
     pd.testing.assert_series_equal(ptf.df[CLEAN], pd.Series(expected_clean, name=CLEAN))

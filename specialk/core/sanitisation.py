@@ -38,13 +38,46 @@ ONE_OFF_MAPPINGS = {
     "&uot;": '"',
     "&emdash;": "-",
     "&eagrave;": "&egrave;",
-    "&eacutes;": "&eacute;"
+    "&eacutes;": "&eacute;",
 }
 
 # Create a regex pattern for punctuation
 PUNCT_PATTERN = re.compile("|".join(map(re.escape, PUNCT_MAPPINGS.keys())))
 HAMMER_PATTERN = re.compile("|".join(map(re.escape, ONE_OFF_MAPPINGS.keys())))
 
+sequence_limits = {
+    ".": 8,
+    "(": 8,
+    ")": 8,
+    ",": 8,
+    "@": 8,
+}
+
+
+def is_valid_text(x: str) -> bool:
+    """
+    Heuristic based text validity, gopher style.
+
+    (yeah, heuristic based filtering has been
+    around for ages, I know).
+    """
+    if len(x.strip()) < 1:
+        return False
+
+    # if the text contains a lot of numbers,
+    if sum(c.isdigit() for c in x) / len(x) > 0.4:
+        return False
+
+    # check ratio of characters.
+    base = {}
+    for char in x:
+        if char not in base:
+            base[char] = 0
+        base[char] += 1
+        if char in sequence_limits:
+            if sequence_limits[char] < base[char]:
+                return False
+    return True
 
 def normalize_punctuation(text: str) -> str:
     """Normalize Unicode punctuation marks to ASCII equivalents. This
@@ -54,6 +87,21 @@ def normalize_punctuation(text: str) -> str:
 
 def hammer_replacement(text: str) -> str:
     return HAMMER_PATTERN.sub(lambda m: ONE_OFF_MAPPINGS[m.group(0)], text)
+
+
+def can_parse_html_pattern(text: str) -> bool:
+    try:
+        HTML_ENTITY_PATTERN.sub(
+            lambda m: chr(
+                int(m.group(1)[1:])
+                if m.group(1).startswith("#")
+                else ord(html.entities.html5[m.group(1)])
+            ),
+            text,
+        )
+        return True
+    except Exception:
+        return False
 
 
 def fix_unicode(text: str) -> str:

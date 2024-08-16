@@ -71,5 +71,4 @@ class ParallelProcessor:
                     for batch in pool.map(func, chunk):
                         results.append(batch)
                         pbar.update(1)
-        log.info("i did ok")
         return results

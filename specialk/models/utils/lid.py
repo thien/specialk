@@ -107,7 +107,6 @@ class FastTextLID:
 
         """
         total_rows = len(series)
-        print(total_rows)
         if total_rows < 1:
             return np.array([]), np.array([])
 

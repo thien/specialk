@@ -1,11 +1,8 @@
 """
 PyTorch native implementation of the Transformer.
 
-Included to sanity check the remaining implementations.
-This was based on this implementation:
-
-https://github.com/pytorch/examples/blob/main/word_language_model/model.py
-https://pytorch.org/tutorials/beginner/translation_transformer.html which doesn't actually work.
+This is intentional to take advantage of native C level
+implementations (as reasonably as possible).
 """
 
 from typing import Optional
@@ -20,7 +17,6 @@ from torch import Tensor
 
 import specialk.core.constants as Constants
 from specialk.models.mt_model import NMTModule
-from specialk.models.transformer.legacy.Optim import ScheduledOptim
 from specialk.models.transformer.pos_encoders import PositionalEncoder
 
 
@@ -133,11 +129,13 @@ class PyTorchTransformerModel(nn.Transformer):
         Returns:
             Tensor: output tokens by model space.
         """
-        y = y[:, :-1]  # make it causal.
+
+        # make it causal.
+        y = y[:, :-1]
+
         # create masks
         length = self.max_seq_length
-        x_pad_mask = self.create_pad_mask(x)
-        y_pad_mask = self.create_pad_mask(y)
+        x_pad_mask, y_pad_mask = self.create_pad_mask(x), self.create_pad_mask(y)
         x_mask = torch.zeros((length, length), device=x.device).type(torch.bool)
         y_mask = self.generate_square_subsequent_mask(y.shape[-1]).bool()
 
@@ -192,9 +190,7 @@ class PyTorchTransformerModel(nn.Transformer):
         x_mask: Optional[Bool[Tensor, "seq_len seq_len"]],
     ) -> Float[Tensor, "batch seq_len d_model"]:
         """Split encoder and decoder runs."""
-        if x_mask is None:
-            # create src_key_padding_mask
-            x_mask = self.create_pad_mask(x)
+        x_mask = x_mask if x_mask else self.create_pad_mask(x)
 
         x_emb: Float[Tensor, "batch seq_len d_embed"] = self.pos_encoder(
             self.input_emb(x) * np.sqrt(self.dim_model)
@@ -255,24 +251,6 @@ class PyTorchTransformerModule(NMTModule):
         )
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
-        # return torch.optim.Adam(
-        #     filter(lambda x: x.requires_grad, self.model.parameters()),
-        #     betas=(0.9, 0.98),
-        #     eps=1e-09,
-        #     lr=0.001,
-        # )
-
         return AdamWScheduleFree(
             self.model.parameters(), lr=0.001, warmup_steps=self.n_warmup_steps
         )
-        # TODO implement NoamOptimizer instead.
-        # return ScheduledOptim(
-        #     optimizer=torch.optim.Adam(
-        #         filter(lambda x: x.requires_grad, self.model.parameters()),
-        #         betas=(0.9, 0.98),
-        #         eps=1e-09,
-        #         lr=0.01,
-        #     ),
-        #     d_model=self.model.dim_model,
-        #     n_warmup_steps=self.n_warmup_steps,
-        # )

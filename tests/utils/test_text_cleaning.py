@@ -122,7 +122,7 @@ def test_pretraining_filter_sanity_check():
     # Check results
     expected_clean = [True, False, False, False]
     expected_reasons = [
-        None,
+        "",
         "source fails sanity check",
         "target fails sanity check",
         "source fails sanity check",
@@ -147,7 +147,7 @@ def test_pretraining_filter_all_valid():
             "source": ["Valid text 1", "Valid text 2", "Valid text 3"],
             "target": ["Valid text A", "Valid text B", "Valid text C"],
             CLEAN: [True] * 3,
-            REASON: [None] * 3,
+            REASON: [""] * 3,
         }
     )
     ptf = ParallelPreTrainingFilter(df, "source", "target")

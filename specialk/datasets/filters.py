@@ -53,6 +53,10 @@ class PreTrainingFilter:
         Args:
             df (pd.DataFrame): DataFrame with column that includes col.
             col (str): column name corresponding to text (str).
+            lid (Optional[FastTextID]): LanguageID object. Initialises one if
+                it hasn't already been done so.
+            init_already (Optional[bool]): If set, skips creating a "clean" and
+                "reason" column.
         """
         self.df = df
         self.col = col
@@ -61,7 +65,7 @@ class PreTrainingFilter:
         if not init_already:
             # we'll add additional columns
             self.df[CLEAN] = True
-            self.df[REASON] = None
+            self.df[REASON] = ""
 
     def _get_valid_rows(self) -> pd.DataFrame:
         """Return a boolean mask for valid rows."""

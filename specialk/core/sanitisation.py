@@ -79,6 +79,7 @@ def is_valid_text(x: str) -> bool:
                 return False
     return True
 
+
 def normalize_punctuation(text: str) -> str:
     """Normalize Unicode punctuation marks to ASCII equivalents. This
     should only be applied on english."""

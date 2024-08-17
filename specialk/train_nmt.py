@@ -174,7 +174,7 @@ def invert_df_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def main():
-    PROD = True
+    PROD = DEVICE == "cuda"
     MODEL = TRANSFORMER
     TRANSFORMER_LEGACY = False
     DATASET_DIR = PROJECT_DIR / "datasets" / "machine_translation" / "parquets"

@@ -5,7 +5,7 @@ This is intentional to take advantage of native C level
 implementations (as reasonably as possible).
 """
 
-from typing import Optional
+from typing import Optional, Tuple
 
 import numpy as np
 import torch
@@ -14,6 +14,8 @@ import torch.nn.functional as F
 from jaxtyping import Bool, Float, Int
 from schedulefree import AdamWScheduleFree
 from torch import Tensor
+from torch.optim import Optimizer
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts, LRScheduler
 
 import specialk.core.constants as Constants
 from specialk.models.mt_model import NMTModule
@@ -226,6 +228,28 @@ class PyTorchTransformerModel(nn.Transformer):
         )
 
 
+class TransformerLRScheduler(LRScheduler):
+    def __init__(
+        self,
+        optimizer: Optimizer,
+        d_model: int,
+        warmup_steps: int,
+        last_epoch: int = -1,
+    ):
+        """Optimiser based on the original Transformer implementation."""
+        self.d_model = d_model
+        self.warmup_steps = warmup_steps
+        super(TransformerLRScheduler, self).__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        step_num = self._step_count
+        arg1 = step_num**-0.5
+        arg2 = step_num * (self.warmup_steps**-1.5)
+        return [
+            base_lr * self.d_model**-0.5 * min(arg1, arg2) for base_lr in self.base_lrs
+        ]
+
+
 class PyTorchTransformerModule(NMTModule):
     def __init__(
         self,
@@ -250,7 +274,14 @@ class PyTorchTransformerModule(NMTModule):
             **kwargs,
         )
 
-    def configure_optimizers(self) -> torch.optim.Optimizer:
-        return AdamWScheduleFree(
-            self.model.parameters(), lr=0.001, warmup_steps=self.n_warmup_steps
+    def configure_optimizers(self) -> Optimizer:
+        optimiser = AdamWScheduleFree(
+            self.model.parameters(),
+            lr=self.learning_rate,
+            warmup_steps=self.n_warmup_steps,
         )
+        # scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=10000, T_mult=2)
+        # scheduler = TransformerLRScheduler(
+        #    optimiser, self.model.dim_model, self.n_warmup_steps
+        # )
+        return optimiser

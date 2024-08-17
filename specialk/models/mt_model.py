@@ -42,6 +42,7 @@ class NMTModule(pl.LightningModule):
         tokenizer: Optional[Vocabulary] = None,
         decoder_tokenizer: Optional[Vocabulary] = None,
         decoder_vocabulary_size: Optional[int] = None,
+        learning_rate: float = 0.001,
         **kwargs,
     ):
         """Initialize the NMT module.
@@ -65,6 +66,7 @@ class NMTModule(pl.LightningModule):
 
         self.sequence_length = sequence_length
         self.label_smoothing = label_smoothing
+        self.learning_rate = learning_rate
         self.tokenizer: Union[Vocabulary, None] = tokenizer
 
         # if we have a separate tokenizer for the decoder,
@@ -243,7 +245,7 @@ class NMTModule(pl.LightningModule):
         return n_correct
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
-        return torch.optim.AdamW(self.model.parameters(), lr=0.001)
+        return torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate)
 
     def generate(self, batch: dict, batch_idx: int) -> torch.Tensor:
         """
@@ -365,4 +367,4 @@ class RNNModule(NMTModule):
         return super().training_step(batch, batch_idx)
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
-        return torch.optim.Adam(self.model.parameters(), lr=0.001)
+        return torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)

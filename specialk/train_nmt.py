@@ -4,22 +4,24 @@ from pathlib import Path
 from typing import Optional, Tuple, Union
 
 import lightning.pytorch as pl
+import numpy as np
 import pandas as pd
 import torch
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.profilers import AdvancedProfiler
 from torch.utils.data import DataLoader
-from datasets import Dataset, load_dataset, concatenate_datasets
+
 import datasets
+from datasets import Dataset, concatenate_datasets, load_dataset
 from specialk.core.constants import (
     LOGGING_DIR,
     LOGGING_PERF_NAME,
     PROJECT_DIR,
     RNN,
+    SEED,
     SOURCE,
     TARGET,
     TRANSFORMER,
-    SEED,
 )
 from specialk.core.utils import check_torch_device, log
 from specialk.models.mt_model import RNNModule, TransformerModule
@@ -34,6 +36,12 @@ from specialk.models.transformer.torch.pytorch_transformer import (
 )
 
 DEVICE: str = check_torch_device()
+
+np.random.seed(SEED)  # if you're using numpy
+torch.manual_seed(SEED)
+if DEVICE == "cuda":
+    torch.cuda.manual_seed_all(SEED)
+torch.use_deterministic_algorithms(True)
 
 
 def load_validation_dataset(src_lang: str, tgt_lang: str, num_proc=1) -> Dataset:
@@ -198,10 +206,7 @@ def main():
         N_EPOCHS = 3
         LOG_EVERY_N_STEPS = 20
         # model configs
-        RNN_CONFIG = {
-            "name": "lstm",
-            "brnn": True,
-        }
+        RNN_CONFIG = {"name": "lstm", "brnn": True, "learning_rate": 0.0001}
         TRANSFORMER_CONFIG = {
             "name": "transformer",
             "num_encoder_layers": 6,
@@ -209,6 +214,7 @@ def main():
             "n_heads": 8,
             "dim_model": 512,
             "n_warmup_steps": 4000,
+            "learning_rate": 0.0001,
         }
         src_tokenizer, src_tokenizer_filepath = load_tokenizer("spm", MAX_SEQ_LEN)
         tgt_tokenizer, tgt_tokenizer_filepath = src_tokenizer, src_tokenizer_filepath
@@ -236,6 +242,7 @@ def main():
             "rnn_size": 192,
             "d_word_vec": 128,
             "brnn": True,
+            "learning_rate": 0.001,
         }
         TRANSFORMER_CONFIG = {
             "name": "transformer_smol",
@@ -244,6 +251,7 @@ def main():
             "n_heads": 4,
             "dim_model": 128,
             "n_warmup_steps": 80,
+            "learning_rate": 0.001,
         }
         if TRANSFORMER_LEGACY:
             TRANSFORMER_CONFIG["name"] += "_legacy"

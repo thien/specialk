@@ -7,6 +7,8 @@ from typing import List
 
 import specialk
 
+SEED=1337
+
 PAD = 0
 UNK = 1
 SOS = 2

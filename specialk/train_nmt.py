@@ -9,8 +9,8 @@ import torch
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.profilers import AdvancedProfiler
 from torch.utils.data import DataLoader
-
-from datasets import Dataset
+from datasets import Dataset, load_dataset, concatenate_datasets
+import datasets
 from specialk.core.constants import (
     LOGGING_DIR,
     LOGGING_PERF_NAME,
@@ -19,6 +19,7 @@ from specialk.core.constants import (
     SOURCE,
     TARGET,
     TRANSFORMER,
+    SEED,
 )
 from specialk.core.utils import check_torch_device, log
 from specialk.models.mt_model import RNNModule, TransformerModule
@@ -35,13 +36,55 @@ from specialk.models.transformer.torch.pytorch_transformer import (
 DEVICE: str = check_torch_device()
 
 
+def load_validation_dataset(src_lang: str, tgt_lang: str, num_proc=1) -> Dataset:
+    ds = load_dataset(
+        "wmt/wmt15", "fr-en", split=datasets.Split.VALIDATION, num_proc=num_proc
+    )
+
+    # Define a function to restructure the data
+    def restructure(examples):
+        return {
+            SOURCE: [x[src_lang] for x in examples["translation"]],
+            TARGET: [x[tgt_lang] for x in examples["translation"]],
+        }
+
+    # Apply the function to the dataset
+    restructured_ds = ds.map(restructure, batched=True, remove_columns=ds.column_names)
+
+    return restructured_ds
+
+
+def load_training_dataset(src_lang: str, tgt_lang: str, num_proc=8) -> Dataset:
+    """Datasets have been uploaded to huggingface."""
+
+    dataset_sources = [
+        "thien/gigatext",
+        "thien/cc",
+        "thien/un2k",
+        "thien/europarl",
+        "thien/news-commentary",
+        "thien/globalvoices",
+    ]
+    ds: Dataset = concatenate_datasets(
+        [load_dataset(d, num_proc=num_proc)["train"] for d in dataset_sources]
+    )
+    ds = ds.shuffle(seed=SEED)
+    ds = (
+        ds.rename_column(src_lang, SOURCE)
+        .rename_column(tgt_lang, TARGET)
+        .remove_columns(["__index_level_0__"])
+    )
+
+    return ds
+
+
 def init_dataloader(
     dataset: Dataset,
     tokenizer: Vocabulary,
     batch_size: int,
     shuffle: bool,
     decoder_tokenizer: Optional[Vocabulary] = None,
-    n_workers: int = 4,
+    n_workers: int = 8,
     persistent_workers: bool = True,
     cache_path: Optional[Union[Path, str]] = None,
 ) -> Tuple[DataLoader, Tuple[Vocabulary, Vocabulary]]:
@@ -63,6 +106,8 @@ def init_dataloader(
 
     if isinstance(cache_path, Path):
         cache_path = str(cache_path)
+    if not cache_path.lower().endswith(".parquet"):
+        cache_path = f"{cache_path}.parquet"
 
     tokenized_dataset = dataset.with_format("torch").map(
         tokenize, batched=True, num_proc=n_map_workers, cache_file_name=cache_path
@@ -129,7 +174,7 @@ def invert_df_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def main():
-    PROD = DEVICE == "cuda"
+    PROD = True
     MODEL = TRANSFORMER
     TRANSFORMER_LEGACY = False
     DATASET_DIR = PROJECT_DIR / "datasets" / "machine_translation" / "parquets"
@@ -137,11 +182,12 @@ def main():
     CACHE_DIR = PROJECT_DIR / "cache"
     DATASET_CACHE_DIR = CACHE_DIR / "datasets"
     DATASET_CACHE_DIR.mkdir(exist_ok=True)
+    N_WORKERS = 7
     if PROD:
         TASK_NAME = "nmt_model"
         # dataset configs
-        PATH_VALID = DATASET_DIR / "corpus_enfr_final.val.parquet"
-        PATH_TRAIN = DATASET_DIR / "corpus_enfr_final.train.parquet"
+        PATH_VALID = Path("wmt15")
+        PATH_TRAIN = Path("thien_mt_datasets")
         BACK_TRANSLATION = True
 
         BATCH_SIZE = 64
@@ -200,7 +246,7 @@ def main():
             "n_warmup_steps": 80,
         }
         if TRANSFORMER_LEGACY:
-            TRANSFORMER_CONFIG['name'] += "_legacy"
+            TRANSFORMER_CONFIG["name"] += "_legacy"
         N_EPOCHS = 30
         LOG_EVERY_N_STEPS = 20
 
@@ -216,20 +262,27 @@ def main():
 
     # load dataset
     log.info("Loading datasets", train=str(PATH_TRAIN), valid=str(PATH_VALID))
-    df_train = pd.read_parquet(PATH_TRAIN).sample(frac=1)  # shuffle.
-    df_valid = pd.read_parquet(PATH_VALID)
-    log.info("Loaded dataset", df_train=df_train.shape, df_valid=df_valid.shape)
+    if not PROD:
+        df_train = pd.read_parquet(PATH_TRAIN).sample(frac=1)  # shuffle.
+        df_valid = pd.read_parquet(PATH_VALID)
+        if BACK_TRANSLATION:
+            log.info("Inverting columns to allow for backtranslation.")
+            df_train = invert_df_columns(df_train)
+            df_valid = invert_df_columns(df_valid)
+            log.info("Backtranslation flag enabled.")
+        else:
+            log.info("Backtranslation is disabled.")
 
-    if BACK_TRANSLATION:
-        log.info("Inverting columns to allow for backtranslation.")
-        df_train = invert_df_columns(df_train)
-        df_valid = invert_df_columns(df_valid)
-        log.info("Backtranslation flag enabled.")
+        train_dataset: Dataset = Dataset.from_pandas(df_train)
+        valid_dataset: Dataset = Dataset.from_pandas(df_valid)
     else:
-        log.info("Backtranslation is disabled.")
-
-    train_dataset: Dataset = Dataset.from_pandas(df_train)
-    valid_dataset: Dataset = Dataset.from_pandas(df_valid)
+        train_dataset = load_training_dataset(
+            src_lang="fr", tgt_lang="en", num_proc=N_WORKERS
+        )
+        valid_dataset = load_validation_dataset(
+            src_lang="fr", tgt_lang="en", num_proc=N_WORKERS
+        )
+    log.info("Loaded dataset", train=train_dataset.shape, valid=valid_dataset.shape)
 
     # create dataloaders
     train_dataloader, _ = init_dataloader(
@@ -239,6 +292,7 @@ def main():
         decoder_tokenizer=tgt_tokenizer,
         shuffle=True,
         cache_path=DATASET_CACHE_DIR / PATH_TRAIN.name,
+        n_workers=N_WORKERS,
     )
     val_dataloader, _ = init_dataloader(
         valid_dataset,
@@ -247,6 +301,7 @@ def main():
         decoder_tokenizer=tgt_tokenizer,
         shuffle=False,
         cache_path=DATASET_CACHE_DIR / PATH_VALID.name,
+        n_workers=N_WORKERS,
     )
     log.info("Created dataset dataloaders.")
 
@@ -286,7 +341,7 @@ def main():
 
     REVIEW_RATE = len(train_dataloader) // 4  # for debugging purposes.
     if PROD:
-        REVIEW_RATE = len(train_dataloader) // 24  # takes around 24 hours per epoch
+        REVIEW_RATE = len(train_dataloader) // 40  # takes around 24 hours per epoch
 
     trainer = pl.Trainer(
         accelerator=DEVICE,

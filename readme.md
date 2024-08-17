@@ -2,6 +2,8 @@
 
 ![Style Transfer from Popular Press to Quality](doc/images/preview.png)
 
+[![wakatime](https://wakatime.com/badge/user/4251d8c6-f363-4bc2-92de-31e3923c596a/project/41ffd15c-a534-4e52-9250-6e308379d529.svg)](https://wakatime.com/badge/user/4251d8c6-f363-4bc2-92de-31e3923c596a/project/41ffd15c-a534-4e52-9250-6e308379d529)
+
 This repository contains the implementation of my summer thesis.
 
 ## Requirements

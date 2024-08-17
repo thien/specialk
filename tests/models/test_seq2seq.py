@@ -298,15 +298,12 @@ def test_transformer_inference(spm_dataloader):
     model = TransformerModule(
         name="transformer_2",
         vocabulary_size=tokenizer.vocab_size,
+        tokenizer=tokenizer,
         sequence_length=SEQUENCE_LENGTH,
-        d_word_vec=16,
-        d_model=16,
-        d_inner=8,
-        n_layers=2,
-        n_head=2,
-        d_k=3,
-        d_v=3,
-        dropout=0.1,
+        dim_model=2,
+        n_heads=1,
+        num_encoder_layers=1,
+        num_decoder_layers=1,
     )
     model.change_pos_enc_len(SEQUENCE_LENGTH)
     model.PAD = tokenizer.PAD
@@ -345,14 +342,10 @@ def test_transformer_inference_separate_tokenizers(word_dataloader_separate):
         tokenizer=src_tokenizer,
         decoder_tokenizer=tgt_tokenizer,
         sequence_length=SEQUENCE_LENGTH,
-        d_word_vec=16,
-        d_model=16,
-        d_inner=8,
-        n_layers=2,
-        n_head=2,
-        d_k=3,
-        d_v=3,
-        dropout=0.1,
+        dim_model=2,
+        n_heads=1,
+        num_encoder_layers=1,
+        num_decoder_layers=1,
     )
     model.change_pos_enc_len(SEQUENCE_LENGTH)
     model.PAD = src_tokenizer.PAD

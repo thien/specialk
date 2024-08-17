@@ -21,7 +21,7 @@ from specialk.core.constants import (
     TRANSFORMER,
 )
 from specialk.core.utils import check_torch_device, log
-from specialk.models.mt_model import RNNModule
+from specialk.models.mt_model import RNNModule, TransformerModule
 from specialk.models.tokenizer import (
     BPEVocabulary,
     SentencePieceVocabulary,
@@ -29,7 +29,7 @@ from specialk.models.tokenizer import (
     WordVocabulary,
 )
 from specialk.models.transformer.torch.pytorch_transformer import (
-    PyTorchTransformerModule as TransformerModule,
+    PyTorchTransformerModule,
 )
 
 DEVICE: str = check_torch_device()
@@ -131,6 +131,7 @@ def invert_df_columns(df: pd.DataFrame) -> pd.DataFrame:
 def main():
     PROD = DEVICE == "cuda"
     MODEL = TRANSFORMER
+    TRANSFORMER_LEGACY = False
     DATASET_DIR = PROJECT_DIR / "datasets" / "machine_translation" / "parquets"
     # make cache dir
     CACHE_DIR = PROJECT_DIR / "cache"
@@ -198,6 +199,8 @@ def main():
             "dim_model": 128,
             "n_warmup_steps": 80,
         }
+        if TRANSFORMER_LEGACY:
+            TRANSFORMER_CONFIG['name'] += "_legacy"
         N_EPOCHS = 30
         LOG_EVERY_N_STEPS = 20
 
@@ -252,7 +255,11 @@ def main():
         # is this needed?
         task.model.PAD = src_tokenizer.PAD
     else:
-        task = TransformerModule(**TRANSFORMER_CONFIG)
+        if TRANSFORMER_LEGACY and not PROD:
+            task = TransformerModule(**TRANSFORMER_CONFIG)
+        else:
+            task = PyTorchTransformerModule(**TRANSFORMER_CONFIG)
+
     log.info("model initialised.", model=task)
 
     hyperparams = {

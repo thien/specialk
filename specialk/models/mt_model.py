@@ -21,7 +21,10 @@ from specialk.models.recurrent.models import Encoder as RNNEncoder
 from specialk.models.recurrent.models import NMTModel as Seq2Seq
 from specialk.models.tokenizer import Vocabulary
 from specialk.models.transformer.legacy.Models import Transformer as TransformerModel
-from specialk.models.transformer.legacy.Models import get_sinusoid_encoding_table
+from specialk.models.transformer.legacy.Models import (
+    TransformerWrapper,
+    get_sinusoid_encoding_table,
+)
 from specialk.models.transformer.legacy.Optim import ScheduledOptim
 
 bleu = SacreBLEU()
@@ -240,8 +243,7 @@ class NMTModule(pl.LightningModule):
         return n_correct
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
-        return AdamWScheduleFree(self.model.parameters(), lr=0.001, warmup_steps=40)
-        # return torch.optim.AdamW(self.model.parameters(), lr=0.001)
+        return torch.optim.AdamW(self.model.parameters(), lr=0.001)
 
     def generate(self, batch: dict, batch_idx: int) -> torch.Tensor:
         """
@@ -271,41 +273,9 @@ class TransformerModule(NMTModule):
     def __init__(self, n_warmup_steps: int = 4000, **kwargs):
         super().__init__(**kwargs)
         self.n_warmup_steps = n_warmup_steps
-        self.model = TransformerModel(
-            n_src_vocab=self.vocabulary_size,
-            n_tgt_vocab=self.decoder_vocabulary_size,
-            len_max_seq=self.sequence_length,
+        self.model = TransformerWrapper(
             **kwargs,
         )
-
-    # def configure_optimizers(self) -> torch.optim.Optimizer:
-    #     return ScheduledOptim(
-    #         optimizer=torch.optim.Adam(
-    #             filter(lambda x: x.requires_grad, self.model.parameters()),
-    #             betas=(0.9, 0.98),
-    #             eps=1e-09,
-    #             lr=0.01,
-    #         ),
-    #         d_model=self.model.encoder.layer_stack[0].pos_ffn.w_1.weight.shape[0],
-    #         n_warmup_steps=self.n_warmup_steps,
-    #     )
-
-    # def configure_optimizers(self) -> torch.optim.Optimizer:
-    #     opt = torch.optim.AdamW(params=self.parameters(), lr=0.01)
-    #     scheduler = CosineAnnealingLR(opt, T_max=10, eta_min=1e-6, last_epoch=-1)
-
-    #     return {
-    #         "optimizer": opt,
-    #         "lr_scheduler": {
-    #             "scheduler": scheduler,
-    #             "interval": "step",
-    #             "monitor": "val_loss",
-    #         },
-    #     }
-
-    def lr_scheduler_step(self, epoch):
-        scheduler.step()
-        return {"lr": scheduler.get_last_lr()}
 
     def change_pos_enc_len(self, seq_len: int, pad_token: int = PAD):
         """Change the maximum sequence length of the transformer input.

@@ -1,5 +1,7 @@
 """Define the Transformer model"""
 
+from typing import Optional
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -279,3 +281,60 @@ class Transformer(nn.Module):
         seq_logit = self.generator(dec_output) * self.x_logit_scale
 
         return seq_logit
+
+
+class TransformerWrapper(Transformer):
+    def __init__(
+        self,
+        vocabulary_size: int,
+        decoder_vocabulary_size: Optional[int] = None,
+        max_seq_length: int = 100,
+        dim_model: int = 512,
+        n_heads: int = 8,
+        dim_feedforward: int = 2048,
+        num_encoder_layers: int = 6,
+        dropout=0.1,
+        decoder_generator_weight_sharing=True,
+        name: str = "PyTorchTransformer",
+        **kwargs,
+    ):
+        if not decoder_vocabulary_size:
+            decoder_vocabulary_size = vocabulary_size
+        self.name = name
+        super().__init__(
+            n_src_vocab=vocabulary_size,
+            n_tgt_vocab=decoder_vocabulary_size,
+            len_max_seq=max_seq_length,
+            d_word_vec=dim_model,
+            d_model=dim_model,
+            d_inner=dim_feedforward,
+            n_layers=num_encoder_layers,
+            n_head=n_heads,
+            d_k=64,
+            d_v=64,
+            dropout=dropout,
+            tgt_emb_prj_weight_sharing=decoder_generator_weight_sharing,
+            emb_src_tgt_weight_sharing=True,
+            **kwargs,
+        )
+
+    def forward(self, src_seq, tgt_seq):
+        BATCH_SIZE, SEQUENCE_LENGTH = src_seq.shape
+        len_x = torch.arange(SEQUENCE_LENGTH, device=src_seq.device).repeat(
+            (BATCH_SIZE, 1)
+        )
+        len_x = len_x.masked_fill((src_seq == Constants.PAD), 0)
+        len_y = torch.arange(SEQUENCE_LENGTH, device=src_seq.device).repeat(
+            (BATCH_SIZE, 1)
+        )
+        len_y = len_y.masked_fill((tgt_seq == Constants.PAD), 0)
+        y_hat_tokens = super().forward(src_seq, len_x, tgt_seq, len_y)
+
+        # y_hat will return predicted tokens of y[1:], so we'll
+        # copy over the original SOS token.
+        sos_one_hot = torch.zeros_like(y_hat_tokens[:, 0, :])
+        sos_one_hot = sos_one_hot.scatter(1, tgt_seq[:, 0].unsqueeze(0).T, 1).unsqueeze(
+            1
+        )
+
+        return torch.cat([sos_one_hot, y_hat_tokens], dim=1)

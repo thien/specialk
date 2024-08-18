@@ -84,6 +84,7 @@ class NMTModule(pl.LightningModule):
                 )
 
         self.model: Union[TransformerModel, Seq2Seq]
+        # label smoothing isn't needed since the distribution is so wide.
         self.criterion = torch.nn.CrossEntropyLoss(ignore_index=PAD)
         self.save_hyperparameters()
 
@@ -106,12 +107,14 @@ class NMTModule(pl.LightningModule):
         n_tokens_correct = self.calculate_classification_metrics(y_hat, y)
         n_tokens_total = y.ne(PAD).sum().item()
         accuracy = n_tokens_correct / n_tokens_total
+        perplexity = self.calculate_perplexity(y_hat, y)
 
         self.log_dict(
             {
                 "train_acc": accuracy,
                 "train_batch_id": batch_idx,
                 "train_loss": loss,
+                "train_perplexity": perplexity,
             },
             batch_size=x.size(0),
         )
@@ -138,11 +141,13 @@ class NMTModule(pl.LightningModule):
         n_tokens_correct = self.calculate_classification_metrics(y_hat, y)
         n_tokens_total = y.ne(PAD).sum().item()
         accuracy = n_tokens_correct / n_tokens_total
+        perplexity = self.calculate_perplexity(y_hat, y)
 
         metric_dict = {
             "eval_acc": accuracy,
             "eval_batch_id": batch_idx,
             "eval_loss": loss,
+            "eval_perplexity": perplexity,
         }
         if self.decoder_tokenizer is not None:
             metric_dict["eval_bleu"] = self.validation_bleu(y_hat, y)
@@ -244,6 +249,35 @@ class NMTModule(pl.LightningModule):
         n_correct = n_correct.masked_select(non_pad_mask).sum().item()
         return n_correct
 
+    @staticmethod
+    def calculate_perplexity(
+        y_hat: Float[Tensor, "batch seq vocab"],
+        y: Int[Tensor, "batch seq"],
+        padding_idx=PAD,
+    ) -> float:
+        """Calculate perplexity.
+
+        Args:
+            y_hat (Tensor): Output log_probs of shape (batch_size, sequence_length, vocab_size).
+            y (Tensor): target indices of shape (batch_size, sequence_length).
+            padding_idx (int, optional): Index corresponding to pad token. Defaults to PAD.
+
+        Returns:
+            float: Perplexity score (scalar).
+        """
+        # Create a mask to ignore padding tokens
+        mask = (y != padding_idx).float()
+
+        # Select log probs of correct tokens
+        token_log_probs = y_hat.gather(dim=-1, index=y.unsqueeze(-1)).squeeze(-1)
+
+        # Apply mask and calculate mean negative log likelihood
+        masked_log_probs = token_log_probs * mask
+        nll = -masked_log_probs.sum() / mask.sum()
+
+        # Calculate perplexity
+        return torch.exp(nll).item()
+
     def configure_optimizers(self) -> torch.optim.Optimizer:
         return torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate)
 
@@ -269,6 +303,15 @@ class NMTModule(pl.LightningModule):
                 Y = torch.cat((Y, token_n), axis=1)
                 probabilities += max_probs_n
         return Y, probabilities
+
+    def on_after_backward(self):
+        # get histogram of parameters.
+        if self.global_step % 250 == 0:
+            # no need to store histograms at every step, that's too expensive.
+            for name, param in self.named_parameters():
+                self.logger.experiment.add_histogram(
+                    f"{name}_grad", param.grad, self.global_step
+                )
 
 
 class TransformerModule(NMTModule):

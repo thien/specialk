@@ -86,6 +86,7 @@ class NMTModule(pl.LightningModule):
         self.model: Union[TransformerModel, Seq2Seq]
         # label smoothing isn't needed since the distribution is so wide.
         self.criterion = torch.nn.CrossEntropyLoss(ignore_index=PAD)
+        self.kwargs = kwargs
         self.save_hyperparameters()
 
     def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:

@@ -4,10 +4,10 @@ from pathlib import Path
 from typing import Optional, Tuple, Union
 
 import lightning.pytorch as pl
-from lightning.pytorch.callbacks import LearningRateMonitor
 import numpy as np
 import pandas as pd
 import torch
+from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.profilers import AdvancedProfiler
 from torch.utils.data import DataLoader
@@ -189,7 +189,7 @@ def main():
     CACHE_DIR = PROJECT_DIR / "cache"
     DATASET_CACHE_DIR = CACHE_DIR / "datasets"
     DATASET_CACHE_DIR.mkdir(exist_ok=True)
-    N_WORKERS = 7
+    N_WORKERS: int = 7
     if PROD:
         TASK_NAME = "nmt_model"
         # dataset configs
@@ -205,7 +205,12 @@ def main():
         N_EPOCHS = 6
         LOG_EVERY_N_STEPS = 20
         # model configs
-        RNN_CONFIG = {"name": "lstm", "brnn": True, "learning_rate": 0.0001}
+        RNN_CONFIG = {
+            "name": "lstm",
+            "brnn": True,
+            "learning_rate": 0.001,
+            "accumulate_grad_batches": 1,
+        }
         TRANSFORMER_CONFIG = {
             "name": "transformer",
             "num_encoder_layers": 6,
@@ -214,6 +219,7 @@ def main():
             "dim_model": 512,
             "n_warmup_steps": 4000,
             "learning_rate": 0.001,
+            "accumulate_grad_batches": 4,
         }
         src_tokenizer, src_tokenizer_filepath = load_tokenizer("spm", MAX_SEQ_LEN)
         tgt_tokenizer, tgt_tokenizer_filepath = src_tokenizer, src_tokenizer_filepath
@@ -242,6 +248,7 @@ def main():
             "d_word_vec": 128,
             "brnn": True,
             "learning_rate": 0.001,
+            "accumulate_grad_batches": 1,
         }
         TRANSFORMER_CONFIG = {
             "name": "transformer_smol",
@@ -251,6 +258,7 @@ def main():
             "dim_model": 128,
             "n_warmup_steps": 80,
             "learning_rate": 0.001,
+            "accumulate_grad_batches": 4,
         }
         if TRANSFORMER_LEGACY:
             TRANSFORMER_CONFIG["name"] += "_legacy"
@@ -341,6 +349,8 @@ def main():
     logger = TensorBoardLogger(LOGGING_DIR, name=f"{TASK_NAME}/{task.name}")
     logger.log_hyperparams(params=hyperparams)
 
+    checkpoint_callback = ModelCheckpoint(save_top_k=3, monitor="val_loss")
+
     profiler = None
     if PROD:
         # profiling will slow prod down.
@@ -361,8 +371,8 @@ def main():
         val_check_interval=REVIEW_RATE,
         gradient_clip_val=0.5,
         gradient_clip_algorithm="norm",
-        accumulate_grad_batches=4,
-        callbacks=[lr_monitor],
+        accumulate_grad_batches=task.kwargs["accumulate_grad_batches"],
+        callbacks=[lr_monitor, checkpoint_callback],
     )
 
     trainer.fit(

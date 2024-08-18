@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional, Tuple, Union
 
 import lightning.pytorch as pl
+from lightning.pytorch.callbacks import LearningRateMonitor
 import numpy as np
 import pandas as pd
 import torch
@@ -203,7 +204,7 @@ def main():
         if MODEL == RNN:
             BATCH_SIZE = 192
             MAX_SEQ_LEN = 75
-        N_EPOCHS = 3
+        N_EPOCHS = 6
         LOG_EVERY_N_STEPS = 20
         # model configs
         RNN_CONFIG = {"name": "lstm", "brnn": True, "learning_rate": 0.0001}
@@ -214,7 +215,7 @@ def main():
             "n_heads": 8,
             "dim_model": 512,
             "n_warmup_steps": 4000,
-            "learning_rate": 0.0001,
+            "learning_rate": 0.001,
         }
         src_tokenizer, src_tokenizer_filepath = load_tokenizer("spm", MAX_SEQ_LEN)
         tgt_tokenizer, tgt_tokenizer_filepath = src_tokenizer, src_tokenizer_filepath
@@ -255,7 +256,7 @@ def main():
         }
         if TRANSFORMER_LEGACY:
             TRANSFORMER_CONFIG["name"] += "_legacy"
-        N_EPOCHS = 30
+        N_EPOCHS = 60
         LOG_EVERY_N_STEPS = 20
 
     TOKENIZER_CONFIG = {
@@ -351,6 +352,8 @@ def main():
     if PROD:
         REVIEW_RATE = len(train_dataloader) // 40  # takes around 24 hours per epoch
 
+    lr_monitor = LearningRateMonitor(logging_interval="step")
+
     trainer = pl.Trainer(
         accelerator=DEVICE,
         max_epochs=N_EPOCHS,
@@ -358,6 +361,10 @@ def main():
         logger=logger,
         profiler=profiler,
         val_check_interval=REVIEW_RATE,
+        gradient_clip_val=0.5,
+        gradient_clip_algorithm="norm",
+        accumulate_grad_batches=4,
+        callbacks=[lr_monitor],
     )
 
     trainer.fit(

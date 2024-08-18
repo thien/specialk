@@ -1,4 +1,3 @@
-import math
 import random
 from argparse import Namespace
 from typing import Optional, Tuple, Union
@@ -11,7 +10,6 @@ from torch.nn.utils.rnn import pack_padded_sequence as pack
 from torch.nn.utils.rnn import pad_packed_sequence as unpack
 
 from specialk.core import constants as Constants
-from specialk.core import log
 from specialk.models.recurrent.attention import Attention
 
 

@@ -1,5 +1,6 @@
 from __future__ import division
 
+import math
 from argparse import Namespace
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
@@ -20,11 +21,10 @@ from specialk.models.recurrent.models import Decoder as RNNDecoder
 from specialk.models.recurrent.models import Encoder as RNNEncoder
 from specialk.models.recurrent.models import NMTModel as Seq2Seq
 from specialk.models.tokenizer import Vocabulary
-from specialk.models.transformer.legacy.Models import Transformer as TransformerModel
+from specialk.models.transformer.legacy.Models import \
+    Transformer as TransformerModel
 from specialk.models.transformer.legacy.Models import (
-    TransformerWrapper,
-    get_sinusoid_encoding_table,
-)
+    TransformerWrapper, get_sinusoid_encoding_table)
 from specialk.models.transformer.legacy.Optim import ScheduledOptim
 
 bleu = SacreBLEU()
@@ -352,6 +352,11 @@ class RNNModule(NMTModule):
             RNNEncoder(args, self.vocabulary_size),
             RNNDecoder(args, self.decoder_vocabulary_size),
         )
+        self.initial_teacher_forcing_ratio: float = 0.9
+        self.min_teacher_forcing_ratio: float = 0.5
+        self.teacher_forcing_decay_rate: float = (
+            3.0  # Adjust this to control decay speed
+        )
 
     @staticmethod
     def patch_args(
@@ -401,17 +406,28 @@ class RNNModule(NMTModule):
         args.pre_word_vecs_dec = pre_word_vecs_dec
         return args
 
+    def on_train_epoch_start(self):
+        self.update_teacher_forcing_ratio()
+
+    def update_teacher_forcing_ratio(self):
+        if self.trainer is not None:
+            # Exponential decay formula
+            ratio = self.min_teacher_forcing_ratio + (
+                self.initial_teacher_forcing_ratio - self.min_teacher_forcing_ratio
+            ) * math.exp(
+                -self.teacher_forcing_decay_rate
+                * self.current_epoch
+                / self.trainer.max_epochs
+            )
+
+            self.model.decoder.teacher_forcing_ratio = ratio
+            # you can observe this in tensorboard.scalars
+            self.log("teacher_forcing_ratio", ratio)
+
     def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
-        self.model.update_teacher_forcing_ratio(
-            self.current_epoch, self.trainer.max_epochs
-        )
+        loss = super().training_step(batch, batch_idx)
         self.log_dict(
-            {
-                "teacher_forcing_ratio": self.model.decoder.teacher_forcing_ratio,
-            },
+            {"teacher_forcing_ratio": self.model.decoder.teacher_forcing_ratio},
             batch_size=batch[SOURCE].size(0),
         )
-        return super().training_step(batch, batch_idx)
-
-    def configure_optimizers(self) -> torch.optim.Optimizer:
-        return torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        return loss

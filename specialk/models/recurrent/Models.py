@@ -1,3 +1,4 @@
+import math
 import random
 from argparse import Namespace
 from typing import Optional, Tuple, Union
@@ -73,33 +74,6 @@ class Encoder(nn.Module):
         return outputs, (hidden_n, cell_n)
 
 
-class StackedLegacyLSTM(nn.Module):
-    def __init__(self, num_layers: int, input_size: int, rnn_size: int, dropout: float):
-        super(StackedLegacyLSTM, self).__init__()
-        self.dropout = nn.Dropout(dropout)
-        self.num_layers = num_layers
-        self.layers = nn.ModuleList()
-        for _ in range(num_layers):
-            self.layers.append(nn.LSTMCell(input_size, rnn_size))
-            input_size = rnn_size
-
-    def forward(self, input: Tensor, hidden: Tensor):
-        h_0, c_0 = hidden
-        h_1, c_1 = [], []
-        for i, layer in enumerate(self.layers):
-            h_1_i, c_1_i = layer(input, (h_0[i], c_0[i]))
-            input = h_1_i
-            if i + 1 != self.num_layers:
-                input = self.dropout(input)
-            h_1 += [h_1_i]
-            c_1 += [c_1_i]
-
-        h_1 = torch.stack(h_1)
-        c_1 = torch.stack(c_1)
-
-        return input, (h_1, c_1)
-
-
 class StackedLSTM(nn.Module):
     def __init__(
         self, num_layers: int, input_size: int, hidden_size: int, dropout: float = 0.0
@@ -107,23 +81,21 @@ class StackedLSTM(nn.Module):
         """_summary_
 
         Args:
-            num_layers (int): _description_
-            input_size (int): _description_
-            hidden_size (int): _description_
-            dropout (float, optional): _description_. Defaults to 0.0.
+            num_layers (int): Number of LSTM layers.
+            input_size (int): input dimension.
+            hidden_size (int): hidden dimension.
+            dropout (Optional[float]): Dropout rate. Defaults to 0.0.
         """
         super(StackedLSTM, self).__init__()
         self.num_layers = num_layers
         self.hidden_size = hidden_size
-
         self.layers = nn.ModuleList(
             [
                 nn.LSTMCell(input_size if i == 0 else hidden_size, hidden_size)
                 for i in range(num_layers)
             ]
         )
-
-        self.dropout = nn.Dropout(dropout) if dropout > 0 else None
+        self.dropout = nn.Dropout(dropout)
 
     def forward(
         self,
@@ -162,7 +134,7 @@ class StackedLSTM(nn.Module):
             layer_output, new_cell = layer(input, (prev_hidden[i], prev_cell[i]))
             input = layer_output
 
-            if self.dropout and i + 1 != self.num_layers:
+            if i + 1 != self.num_layers:
                 input = self.dropout(input)
 
             new_hidden_states.append(layer_output)
@@ -330,13 +302,6 @@ class NMTModel(nn.Module):
             requires_grad=False,
         )
 
-    def update_teacher_forcing_ratio(self, epoch: int, total_epochs: int):
-        # Linearly decrease the teacher forcing ratio from
-        # 1.0 to 0.5 over the course of training
-
-        # TODO: perhaps use steps instead of epochs.
-        self.decoder.teacher_forcing_ratio = max(0.5, 0.9 - (epoch / total_epochs))
-
     def _fix_enc_hidden(self, hidden: Tensor) -> Tensor:
         """
         Restructures the encoder output for the decoder
@@ -389,14 +354,10 @@ class NMTModel(nn.Module):
         cell_n: Float[Tensor, "d*num_layers length hidden"]
 
         context, (hddn_n, cell_n) = self.encoder(x)
+        hidden = self._fix_enc_hidden(hddn_n), self._fix_enc_hidden(cell_n)
 
         init_output: Float[Tensor, "batch hidden"]
         init_output = self.make_init_decoder_output(x.shape[0])
-
-        hidden = (
-            self._fix_enc_hidden(hddn_n),
-            self._fix_enc_hidden(cell_n),
-        )
 
         out, _, _ = self.decoder(y, hidden, context, init_output)
         out = out.transpose(0, 1)  # reverse tensor order (for batch)

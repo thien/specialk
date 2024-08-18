@@ -307,11 +307,14 @@ class NMTModule(pl.LightningModule):
     def on_after_backward(self):
         # get histogram of parameters.
         if self.global_step % 250 == 0:
-            # no need to store histograms at every step, that's too expensive.
-            for name, param in self.named_parameters():
-                self.logger.experiment.add_histogram(
-                    f"{name}_grad", param.grad, self.global_step
-                )
+            if self.logger is not None:
+                # no need to store histograms at every step, that's too expensive.
+                for name, param in self.named_parameters():
+                    self.logger.experiment.add_histogram(
+                        f"{name}_grad", param.grad, self.global_step
+                    )
+            else:
+                log.warn("logger for this object is not initialised through Trainer()")
 
 
 class TransformerModule(NMTModule):

@@ -1,8 +1,10 @@
 from typing import List, Tuple
 
+import numpy as np
 import torch
 from jaxtyping import Float, Int
 from torch import tensor as Tensor
+from tqdm import tqdm
 
 from specialk.models.generators.beam import Beam
 from specialk.models.mt_model import NMTModule
@@ -31,16 +33,14 @@ class DecoderSampler:
         tokens: Int[Tensor, "seq_len"]
         logits: Float[Tensor, "seq_len d_vocab"]
 
-        tokens: List[str] = self.tokenizer.encode(prompt, return_tensors="pt").to(
-            self.device
-        )[0]
+        tokens = self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)[0]
 
         for _ in range(max_tokens_generated):
             logits = self.model(tokens.unsqueeze(0))[:, -1, :]
             next_token: int = self.sample_next_token(tokens, logits, **kwargs)
             next_token = Tensor([next_token]).to(self.device).long()
 
-            tokens = t.cat((tokens, next_token))
+            tokens = torch.cat((tokens, next_token))
             if next_token == tokenizer.eos_token_id:
                 break
 
@@ -56,7 +56,7 @@ class DecoderSampler:
         max_new_tokens: int,
         no_repeat_ngram_size: int = 0,
         verbose=False,
-    ) -> List[Tuple[float, t.Tensor]]:
+    ) -> List[Tuple[float, torch.Tensor]]:
         """
         Implements a beam search, by repeatedly performing the `generate` and `filter` steps (starting
         from the initial prompt) until either of the two stopping criteria are met:
@@ -127,7 +127,7 @@ class DecoderSampler:
 
         # Set random seeds for reproducibility
         if seed is not None:
-            t.manual_seed(seed)
+            torch.manual_seed(seed)
             np.random.seed(seed)
 
         # Apply all the specialized sampling methods
@@ -171,7 +171,7 @@ class DecoderSampler:
         """
         Applies a frequency penalty to the logits.
         """
-        freqs = t.bincount(input_ids, minlength=logits.shape[-1]) * freq_penalty
+        freqs = torch.bincount(input_ids, minlength=logits.shape[-1]) * freq_penalty
         return logits - freqs
 
     @staticmethod
@@ -179,7 +179,7 @@ class DecoderSampler:
         """
         Samples from the distribution defined by the logits.
         """
-        sample = t.distributions.categorical.Categorical(logits=logits).sample()
+        sample = torch.distributions.categorical.Categorical(logits=logits).sample()
         return sample
 
     @staticmethod
@@ -189,9 +189,9 @@ class DecoderSampler:
         """
         if len(logits.shape) > 1:
             logits = logits.squeeze(0)
-        topk = t.topk(input=logits, k=k)
+        topk = torch.topk(input=logits, k=k)
         top_k_logits, top_k_token_ids = topk.values, topk.indices
-        sampled_token_idx = t.distributions.categorical.Categorical(
+        sampled_token_idx = torch.distributions.categorical.Categorical(
             logits=top_k_logits
         ).sample()
         return top_k_token_ids[sampled_token_idx].item()

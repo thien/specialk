@@ -217,9 +217,9 @@ def main():
             "num_decoder_layers": 6,
             "n_heads": 8,
             "dim_model": 512,
-            "n_warmup_steps": 4000,
-            "learning_rate": 0.001,
-            "accumulate_grad_batches": 4,
+            "n_warmup_steps": 10000,
+            "learning_rate": 0.01,
+            "accumulate_grad_batches": 24,  # multiply by batch_size to get eff. batch size
         }
         src_tokenizer, src_tokenizer_filepath = load_tokenizer("spm", MAX_SEQ_LEN)
         tgt_tokenizer, tgt_tokenizer_filepath = src_tokenizer, src_tokenizer_filepath
@@ -358,7 +358,7 @@ def main():
 
     REVIEW_RATE = len(train_dataloader) // 4  # for debugging purposes.
     if PROD:
-        REVIEW_RATE = len(train_dataloader) // 40  # takes around 24 hours per epoch
+        REVIEW_RATE = len(train_dataloader) // 70  # takes around 24 hours per epoch
 
     lr_monitor = LearningRateMonitor(logging_interval="step")
 

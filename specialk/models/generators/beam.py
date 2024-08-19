@@ -9,13 +9,18 @@ from jaxtyping import Float, Int
 from torch import Tensor
 from tqdm import tqdm
 
+from specialk.models.mt_model import NMTModule
+from specialk.models.tokenizer import Vocabulary
+from specialk.core import log
+from rich.table import Table
+from rich import print as rprint
 
 @dataclass
 class Beam:
     """Class to store beams during beam search."""
 
-    model: DemoTransformer
-    tokenizer: GPT2TokenizerFast
+    model: NMTModule 
+    tokenizer: Vocabulary 
     logprob_sums: Float[Tensor, "batch"]  # each item corresponds to index 0 of tokens.
     tokens: Int[Tensor, "batch seq"]
 
@@ -144,7 +149,7 @@ class Beam:
             which has already appeared in `self.tokens`.
         """
         batch, seq_len = self.tokens.shape
-        neg_inf = torch.tensor(-1.0e4).to(device)
+        neg_inf = torch.tensor(-1.0e4).to(logprobs.device)
 
         # If completion isn't long enough for a repetition, or we have no restructions, just return topk
         if (no_repeat_ngram_size is not None) and (seq_len > no_repeat_ngram_size - 1):
@@ -201,7 +206,7 @@ def beam_search(
 
     assert num_return_sequences <= num_beams
     self.model.eval()
-    tokens = self.tokenizer.encode(prompt, return_tensors="pt").to(device)
+    tokens = self.tokenizer.to_tensor(prompt).to(device)
 
     # keep track of final beams; early terminations.
     beam_results: List[Tuple[float, str]] = []

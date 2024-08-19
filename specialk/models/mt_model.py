@@ -102,6 +102,7 @@ class NMTModule(pl.LightningModule):
         """
         x: Int[Tensor, "batch seq_len"] = batch[SOURCE]
         y: Int[Tensor, "batch seq_len"] = batch[TARGET]
+        batch_size: int = x.size(0)
 
         y_hat = self.model(x, y)
         loss = self.loss(y_hat.view(-1, y_hat.size(-1)), y.view(-1))
@@ -111,15 +112,15 @@ class NMTModule(pl.LightningModule):
         accuracy = n_tokens_correct / n_tokens_total
         perplexity = self.calculate_perplexity(y_hat, y)
 
+        self.log("train_loss", loss, prog_bar=True, batch_size=batch_size)
         self.log_dict(
             {
                 "train_acc": accuracy,
                 "train_batch_id": batch_idx,
                 "train_perplexity": perplexity,
             },
-            batch_size=x.size(0),
+            batch_size=batch_size,
         )
-        self.log("train_loss", loss, prog_bar=True, on_step=True, on_epoch=True)
         return loss
 
     def _shared_eval_step(

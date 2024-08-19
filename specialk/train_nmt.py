@@ -197,7 +197,7 @@ def main():
         PATH_TRAIN = Path("thien_mt_datasets")
         BACK_TRANSLATION = True
 
-        BATCH_SIZE = 96 
+        BATCH_SIZE = 96
         MAX_SEQ_LEN = 100
         if MODEL == RNN:
             BATCH_SIZE = 192

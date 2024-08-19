@@ -197,7 +197,7 @@ def main():
         PATH_TRAIN = Path("thien_mt_datasets")
         BACK_TRANSLATION = True
 
-        BATCH_SIZE = 64
+        BATCH_SIZE = 96 
         MAX_SEQ_LEN = 100
         if MODEL == RNN:
             BATCH_SIZE = 192
@@ -218,8 +218,8 @@ def main():
             "n_heads": 8,
             "dim_model": 512,
             "n_warmup_steps": 10000,
-            "learning_rate": 0.01,
-            "accumulate_grad_batches": 24,  # multiply by batch_size to get eff. batch size
+            "learning_rate": 0.001,
+            "accumulate_grad_batches": 16,  # multiply by batch_size to get eff. batch size
         }
         src_tokenizer, src_tokenizer_filepath = load_tokenizer("spm", MAX_SEQ_LEN)
         tgt_tokenizer, tgt_tokenizer_filepath = src_tokenizer, src_tokenizer_filepath
@@ -368,6 +368,7 @@ def main():
         log_every_n_steps=LOG_EVERY_N_STEPS,
         logger=logger,
         profiler=profiler,
+        precision=16,
         val_check_interval=REVIEW_RATE,
         gradient_clip_val=0.5,
         gradient_clip_algorithm="norm",

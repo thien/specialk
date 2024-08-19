@@ -21,10 +21,11 @@ from specialk.models.recurrent.models import Decoder as RNNDecoder
 from specialk.models.recurrent.models import Encoder as RNNEncoder
 from specialk.models.recurrent.models import NMTModel as Seq2Seq
 from specialk.models.tokenizer import Vocabulary
-from specialk.models.transformer.legacy.Models import \
-    Transformer as TransformerModel
+from specialk.models.transformer.legacy.Models import Transformer as TransformerModel
 from specialk.models.transformer.legacy.Models import (
-    TransformerWrapper, get_sinusoid_encoding_table)
+    TransformerWrapper,
+    get_sinusoid_encoding_table,
+)
 from specialk.models.transformer.legacy.Optim import ScheduledOptim
 
 bleu = SacreBLEU()
@@ -114,11 +115,11 @@ class NMTModule(pl.LightningModule):
             {
                 "train_acc": accuracy,
                 "train_batch_id": batch_idx,
-                "train_loss": loss,
                 "train_perplexity": perplexity,
             },
             batch_size=x.size(0),
         )
+        self.log("train_loss", loss, prog_bar=True, on_step=True, on_epoch=True)
         return loss
 
     def _shared_eval_step(

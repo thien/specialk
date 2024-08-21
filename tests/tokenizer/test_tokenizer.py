@@ -228,3 +228,25 @@ def test_model_validation_bleu_word(word_tokenizer):
     score = 90
 
     assert np.isclose(pred_score, score, rtol=5, atol=5)
+
+
+def test_tokenizer_to_tensor_single_sequence(
+    word_tokenizer, bpe_tokenizer, sentencepiece_tokenizer
+):
+    tokenizers = [bpe_tokenizer, sentencepiece_tokenizer, word_tokenizer]
+    for tokenizer in tokenizers:
+        tokenizer.max_length
+        tensor = torch.tensor(tokenizer.to_tensor("hello world"))
+        assert tensor.shape == torch.Size((1, tokenizer.max_length))
+
+
+def test_tokenizer_to_tensor_multiple_seq(
+    word_tokenizer, bpe_tokenizer, sentencepiece_tokenizer
+):
+    sequences = ["hello world", "how are you doing"]
+    batch_size = len(sequences)
+    tokenizers = [bpe_tokenizer, sentencepiece_tokenizer, word_tokenizer]
+    for tokenizer in tokenizers:
+        tokenizer.max_length
+        tensor = torch.tensor(tokenizer.to_tensor(sequences))
+        assert tensor.shape == torch.Size((batch_size, tokenizer.max_length))

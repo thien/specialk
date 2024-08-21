@@ -10,7 +10,7 @@ from typing import Any, Iterable, List, Optional, Union
 import sentencepiece as spm
 import torch
 from sacremoses import MosesDetokenizer, MosesTokenizer
-from torch import Tensor
+from torch import LongTensor, Tensor
 from tqdm import tqdm
 
 import specialk.core.constants as Constants
@@ -40,25 +40,25 @@ class Vocabulary:
             name (str): name of vocabulary.
             data_file (Union[Path,str]): path of file containing training
                 data to use for the vocabulary.
-            filename (Union[Path,str]): path of vocabulary file to either 
+            filename (Union[Path,str]): path of vocabulary file to either
                 load from, or save to.
             vocab_size (int, Optional): If set, sets cap on vocabulary size.
             max_length (int): maxiumum token length of a sequence.
-            BOS_TOKEN (Optional[str], optional): A special token representing 
+            BOS_TOKEN (Optional[str], optional): A special token representing
                 the beginning of a sentence. Defaults to Constants.SOS_WORD.
-            EOS_TOKEN (Optional[str], optional): A special token representing 
+            EOS_TOKEN (Optional[str], optional): A special token representing
                 the end of a sentence. Defaults to Constants.EOS_WORD.
-            UNK_TOKEN (Optional[str], optional):  A special token representing 
+            UNK_TOKEN (Optional[str], optional):  A special token representing
                 an out-of-vocabulary token. Defaults to Constants.UNK_WORD.
-            SEP_TOKEN (Optional[str], optional): A special token separating two 
-                different sentences in the same input (used by BERT for instance).. 
+            SEP_TOKEN (Optional[str], optional): A special token separating two
+                different sentences in the same input (used by BERT for instance)..
                 Defaults to Constants.UNK_WORD.
-            PAD_TOKEN (Optional[str], optional): A special token used to make 
-                arrays of tokens the same size for batching purpose. Will then be 
-                ignored by attention mechanisms or loss computation. Defaults to 
+            PAD_TOKEN (Optional[str], optional): A special token used to make
+                arrays of tokens the same size for batching purpose. Will then be
+                ignored by attention mechanisms or loss computation. Defaults to
                 Constants.SEP_WORD.
-            CLS_TOKEN (Optional[str], optional):  A special token representing the 
-                class of the input (used by BERT for instance). Defaults to 
+            CLS_TOKEN (Optional[str], optional):  A special token representing the
+                class of the input (used by BERT for instance). Defaults to
                 Constants.CLS_TOKEN.
             BLO_TOKEN (Optional[str], optional):  A special token representing the
                 separation of paragraph blocks. Defaults to Constants.BLO_WORD.
@@ -104,7 +104,7 @@ class Vocabulary:
             filepath = self.filename
         raise NotImplementedError
 
-    def to_tensor(self, text: str) -> torch.LongTensor:
+    def to_tensor(self, text: str) -> LongTensor:
         raise NotImplementedError
 
     def tokenize(self, text: str) -> List[str]:
@@ -412,7 +412,7 @@ class SentencePieceVocabulary(Vocabulary):
             tokens = [self.vocab.bos_id()] + tokens + [self.vocab.eos_id()]
             tokens = tokens + [self.vocab.pad_id()] * (self.max_length - len(tokens))
             token_sequences[i] = tokens
-        return torch.LongTensor(token_sequences)
+        return LongTensor(token_sequences)
         # return token_sequences
 
     # @property
@@ -644,15 +644,17 @@ class WordVocabulary(Vocabulary):
         """Converts string to text to tensor of input.
 
         Args:
-            text (str): Raw string of input.
+            text (Union[str,List[str]]): Raw string of input.
 
         Returns:
             torch.LongTensor: List of indices corresponding to
             the token index from the vocab.
+                this has shape [batch_size, seq_length].
+
+            If text is a string, then the batch_size is 1.
         """
         if isinstance(text, str):
-            text: str
-            return torch.LongTensor(
+            return LongTensor(
                 self.vocab.convertToIdx(
                     self.tokenize(text),
                     unkWord=self.UNK_TOKEN,
@@ -661,7 +663,7 @@ class WordVocabulary(Vocabulary):
                     eosWord=self.EOS_TOKEN,
                     paddingWord=self.PAD_TOKEN,
                 )
-            )
+            ).unsqueeze(0)
         else:
             tokens = [
                 self.vocab.convertToIdx(
@@ -674,20 +676,18 @@ class WordVocabulary(Vocabulary):
                 )
                 for line in text
             ]
-            return torch.LongTensor(tokens)
+            return LongTensor(tokens)
 
     def tokenize(self, text: str) -> List[str]:
         """Performs space level tokenization.
         Ensure that Moses Tokenization is used here."""
         return [word for word in self.mt.tokenize(text, return_str=True).split()]
 
-    def detokenize(
-        self, tokens: Union[torch.LongTensor, list], specials=True
-    ) -> List[str]:
+    def detokenize(self, tokens: Union[LongTensor, list], specials=True) -> List[str]:
         """Returns detokenized string(s).
 
         Args:
-            tokens (Union[torch.LongTensor, List[int], List[List[int]]]): Tensor or
+            tokens (Union[LongTensor, List[int], List[List[int]]]): Tensor or
                 list of integer values corresponding to indexes of tokens.
             specials (bool, optional): If unset, then removes special tokens from
                 output. Defaults to True.

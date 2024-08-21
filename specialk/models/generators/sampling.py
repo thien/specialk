@@ -1,111 +1,109 @@
-from typing import List, Tuple
+from __future__ import annotations
+
+from typing import List, Optional, Tuple
 
 import numpy as np
 import torch
 from jaxtyping import Float, Int
-from torch import tensor as Tensor
+from torch import Tensor
 from tqdm import tqdm
 
+from specialk.core import constants, log
 from specialk.models.generators.beam import Beam
 from specialk.models.mt_model import NMTModule
 from specialk.models.tokenizer import Vocabulary
 
 
-class DecoderSampler:
-    """Operations to perform text sampling from a decoder model."""
+class EncoderDecoderSampler:
+    """Operations to perform text sampling from an encoder/decoder model."""
 
-    def __init__(self, model: NMTModule, tokenizer: Vocabulary):
+    def __init__(
+        self,
+        model: NMTModule,
+        src_tokenizer: Vocabulary,
+        tgt_tokenizer: Optional[Vocabulary] = None,
+        device: Optional[str] = "cpu",
+    ):
         self.model = model
-        self.tokenizer = tokenizer
-        self.device = self.model.generator.weights.device
+        self.src_tokenizer = src_tokenizer
+        self.tgt_tokenizer = tgt_tokenizer if tgt_tokenizer else src_tokenizer
+        self.device = device
 
     @torch.inference_mode()
-    def sample(self, prompt: str, max_tokens_generated=100, verbose=False, **kwargs):
+    def sample(
+        self,
+        input: str,
+        max_len=50,
+        start_symbol: int = constants.SOS,
+        **kwargs,
+    ):
         """
-        Returns a string of autoregressively generated text, starting from the prompt.
+        Returns a string of autoregressively generated text from the decoder.
 
         Sampling terminates at max_tokens_generated, or when the model generates an
         end-of-sequence token.
 
         kwargs are passed to sample_next_token, to give detailed instructions on how
         new tokens are chosen.
+
+        args:
+            input_tokens (Int[Tensor, "batch_size seq_length"]): input sequence to send to the MT model.
+            max_len (int): maximum length of generated sequence.
         """
-        tokens: Int[Tensor, "seq_len"]
+        input_tokens: Int[Tensor, "batch seq_len"] = (
+            self.src_tokenizer.to_tensor(input).unsqueeze(0).to(self.device)
+        )
+        batch_size, x_length = input_tokens.shape
         logits: Float[Tensor, "seq_len d_vocab"]
 
-        tokens = self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)[0]
+        # setup y output values.
+        y_hat = torch.full(
+            (batch_size, max_len), constants.PAD, dtype=torch.long, device=self.device
+        )
+        y_hat[:, 0] = start_symbol
 
-        for _ in range(max_tokens_generated):
-            logits = self.model(tokens.unsqueeze(0))[:, -1, :]
-            next_token: int = self.sample_next_token(tokens, logits, **kwargs)
+        # create encoder values
+        x_mask = torch.zeros((x_length, x_length), device=self.device, dtype=torch.bool)
+        x_pad_mask = self.model.create_pad_mask(input_tokens)
+        x_emb = self.model.pos_encoder(
+            self.model.input_emb(input_tokens) * np.sqrt(self.model.dim_model)
+        )
+        memory = self.model.encoder(x_emb, mask=x_mask, src_key_padding_mask=x_pad_mask)
+
+        for i in range(1, max_len):
+            # prepare decoder output to feed into the model.
+            y = y_hat[:, :i]
+            y_mask = self.model.generate_square_subsequent_mask(i)
+            y_padding_mask = self.model.create_pad_mask(y)
+            y_emb = self.model.pos_encoder(
+                self.model.output_emb(y) * np.sqrt(self.model.dim_model)
+            )
+
+            out = self.model.decoder(
+                tgt=y_emb,
+                memory=memory,
+                tgt_mask=y_mask,
+                tgt_key_padding_mask=y_padding_mask,
+                memory_key_padding_mask=x_pad_mask,
+                tgt_is_causal=True,
+            )
+            logits = torch.nn.functional.log_softmax(
+                self.model.generator(out[:, -1]), dim=-1
+            )
+
+            # TODO make this only 1D, but support batches later.
+            logits = logits.squeeze(0)
+            _y_hat = y_hat.squeeze(0)
+            next_token: Tensor = self.sample_next_token(_y_hat, logits, **kwargs)
             next_token = Tensor([next_token]).to(self.device).long()
+            next_token = next_token.unsqueeze(0)
 
-            tokens = torch.cat((tokens, next_token))
-            if next_token == tokenizer.eos_token_id:
+            y_hat[:, i] = next_token[:, 0]
+            if next_token == self.tgt_tokenizer.EOS:
                 break
 
         # convert tokens back into strings.
-        return tokenizer.decode(tokens)
-
-    @torch.inference_mode()
-    def beam_search(
-        self,
-        prompt: str,
-        num_return_sequences: int,
-        num_beams: int,
-        max_new_tokens: int,
-        no_repeat_ngram_size: int = 0,
-        verbose=False,
-    ) -> List[Tuple[float, torch.Tensor]]:
-        """
-        Implements a beam search, by repeatedly performing the `generate` and `filter` steps (starting
-        from the initial prompt) until either of the two stopping criteria are met:
-
-            (1) we've generated `max_new_tokens` tokens, or
-            (2) we've generated `num_returns_sequences` terminating sequences.
-
-        To modularize this function, most of the actual complexity is in the Beam class,
-        in the `generate` and `filter` methods.
-        """
-
-        assert num_return_sequences <= num_beams
-        self.model.eval()
-        tokens = self.tokenizer.encode(prompt, return_tensors="pt").to(device)
-
-        # keep track of final beams; early terminations.
-        beam_results: List[Tuple[float, str]] = []
-        # generate logprob of prompt tokens.
-        logprob_sums = torch.tensor([-1.0] * len(tokens)).to(device)
-        # logprob_sums = self.model(tokens)[0].log_softmax(-1).diagonal()[-2:-1]
-        print(logprob_sums.shape, logprob_sums)
-        best_beam = Beam(
-            model=self.model,
-            tokenizer=self.tokenizer,
-            logprob_sums=logprob_sums,
-            tokens=tokens,
-        )
-        for i in tqdm(range(max_new_tokens)):
-            # generate beam.
-            best_beam = best_beam.generate(
-                num_beams, no_repeat_ngram_size=no_repeat_ngram_size
-            )
-            best_beam, early_terminated_beams = best_beam.filter(num_beams)
-
-            beam_results.extend(early_terminated_beams.logprobs_and_completions)
-
-            if verbose:
-                best_beams.print(title=f"Best Completions @ idx={i}")
-                early_terminated_beams.print(
-                    title=f"Early Terminated Completions @ idx={i}"
-                )
-
-            # early stopping condition.
-            if len(beam_results) >= num_return_sequences:
-                return beam_results[:num_return_sequences]
-
-        beam_results.extend(best_beams.logprobs_and_completions)
-        beam_results = beam_results[:num_return_sequences]
-        return beam_results
+        return self.tgt_tokenizer.detokenize(y_hat, specials=False)
 
     @staticmethod
     def sample_next_token(
@@ -116,7 +114,9 @@ class DecoderSampler:
         top_p=0.0,
         frequency_penalty=0.0,
         seed=None,
-    ):
+    ) -> int:
+        """Sample the next token."""
+
         assert input_ids.ndim == 1, "input_ids should be a 1D sequence of token ids"
         assert temperature >= 0, "Temperature should be non-negative"
         assert 0 <= top_p <= 1.0, "Top-p must be a probability"
@@ -132,25 +132,25 @@ class DecoderSampler:
 
         # Apply all the specialized sampling methods
         if temperature == 0:
-            return TransformerSampler.greedy_search(logits)
+            return EncoderDecoderSampler.greedy_search(logits)
         elif temperature != 1.0:
-            logits = TransformerSampler.apply_temperature(logits, temperature)
+            logits = EncoderDecoderSampler.apply_temperature(logits, temperature)
         if frequency_penalty != 0.0:
-            logits = TransformerSampler.apply_frequency_penalty(
+            logits = EncoderDecoderSampler.apply_frequency_penalty(
                 input_ids, logits, frequency_penalty
             )
         if top_k > 0:
-            return TransformerSampler.sample_top_k(logits, top_k)
+            return EncoderDecoderSampler.sample_top_k(logits, top_k)
         if top_p > 0.0:
-            return TransformerSampler.sample_top_p(logits, top_p)
-        return TransformerSampler.sample_basic(logits)
+            return EncoderDecoderSampler.sample_top_p(logits, top_p)
+        return EncoderDecoderSampler.sample_basic(logits)
 
     @staticmethod
     def greedy_search(logits: Float[Tensor, "d_vocab"]) -> int:
         """
         Returns the most likely token (as an int).
         """
-        out = logits.argmax().item()
+        out = int(logits.argmax().item())
         return out
 
     @staticmethod
@@ -194,7 +194,7 @@ class DecoderSampler:
         sampled_token_idx = torch.distributions.categorical.Categorical(
             logits=top_k_logits
         ).sample()
-        return top_k_token_ids[sampled_token_idx].item()
+        return top_k_token_ids[sampled_token_idx]
 
     @staticmethod
     def sample_top_p(
@@ -209,7 +209,7 @@ class DecoderSampler:
         cum_vals = values.softmax(dim=-1).cumsum(dim=-1)
 
         # first item to cut off is included in the thresholding.
-        top_n = (cum_vals <= top_p).sum() + 1
+        top_n = int((cum_vals <= top_p).sum() + 1)
         top_n = max(top_n, min_tokens_to_keep)
 
         good_logits = _logits[:top_n]

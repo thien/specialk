@@ -14,7 +14,8 @@ import torch.nn.functional as F
 from jaxtyping import Bool, Float, Int
 from schedulefree import AdamWScheduleFree
 from torch import Tensor
-from torch.optim import Optimizer
+from torch.optim import AdamW, Optimizer
+from torch.optim.lr_scheduler import LambdaLR, LRScheduler
 
 import specialk.core.constants as Constants
 from specialk.models.mt_model import NMTModule
@@ -254,10 +255,50 @@ class PyTorchTransformerModule(NMTModule):
             **kwargs,
         )
 
-    def configure_optimizers(self) -> Optimizer:
-        optimiser = AdamWScheduleFree(
-            self.model.parameters(),
-            lr=self.learning_rate,
-            warmup_steps=self.n_warmup_steps,
+    def configure_optimizers(self):
+        optimizer = AdamW(
+            self.model.parameters(), lr=self.learning_rate, betas=(0.9, 0.98), eps=1e-9
         )
-        return optimiser
+        lr_scheduler = ScheduledOptim(
+            optimizer=optimizer,
+            d_model=self.model.dim_model,
+            n_warmup_steps=self.n_warmup_steps,
+        )
+
+        return [optimizer], [{"scheduler": lr_scheduler, "interval": "step"}]
+
+
+class ScheduledOptim(LRScheduler):
+    """A simple wrapper class for learning rate scheduling"""
+
+    def __init__(self, optimizer: Optimizer, d_model: int, n_warmup_steps: int):
+        self.optimizer = optimizer
+        self.n_warmup_steps = n_warmup_steps
+        self.n_current_steps = 0
+        self.init_lr = np.power(d_model, -0.5)
+
+    def step(self, epoch: Optional[int] = None):
+        "Step with the inner optimizer"
+        self.update_learning_rate()
+        self.optimizer.step()
+
+    def zero_grad(self):
+        "Zero out the gradients by the inner optimizer"
+        self.optimizer.zero_grad()
+
+    def get_lr_scale(self):
+        return np.min(
+            [
+                np.power(self.n_current_steps, -0.5),
+                np.power(self.n_warmup_steps, -1.5) * self.n_current_steps,
+            ]
+        )
+
+    def update_learning_rate(self):
+        """Learning rate scheduling per step"""
+
+        self.n_current_steps += 1
+        lr = self.init_lr * self.get_lr_scale()
+
+        for param_group in self.optimizer.param_groups:
+            param_group["lr"] = lr

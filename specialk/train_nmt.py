@@ -221,9 +221,9 @@ def main():
             "num_decoder_layers": 6,
             "n_heads": 8,
             "dim_model": 512,
-            "n_warmup_steps": 10000,
+            "n_warmup_steps": 4000,
             "learning_rate": 0.001,
-            "accumulate_grad_batches": 16,  # multiply by batch_size to get eff. batch size
+            "accumulate_grad_batches": 10,  # multiply by batch_size to get eff. batch size
         }
         src_tokenizer, src_tokenizer_filepath = load_tokenizer("spm", MAX_SEQ_LEN)
         tgt_tokenizer, tgt_tokenizer_filepath = src_tokenizer, src_tokenizer_filepath
@@ -346,7 +346,6 @@ def main():
         "max_sequence_length": src_tokenizer.max_length,
         "dataset_train_path": PATH_TRAIN,
         "dataset_valid_path": PATH_VALID,
-        "learning_rate": task.configure_optimizers().defaults["lr"],
     }
     log.info("Hyperparameters initialised.", hyperparams=hyperparams)
 

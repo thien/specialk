@@ -85,6 +85,7 @@ class NMTModule(pl.LightningModule):
                 )
 
         self.model: Union[TransformerModel, Seq2Seq]
+
         # label smoothing isn't needed since the distribution is so wide.
         self.criterion = torch.nn.CrossEntropyLoss(ignore_index=PAD)
         self.kwargs = kwargs
@@ -194,9 +195,6 @@ class NMTModule(pl.LightningModule):
         self.log_dict(metrics, batch_size=batch[SOURCE].size(0))
         return metrics
 
-    def predict_step(self, **kwargs) -> torch.Tensor:
-        raise NotImplementedError
-
     def loss(
         self,
         pred: torch.Tensor,
@@ -284,30 +282,16 @@ class NMTModule(pl.LightningModule):
     def configure_optimizers(self) -> torch.optim.Optimizer:
         return torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate)
 
-    def generate(self, batch: dict, batch_idx: int) -> torch.Tensor:
+    @torch.inference_mode()
+    def generate(self, text: Union[str, List[str]], **kwargs) -> torch.Tensor:
         """
         Generate tokens using decoder strategies, such as greedy,
         beam search, top-k, nucleus sampling.
         """
-        x = batch[SOURCE]
-        batch_size: int = x.shape(0)
-        device: str = self.model.device
-        max_length: int = self.sequence_length
-
-        # below is a greedy implementation.
-        with torch.no_grad():
-            Y = torch.ones(batch_size, 1, device=device)
-            probabilities = torch.zeros(batch_size, device=device)  # first token.
-            encoder_output = self.model.encoder(x)
-            for _ in range(max_length):
-                probs_n = self.model.decoder(encoder_output)[:, -1].log_softmax(-1)
-                max_probs_n, token_n = probs_n.max(-1)
-                token_n = token_n.unsqueeze(-1)
-                Y = torch.cat((Y, token_n), axis=1)
-                probabilities += max_probs_n
-        return Y, probabilities
+        raise NotImplementedError
 
     def on_after_backward(self):
+        """This is called when a backward pass is ran (during training)."""
         # get histogram of parameters.
         if self.global_step % 250 == 0:
             if self.logger is not None:
@@ -433,3 +417,26 @@ class RNNModule(NMTModule):
             batch_size=batch[SOURCE].size(0),
         )
         return loss
+
+    @torch.inference_mode()
+    def generate(self, batch: dict, batch_idx: int) -> torch.Tensor:
+        """
+        Generate tokens using decoder strategies, such as greedy,
+        beam search, top-k, nucleus sampling.
+        """
+        x = batch[SOURCE]
+        batch_size: int = x.shape(0)
+        device: str = self.model.device
+        max_length: int = self.sequence_length
+
+        # below is a greedy implementation.
+        Y = torch.ones(batch_size, 1, device=device)
+        probabilities = torch.zeros(batch_size, device=device)  # first token.
+        encoder_output = self.model.encoder(x)
+        for _ in range(max_length):
+            probs_n = self.model.decoder(encoder_output)[:, -1].log_softmax(-1)
+            max_probs_n, token_n = probs_n.max(-1)
+            token_n = token_n.unsqueeze(-1)
+            Y = torch.cat((Y, token_n), axis=1)
+            probabilities += max_probs_n
+        return Y, probabilities

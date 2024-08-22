@@ -5,7 +5,7 @@ This is intentional to take advantage of native C level
 implementations (as reasonably as possible).
 """
 
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -15,7 +15,7 @@ from jaxtyping import Bool, Float, Int
 from schedulefree import AdamWScheduleFree
 from torch import Tensor
 from torch.optim import AdamW, Optimizer
-from torch.optim.lr_scheduler import LambdaLR, LRScheduler
+from torch.optim.lr_scheduler import LambdaLR, _LRScheduler
 
 import specialk.core.constants as Constants
 from specialk.models.mt_model import NMTModule
@@ -259,46 +259,26 @@ class PyTorchTransformerModule(NMTModule):
         optimizer = AdamW(
             self.model.parameters(), lr=self.learning_rate, betas=(0.9, 0.98), eps=1e-9
         )
-        lr_scheduler = ScheduledOptim(
-            optimizer=optimizer,
-            d_model=self.model.dim_model,
-            n_warmup_steps=self.n_warmup_steps,
+        # lr scheduler is applied per step; not epoch.
+        # so we're changing it.
+        self.lr_scheduler = CosineWarmupScheduler(
+            optimizer=optimizer, n_warmup_steps=self.n_warmup_steps, max_iters=3000000
         )
+        return optimizer
 
-        return [optimizer], [{"scheduler": lr_scheduler, "interval": "step"}]
 
+class CosineWarmupScheduler(_LRScheduler):
+    def __init__(self, optimizer: Optimizer, n_warmup_steps: int, max_iters: int):
+        self.warmup = n_warmup_steps
+        self.max_num_iters = max_iters
+        super().__init__(optimizer)
 
-class ScheduledOptim(LRScheduler):
-    """A simple wrapper class for learning rate scheduling"""
+    def get_lr(self) -> List[float]:
+        lr_factor = self.get_lr_factor(epoch=self.last_epoch)
+        return [base_lr * lr_factor for base_lr in self.base_lrs]
 
-    def __init__(self, optimizer: Optimizer, d_model: int, n_warmup_steps: int):
-        self.optimizer = optimizer
-        self.n_warmup_steps = n_warmup_steps
-        self.n_current_steps = 0
-        self.init_lr = np.power(d_model, -0.5)
-
-    def step(self, epoch: Optional[int] = None):
-        "Step with the inner optimizer"
-        self.update_learning_rate()
-        self.optimizer.step()
-
-    def zero_grad(self):
-        "Zero out the gradients by the inner optimizer"
-        self.optimizer.zero_grad()
-
-    def get_lr_scale(self):
-        return np.min(
-            [
-                np.power(self.n_current_steps, -0.5),
-                np.power(self.n_warmup_steps, -1.5) * self.n_current_steps,
-            ]
-        )
-
-    def update_learning_rate(self):
-        """Learning rate scheduling per step"""
-
-        self.n_current_steps += 1
-        lr = self.init_lr * self.get_lr_scale()
-
-        for param_group in self.optimizer.param_groups:
-            param_group["lr"] = lr
+    def get_lr_factor(self, epoch: int) -> float:
+        lr_factor = 0.5 * (1 + np.cos(np.pi * epoch / self.max_num_iters))
+        if epoch <= self.warmup:
+            lr_factor *= epoch * 1.0 / self.warmup
+        return lr_factor

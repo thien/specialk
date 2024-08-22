@@ -195,6 +195,10 @@ class NMTModule(pl.LightningModule):
         self.log_dict(metrics, batch_size=batch[SOURCE].size(0))
         return metrics
 
+    def optimizer_step(self, *args, **kwargs):
+        super().optimizer_step(*args, **kwargs)
+        self.lr_scheduler.step()
+
     def loss(
         self,
         pred: torch.Tensor,

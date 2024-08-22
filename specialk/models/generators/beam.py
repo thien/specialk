@@ -6,21 +6,22 @@ from typing import List, Optional, Tuple
 import einops
 import torch
 from jaxtyping import Float, Int
+from rich import print as rprint
+from rich.table import Table
 from torch import Tensor
 from tqdm import tqdm
 
+from specialk.core import log
 from specialk.models.mt_model import NMTModule
 from specialk.models.tokenizer import Vocabulary
-from specialk.core import log
-from rich.table import Table
-from rich import print as rprint
+
 
 @dataclass
 class Beam:
     """Class to store beams during beam search."""
 
-    model: NMTModule 
-    tokenizer: Vocabulary 
+    model: NMTModule
+    tokenizer: Vocabulary
     logprob_sums: Float[Tensor, "batch"]  # each item corresponds to index 0 of tokens.
     tokens: Int[Tensor, "batch seq"]
 
@@ -181,64 +182,3 @@ class Beam:
             f"logprob_sums={self.logprob_sums.shape}, "
             f"tokens={self.tokens.shape})"
         )
-
-
-@torch.inference_mode()
-def beam_search(
-    self: TransformerSampler,
-    prompt: str,
-    num_return_sequences: int,
-    num_beams: int,
-    max_new_tokens: int,
-    no_repeat_ngram_size: Optional[int] = None,
-    verbose=False,
-) -> List[Tuple[float, Tensor]]:
-    """
-    Implements a beam search, by repeatedly performing the `generate` and `filter` steps (starting
-    from the initial prompt) until either of the two stopping criteria are met:
-
-        (1) we've generated `max_new_tokens` tokens, or
-        (2) we've generated `num_returns_sequences` terminating sequences.
-
-    To modularize this function, most of the actual complexity is in the Beam class,
-    in the `generate` and `filter` methods.
-    """
-
-    assert num_return_sequences <= num_beams
-    self.model.eval()
-    tokens = self.tokenizer.to_tensor(prompt).to(device)
-
-    # keep track of final beams; early terminations.
-    beam_results: List[Tuple[float, str]] = []
-    # generate logprob of prompt tokens.
-    logprob_sums = torch.tensor([-1.0] * len(tokens)).to(device)
-    # logprob_sums = self.model(tokens)[0].log_softmax(-1).diagonal()[-2:-1]
-    print(logprob_sums.shape, logprob_sums)
-    best_beam = Beam(
-        model=self.model,
-        tokenizer=self.tokenizer,
-        logprob_sums=logprob_sums,
-        tokens=tokens,
-    )
-    for i in tqdm(range(max_new_tokens)):
-        # generate beam.
-        best_beam = best_beam.generate(
-            num_beams, no_repeat_ngram_size=no_repeat_ngram_size
-        )
-        best_beam, early_terminated_beams = best_beam.filter(num_beams)
-
-        beam_results.extend(early_terminated_beams.logprobs_and_completions)
-
-        if verbose:
-            best_beams.print(title=f"Best Completions @ idx={i}")
-            early_terminated_beams.print(
-                title=f"Early Terminated Completions @ idx={i}"
-            )
-
-        # early stopping condition.
-        if len(beam_results) >= num_return_sequences:
-            return beam_results[:num_return_sequences]
-
-    beam_results.extend(best_beams.logprobs_and_completions)
-    beam_results = beam_results[:num_return_sequences]
-    return beam_results

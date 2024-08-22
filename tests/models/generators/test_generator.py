@@ -45,7 +45,7 @@ def test_generator(sampler):
     assert text.lower().startswith("a group of men")
 
 
-def test_generator_batch():
+def test_generator_batch(sampler):
     test_src = [
         "Eine Gruppe von Männern lädt Baumwolle auf einen Lastwagen",
         "Ein Mann schläft in einem grünen Raum auf einem Sofa.",
@@ -55,4 +55,7 @@ def test_generator_batch():
         "A man sleeping in a green room on a couch.",
     ]
     # i haven't implemented this yet
-    pass
+
+    generated_text = sampler.sample(test_src, top_p=0.1, seed=SEED)
+    for expected, actual in zip(generated_text, test_tgt):
+        assert expected == actual

@@ -5,7 +5,7 @@ This is intentional to take advantage of native C level
 implementations (as reasonably as possible).
 """
 
-from typing import Optional
+from typing import Optional, Tuple
 
 import numpy as np
 import torch
@@ -188,18 +188,21 @@ class PyTorchTransformerModel(nn.Transformer):
     def encode(
         self,
         x: Float[Tensor, "batch seq_len"],
-        x_mask: Optional[Bool[Tensor, "seq_len seq_len"]],
-    ) -> Float[Tensor, "batch seq_len d_model"]:
+        x_pad_mask: Optional[Bool[Tensor, "seq_len seq_len"]] = None,
+    ) -> Tuple[Float[Tensor, "batch seq_len d_model"], Float[Tensor, "batch seq_len"]]:
         """Split encoder and decoder runs."""
-        x_mask = x_mask if x_mask else self.create_pad_mask(x)
 
+        _, seq_len = x.shape
+        x_mask = torch.zeros((seq_len, seq_len), device=x.device, dtype=torch.bool)
+        x_pad_mask = x_pad_mask if x_pad_mask else self.create_pad_mask(x)
         x_emb: Float[Tensor, "batch seq_len d_embed"] = self.pos_encoder(
             self.input_emb(x) * np.sqrt(self.dim_model)
         )
+
         z: Float[Tensor, "batch seq_len d_model"] = self.encoder(
-            x_emb, src_key_padding_mask=x_mask
+            x_emb, mask=x_mask, src_key_padding_mask=x_pad_mask
         )
-        return z
+        return z, x_pad_mask
 
     def decode(
         self,

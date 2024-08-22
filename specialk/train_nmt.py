@@ -75,7 +75,10 @@ def load_training_dataset(src_lang: str, tgt_lang: str, num_proc=8) -> Dataset:
         "thien/globalvoices",
     ]
     ds: Dataset = concatenate_datasets(
-        [load_dataset(d, num_proc=num_proc)["train"] for d in dataset_sources]
+        [
+            load_dataset(d, num_proc=num_proc, keep_in_memory=True)["train"]
+            for d in dataset_sources
+        ]
     )
     ds = ds.shuffle(seed=SEED)
     ds = (
@@ -111,10 +114,11 @@ def init_dataloader(
         example[TARGET] = decoder_tokenizer.to_tensor(example[TARGET]).squeeze(0)
         return example
 
-    if isinstance(cache_path, Path):
-        cache_path = str(cache_path)
-    if not cache_path.lower().endswith(".parquet"):
-        cache_path = f"{cache_path}.parquet"
+    if cache_path:
+        if isinstance(cache_path, Path):
+            cache_path = str(cache_path)
+        if not cache_path.lower().endswith(".parquet"):
+            cache_path = f"{cache_path}.parquet"
 
     tokenized_dataset = dataset.with_format("torch").map(
         tokenize, batched=True, num_proc=n_workers, cache_file_name=cache_path

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -12,6 +12,8 @@ from specialk.core import constants, log
 from specialk.models.generators.beam import Beam
 from specialk.models.mt_model import NMTModule
 from specialk.models.tokenizer import Vocabulary
+
+NEG_INF = float("-inf")
 
 
 class LanguageModelSampler:
@@ -41,7 +43,7 @@ class LanguageModelSampler:
     ) -> int:
         """Sample the next token."""
 
-        assert input_ids.ndim == 1, "input_ids should be a 1D sequence of token ids"
+        assert input_ids.ndim == 2, "input_ids should be a 2D sequence of token ids"
         assert temperature >= 0, "Temperature should be non-negative"
         assert 0 <= top_p <= 1.0, "Top-p must be a probability"
         assert 0 <= top_k, "Top-k must be non-negative"
@@ -55,7 +57,8 @@ class LanguageModelSampler:
         if temperature == 0:
             return LanguageModelSampler.greedy_search(logits)
         elif temperature != 1.0:
-            logits = LanguageModelSampler.apply_temperature(logits, temperature)
+            # i could separate this out, but it would just do this.
+            logits = logits / temperature
         if frequency_penalty != 0.0:
             logits = LanguageModelSampler.apply_frequency_penalty(
                 input_ids, logits, frequency_penalty
@@ -66,18 +69,20 @@ class LanguageModelSampler:
 
     @staticmethod
     def sample_top_k_top_p(
-        logits: torch.Tensor, top_k: int, top_p: float, min_tokens_to_keep: int = 1
+        logits: Float[Tensor, "batch vocab"],
+        top_k: int,
+        top_p: float,
+        min_tokens_to_keep: int = 1,
     ) -> int:
         """
         Samples using both top-k and top-p filtering.
         """
-        if len(logits.shape) > 1:
-            logits = logits.squeeze(0)
+        _, vocab_size = logits.shape
 
         # Apply top-k sampling; this is so we can dramatically reduce the number of tokens to
         # apply top-p for.
         if top_k > 0:
-            top_k = min(max(top_k, min_tokens_to_keep), logits.size(-1))
+            top_k = min(max(top_k, min_tokens_to_keep), vocab_size)
             indices_to_remove = logits < torch.topk(logits, top_k)[0][..., -1, None]
             logits[indices_to_remove] = float("-inf")
 
@@ -89,22 +94,23 @@ class LanguageModelSampler:
             )
 
             # Remove tokens with cumulative probability above the threshold
-            sorted_indices_to_remove = cumulative_probs > top_p
+            sorted_indices_to_rm = cumulative_probs > top_p
 
             # Shift the indices to the right to keep also the first token above the threshold
-            sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[
-                ..., :-1
-            ].clone()
-            sorted_indices_to_remove[..., 0] = 0
+            sorted_indices_to_rm[..., 1:] = sorted_indices_to_rm[..., :-1].clone()
+            sorted_indices_to_rm[..., 0] = 0
 
-            indices_to_remove = sorted_indices[sorted_indices_to_remove]
-            logits[indices_to_remove] = float("-inf")
+            # scatter sorted tensors to original indexing
+            indices_to_remove = sorted_indices_to_rm.scatter(
+                1, sorted_indices, sorted_indices_to_rm
+            )
+            logits = logits.masked_fill(indices_to_remove, NEG_INF)
 
         # Sample from the filtered distribution
         return LanguageModelSampler.sample_basic(logits)
 
     @staticmethod
-    def sample_top_k(logits: Float[Tensor, "d_vocab"], k: int) -> int:
+    def sample_top_k(logits: Float[Tensor, "d_vocab"], k: int) -> Tensor:
         """
         Samples from the top k most likely tokens.
         """
@@ -146,15 +152,6 @@ class LanguageModelSampler:
         return out
 
     @staticmethod
-    def apply_temperature(
-        logits: Float[Tensor, "d_vocab"], temperature: float
-    ) -> Float[Tensor, "d_vocab"]:
-        """
-        Applies temperature scaling to the logits.
-        """
-        return logits / temperature
-
-    @staticmethod
     def apply_frequency_penalty(
         input_ids: Int[Tensor, "seq_len"],
         logits: Float[Tensor, "d_vocab"],
@@ -163,16 +160,21 @@ class LanguageModelSampler:
         """
         Applies a frequency penalty to the logits.
         """
-        freqs = torch.bincount(input_ids, minlength=logits.shape[-1]) * freq_penalty
-        return logits - freqs
+        # TODO: this is really inefficient, needs optimising.
+        freqs = torch.stack(
+            [torch.bincount(seq, minlength=logits.shape[-1]) for seq in input_ids]
+        )
+        return logits - (freqs * freq_penalty)
 
     @staticmethod
-    def sample_basic(logits: Float[Tensor, "d_vocab"]) -> int:
+    def sample_basic(logits: Float[Tensor, "d_vocab"]) -> Tensor:
         """
         Samples from the distribution defined by the logits.
+
+        Returns:
+            Tensor: one logit index from the logits.
         """
-        sample = torch.distributions.categorical.Categorical(logits=logits).sample()
-        return sample
+        return torch.distributions.categorical.Categorical(logits=logits).sample()
 
     @torch.inference_mode()
     def beam_search(
@@ -185,7 +187,9 @@ class LanguageModelSampler:
         verbose=False,
     ) -> List[Tuple[float, Tensor]]:
         """
-        Implements a beam search, by repeatedly performing the `generate` and `filter` steps (starting
+        Beam Search.
+
+        This is done by repeatedly performing the `generate` and `filter` steps (starting
         from the initial prompt) until either of the two stopping criteria are met:
 
             (1) we've generated `max_new_tokens` tokens, or
@@ -250,7 +254,8 @@ class LanguageModelSampler:
         new tokens are chosen.
 
         args:
-            input_tokens (Int[Tensor, "batch_size seq_length"]): input sequence to send to the MT model.
+            input_tokens (Int[Tensor, "batch_size seq_length"]): input sequence to
+                send to the MT model.
             max_len (int): maximum length of generated sequence.
         """
         input_tokens: Int[Tensor, "batch seq_len"]
@@ -326,7 +331,7 @@ class EncoderDecoderSampler(LanguageModelSampler):
     @torch.inference_mode()
     def sample(
         self,
-        input: str,
+        input: Union[str, List[str]],
         max_len=50,
         start_symbol: int = constants.SOS,
         **kwargs,
@@ -341,12 +346,13 @@ class EncoderDecoderSampler(LanguageModelSampler):
         new tokens are chosen.
 
         args:
-            input_tokens (Int[Tensor, "batch_size seq_length"]): input sequence to send to the MT model.
+            input_tokens (Int[Tensor, "batch_size seq_length"]): input sequence
+                to send to the MT model.
             max_len (int): maximum length of generated sequence.
         """
-        input_tokens: Int[Tensor, "batch seq_len"] = self.src_tokenizer.to_tensor(
-            input
-        ).to(self.device)
+        input_tokens: Int[Tensor, "batch seq_len"]
+        input_tokens = self.src_tokenizer.to_tensor(input).to(self.device)
+
         batch_size, _ = input_tokens.shape
         logits: Float[Tensor, "seq_len d_vocab"]
 
@@ -355,6 +361,9 @@ class EncoderDecoderSampler(LanguageModelSampler):
             (batch_size, max_len), constants.PAD, dtype=torch.long, device=self.device
         )
         y_hat[:, 0] = start_symbol
+
+        # Track which sequences have finished
+        y_completed = torch.zeros(batch_size, dtype=torch.bool, device=self.device)
 
         memory, x_pad_mask = self.model.encode(input_tokens)
 
@@ -379,15 +388,18 @@ class EncoderDecoderSampler(LanguageModelSampler):
                 self.model.generator(out[:, -1]), dim=-1
             )
 
-            # TODO make this only 1D, but support batches later.
-            logits = logits.squeeze(0)
-            _y_hat = y_hat.squeeze(0)
-            next_token: Tensor = self.sample_next_token(_y_hat, logits, **kwargs)
-            next_token = Tensor([next_token]).to(self.device).long()
-            next_token = next_token.unsqueeze(0)
+            # Sample next tokens for all unfinished sequences.
+            next_tokens = torch.where(
+                y_completed,
+                constants.PAD,
+                self.sample_next_token(y_hat, logits, **kwargs),
+            )
+            y_hat[:, i] = next_tokens
 
-            y_hat[:, i] = next_token[:, 0]
-            if next_token == self.tgt_tokenizer.EOS:
+            # damn, look at that bitwise or!
+            y_completed |= next_tokens == self.tgt_tokenizer.EOS
+
+            if y_completed.all():
                 break
 
         # convert tokens back into strings.

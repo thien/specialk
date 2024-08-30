@@ -6,15 +6,25 @@ from pathlib import Path
 from typing import List, Optional, Union
 
 import gensim
-import numpy as np
 from gensim.models.word2vec import Word2Vec
 from tqdm import tqdm
 
-from specialk.core.utils import hash
 import specialk.metrics.style_transfer.cnn as cnn
 import specialk.metrics.style_transfer.content_preservation as preserv
+from specialk.core import log
+from specialk.core.constants import PROJECT_DIR
+from specialk.core.utils import hash
 from specialk.metrics import AlignmentMetric, Metric
+from specialk.models.classifier.models import CNNClassifier
 from specialk.models.style_lexicon import StyleLexicon
+from specialk.models.tokenizer import (
+    BPEVocabulary,
+    SentencePieceVocabulary,
+    Vocabulary,
+    WordVocabulary,
+)
+
+PATH_CLASSIFIER = PROJECT_DIR / "assets/classifiers/legacy/cnn_classifier/"
 
 
 class StyleMetric(Metric):
@@ -28,6 +38,20 @@ class Intensity(StyleMetric, AlignmentMetric):
         self.category = category
         assert self.category in {"political", "publication"}
 
+        if category == "political":
+            category = "adversarial_political"
+        elif category == "publication":
+            category = "adversarial_publication"
+
+        path_checkpoint = PATH_CLASSIFIER / category / f"{category}.ckpt"
+        path_hyperparams = PATH_CLASSIFIER / category / f"hyperparameters.yaml"
+        path_tok = PATH_CLASSIFIER / category / f"tokenizer"
+
+        self.module = CNNClassifier.load_from_checkpoint(
+            path_checkpoint, hparams_file=path_hyperparams
+        )
+        self.module.tokenizer = WordVocabulary.from_file(path_tok)
+
     def compute(self, text: str) -> float:
         """Compute intensity score of given text.
 
@@ -40,10 +64,28 @@ class Intensity(StyleMetric, AlignmentMetric):
         Returns:
             float: value predicted by the model.
         """
-        return np.mean(cnn.classify(self.category, text))
+        return self.module.generate(text).mean()
 
 
 class Naturalness(StyleMetric):
+    def __init__(self, category: str):
+        assert category in {"political", "publication"}
+        self.category = category
+
+        if category == "political":
+            category = "naturalness_political"
+        elif category == "publication":
+            raise Exception("Model not implemented for naturalness for publication.")
+
+        path_checkpoint = PATH_CLASSIFIER / category / f"{category}.ckpt"
+        path_hyperparams = PATH_CLASSIFIER / category / f"hyperparameters.yaml"
+        path_tok = PATH_CLASSIFIER / category / f"tokenizer"
+
+        self.module = CNNClassifier.load_from_checkpoint(
+            path_checkpoint, hparams_file=path_hyperparams
+        )
+        self.module.tokenizer = WordVocabulary.from_file(path_tok)
+
     def compute(self, text: str) -> float:
         """Compute naturalness score of given text.
 
@@ -56,13 +98,14 @@ class Naturalness(StyleMetric):
         Returns:
             float: value predicted by the model.
         """
-        return np.mean(cnn.classify("naturalness", text))
+        return self.module.generate(text).mean()
 
 
 class Preservation(StyleMetric, AlignmentMetric):
     """To use, init a style lexicon of the whole corpora, and then
-        use that for test cases.
+    use that for test cases.
     """
+
     def __init__(
         self,
         dir_cache: Union[Path, str],
@@ -135,13 +178,16 @@ class Preservation(StyleMetric, AlignmentMetric):
         return checksum
 
     def init_w2v(self, checksum: str, predictions: list[str], references: List[str]):
+        """Creates Word2Vec embedding."""
         path_w2v = self.dir_w2v / checksum
-        if self.dir_w2v.exists():
-            self.w2v: Word2Vec = Word2Vec.load(path_w2v)
+        path_w2v_str = str(path_w2v)
+        if path_w2v.exists():
+            log.info("Loading Word2Vec", path=path_w2v_str)
+            self.w2v: Word2Vec = Word2Vec.load(path_w2v_str)
         else:
             self.w2v = Word2Vec(predictions + references)
             if self.enable_cache:
-                self.w2v.save(path_w2v)
+                self.w2v.save(path_w2v_str)
 
     def compute(
         self,

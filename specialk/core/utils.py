@@ -1,20 +1,61 @@
 import functools
-
+import hashlib
 import platform
 import subprocess
 import warnings
 from argparse import Namespace
 from multiprocessing import Pool, cpu_count
 from pathlib import Path
-from typing import Any, Dict, List
-from specialk.core.logging import log
-import hashlib
+from typing import Any, Dict, Iterable, List
+
 import torch
+import yaml
 from tqdm import tqdm
+
+from specialk.core.logging import log
 
 """
 Misc. functions used by a variety of parts of the library.
 """
+
+
+def batch_texts(texts: Iterable[str], batch_size: int) -> Iterable[List[str]]:
+    """
+    Takes an iterable of texts and yields batches of texts.
+
+    Args:
+    texts (Iterable[str]): An iterable of text strings.
+    batch_size (int): The number of texts in each batch.
+
+    Yields:
+    List[str]: A batch of texts.
+    """
+    current_batch = []
+
+    for text in texts:
+        current_batch.append(text)
+        if len(current_batch) == batch_size:
+            yield current_batch
+            current_batch = []
+
+    # Yield any remaining texts in the last batch
+    if current_batch:
+        yield current_batch
+
+
+def save_dict_to_yaml(data: dict, file_path: str) -> None:
+    """
+    Save a dictionary to a YAML file.
+
+    Args:
+    data (dict): The dictionary to be saved
+    file_path (str): The path where the YAML file will be saved
+
+    Returns:
+    None
+    """
+    with open(file_path, "w") as file:
+        yaml.dump(data, file, default_flow_style=False)
 
 
 def deprecated(func):

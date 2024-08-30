@@ -13,7 +13,7 @@ from __future__ import division
 
 import argparse
 from pathlib import Path
-from typing import Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import lightning.pytorch as pl
 import torch
@@ -32,6 +32,7 @@ from specialk.core.utils import check_torch_device, log, namespace_to_dict
 from specialk.datasets.dataloaders import (
     init_classification_dataloaders as init_dataloaders,
 )
+from specialk.models.classifier.models import CNNClassifier
 from specialk.models.classifier.onmt.CNNModels import ConvNet
 from specialk.models.tokenizer import (
     BPEVocabulary,
@@ -41,168 +42,6 @@ from specialk.models.tokenizer import (
 )
 
 DEVICE: str = check_torch_device()
-
-
-class TextClassifier(pl.LightningModule):
-    """Base class for Text Classification."""
-
-    def __init__(self, name: str, vocabulary_size: int, sequence_length: int):
-        super().__init__()
-        self.name = name
-        self.vocabulary_size = vocabulary_size
-        self.sequence_length = sequence_length
-        self.criterion = nn.BCELoss()
-        self.model = None
-
-    def validation_step(self, batch: dict, batch_idx: int):
-        loss, acc = self._shared_eval_step(batch, batch_idx)
-        metrics = {"val_acc": acc, "val_loss": loss}
-        self.log_dict(metrics, batch_size=batch["text"].size(0))
-        return metrics
-
-    def test_step(self, batch: dict, batch_idx: int):
-        loss, acc = self._shared_eval_step(batch, batch_idx)
-        metrics = {"test_acc": acc, "test_loss": loss}
-        self.log_dict(metrics)
-        return metrics
-
-    def predict_step(
-        self, batch: dict, batch_idx: int, dataloader_idx=0
-    ) -> torch.Tensor:
-        raise NotImplementedError
-
-    def _shared_eval_step(
-        self, batch: dict, batch_idx: int
-    ) -> Tuple[torch.Tensor, float]:
-        """Run shared eval step.
-
-        Args:
-            batch (dict): individual batch generated from the DataLoader.
-            batch_idx (int): ID corresponding to the batch.
-
-        Returns:
-            Tuple[torch.Tensor, float]: Returns loss, accuracy.
-        """
-        raise NotImplementedError
-
-    @staticmethod
-    def calculate_classification_metrics(
-        output: torch.Tensor,
-        target: torch.Tensor,
-    ) -> float:
-        """Calculate downstream metrics.
-
-        Args:
-            output (torch.Tensor): Predicted values generated from the model.
-            target (torch.Tensor): Values we want to predict.
-
-        Returns:
-            int: Accuracy.
-        """
-
-        outputs = (output > 0.5).long()
-        n_correct: float = outputs.eq(target).sum().item() / outputs.size(0)
-        return n_correct
-
-
-class CNNClassifier(TextClassifier):
-    """CNN Text Classifier. Operates on one-hot."""
-
-    def __init__(self, name: str, vocabulary_size: int, sequence_length: int):
-        super().__init__(
-            name=name, vocabulary_size=vocabulary_size, sequence_length=sequence_length
-        )
-        # min_batch_size is used because the convolution
-        # operations depend on a minimum size.
-        self.min_batch_size = 50
-        self.model = ConvNet(
-            vocab_size=self.vocabulary_size, sequence_length=self.sequence_length
-        )
-
-    def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
-        """Run Training step.
-
-        Args:
-            batch (dict): individual batch generated from the DataLoader.
-            batch_idx (int): ID corresponding to the batch.
-
-        Returns:
-            torch.Tensor: Returns loss.
-        """
-        x, y = batch["text"], batch["label"]
-        batch_size, seq_len = x.size()
-
-        if batch_size < self.min_batch_size:
-            log.error(
-                f"batch size (currently set to {batch_size}) "
-                f"should be at least {self.min_batch_size}."
-            )
-
-        # wrap into one-hot encoding of tokens for activation.
-        one_hot = torch.zeros(
-            seq_len, batch_size, self.vocabulary_size, device=self.device
-        ).scatter_(2, torch.unsqueeze(x.T, 2), 1)
-
-        y_hat = self.model(one_hot).squeeze(-1)
-
-        loss: torch.Tensor = self.criterion(y_hat, y.float())
-        accuracy = self.calculate_classification_metrics(y_hat, y)
-
-        self.log_dict(
-            {"train_acc": accuracy, "batch_id": batch_idx, "train_loss": loss},
-            batch_size=batch_size,
-        )
-        return loss
-
-    def _shared_eval_step(
-        self, batch: dict, batch_idx: int
-    ) -> Tuple[torch.Tensor, float]:
-        """Run shared eval step.
-
-        Args:
-            batch (dict): individual batch generated from the DataLoader.
-            batch_idx (int): ID corresponding to the batch.
-
-        Returns:
-            Tuple[torch.Tensor, float]: Returns loss, accuracy.
-        """
-        x, y = batch["text"], batch["label"]
-
-        seq_len: int = x.size(1)
-        batch_size: int = x.size(0)
-
-        # wrap into one-hot encoding of tokens for activation.
-        one_hot = torch.zeros(
-            seq_len, batch_size, self.vocabulary_size, device=self.device
-        ).scatter_(2, torch.unsqueeze(x.T, 2), 1)
-
-        y_hat = self.model(one_hot).squeeze(-1)
-        loss: torch.Tensor = self.criterion(y_hat, y.float())
-
-        accuracy = self.calculate_classification_metrics(y_hat, y)
-        return loss, accuracy
-
-    def validation_step(self, batch: dict, batch_idx: int):
-        loss, acc = self._shared_eval_step(batch, batch_idx)
-        metrics = {"val_acc": acc, "val_loss": loss}
-        self.log_dict(metrics, batch_size=batch["text"].size(0))
-        return metrics
-
-    def test_step(self, batch: dict, batch_idx: int):
-        loss, acc = self._shared_eval_step(batch, batch_idx)
-        metrics = {"test_acc": acc, "test_loss": loss}
-        self.log_dict(metrics)
-        return metrics
-
-    def predict_step(
-        self, batch: dict, batch_idx: int, dataloader_idx=0
-    ) -> torch.Tensor:
-        x = batch["text"]  # assumes text is tokenized.
-        y_hat = self.model(x)
-        return y_hat.squeeze(-1)
-
-    def configure_optimizers(self) -> torch.optim.Optimizer:
-        return torch.optim.Adam(self.model.parameters(), lr=0.02)
 
 
 def get_args() -> argparse.Namespace:
@@ -703,6 +542,7 @@ def main_new():
         "political",
         vocabulary_size=tokenizer.vocab_size,
         sequence_length=tokenizer.max_length,
+        tokenizer=tokenizer,
     )
 
     logger = TensorBoardLogger(LOGGING_DIR, name="pol_classifier")

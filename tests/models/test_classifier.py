@@ -1,17 +1,19 @@
+from pathlib import Path
+
 import pytest
 import torch
 from torch import nn
 from torchmetrics.functional import accuracy
 
 from specialk.core.utils import log
+from specialk.models.classifier.models import CNNClassifier
 from specialk.models.classifier.onmt.CNNModels import ConvNet
-from tests.models.fixtures import (
-    bpe_dataloader,  # noqa: F401; noqa: F402
-    bpe_tokenizer,  # noqa: F401; noqa: F402
-    dataset,  # noqa: F401; noqa: F402
-    word_dataloader,  # noqa: F401; noqa: F402
-    word_tokenizer,  # noqa: F401; noqa: F402
-)
+from specialk.models.tokenizer import WordVocabulary
+from tests.models.fixtures import bpe_dataloader  # noqa: F401; noqa: F402
+from tests.models.fixtures import bpe_tokenizer  # noqa: F401; noqa: F402
+from tests.models.fixtures import dataset  # noqa: F401; noqa: F402
+from tests.models.fixtures import word_dataloader  # noqa: F401; noqa: F402
+from tests.models.fixtures import word_tokenizer  # noqa: F401; noqa: F402
 from tests.tokenizer.test_tokenizer import VOCABULARY_SIZE
 
 dirpath = "tests/tokenizer/test_files"
@@ -80,3 +82,29 @@ def test_accuracy():
     assert y.shape == y_pred.shape
     acc = accuracy(y_pred, y, "binary")
     assert acc == pytest.approx(0.833, 0.1)
+
+
+def test_load_model_from_checkpoint():
+    path_classifier = Path(
+        "/Users/t/Projects/specialk/assets/classifiers/legacy/cnn_classifier/"
+    )
+    for category in [
+        "adversarial_political",
+        "adversarial_publication",
+        "naturalness_political",
+    ]:
+        path_checkpoint = path_classifier / category / f"{category}.ckpt"
+        path_hyperparams = path_classifier / category / f"hyperparameters.yaml"
+        path_tok = path_classifier / category / f"tokenizer"
+
+        module = CNNClassifier.load_from_checkpoint(
+            path_checkpoint, hparams_file=path_hyperparams
+        )
+        module.tokenizer = WordVocabulary.from_file(path_tok)
+
+        text = ["Donald Trump!!!", "obama rules"] * 10
+        batch_size = 3
+        output = module.generate(text, batch_size)
+        log.info("output", out=output, shape=output.shape)
+        assert output.shape == torch.Size((len(text)))
+        assert isinstance(output, torch.Tensor)

@@ -11,6 +11,7 @@ from specialk.datasets.preprocess import load_file
 from specialk.models.mt_model import NMTModule
 from specialk.models.tokenizer import (
     BPEVocabulary,
+    HuggingFaceTokenizer,
     SentencePieceVocabulary,
     WordVocabulary,
 )
@@ -126,6 +127,15 @@ def sentencepiece_tokenizer():
     return tokenizer
 
 
+@pytest.fixture(scope="session", autouse=True)
+def huggingface_tokenizer():
+    return HuggingFaceTokenizer(
+        name="bert-base-uncased",
+        pretrained_model_name_or_path="bert-base-uncased",
+        max_length=512,
+    )
+
+
 def test_spm_tokenizer_to_tensor_long(sentencepiece_tokenizer):
     sequence = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
     output = sentencepiece_tokenizer.to_tensor(sequence)
@@ -231,21 +241,31 @@ def test_model_validation_bleu_word(word_tokenizer):
 
 
 def test_tokenizer_to_tensor_single_sequence(
-    word_tokenizer, bpe_tokenizer, sentencepiece_tokenizer
+    word_tokenizer, bpe_tokenizer, sentencepiece_tokenizer, huggingface_tokenizer
 ):
-    tokenizers = [bpe_tokenizer, sentencepiece_tokenizer, word_tokenizer]
+    tokenizers = [
+        bpe_tokenizer,
+        sentencepiece_tokenizer,
+        word_tokenizer,
+        huggingface_tokenizer,
+    ]
     for tokenizer in tokenizers:
         tokenizer.max_length
-        tensor = torch.tensor(tokenizer.to_tensor("hello world"))
+        tensor = torch.tensor(tokenizer.to_tensor("hello world")).detach()
         assert tensor.shape == torch.Size((1, tokenizer.max_length))
 
 
 def test_tokenizer_to_tensor_multiple_seq(
-    word_tokenizer, bpe_tokenizer, sentencepiece_tokenizer
+    word_tokenizer, bpe_tokenizer, sentencepiece_tokenizer, huggingface_tokenizer
 ):
     sequences = ["hello world", "how are you doing"]
     batch_size = len(sequences)
-    tokenizers = [bpe_tokenizer, sentencepiece_tokenizer, word_tokenizer]
+    tokenizers = [
+        bpe_tokenizer,
+        sentencepiece_tokenizer,
+        word_tokenizer,
+        huggingface_tokenizer,
+    ]
     for tokenizer in tokenizers:
         tokenizer.max_length
         tensor = torch.tensor(tokenizer.to_tensor(sequences))

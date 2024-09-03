@@ -12,6 +12,7 @@ import torch
 from sacremoses import MosesDetokenizer, MosesTokenizer
 from torch import LongTensor, Tensor
 from tqdm import tqdm
+from transformers import AutoTokenizer
 
 import specialk.core.constants as Constants
 from specialk.core.utils import deprecated, load_dataset, log
@@ -737,3 +738,77 @@ class WordVocabulary(Vocabulary):
 
     def __repr__(self) -> str:
         return f"WordVocabulary(vocab_size={self.vocab_size}, max_length={self.max_length}, lower={self.lower})"
+
+
+class HuggingFaceTokenizer(Vocabulary):
+    def __init__(
+        self, name: str, pretrained_model_name_or_path: str, max_length: int, **kwargs
+    ):
+        super().__init__(name=name, vocab_size=None, max_length=max_length, **kwargs)
+        self.pretrained_model_name_or_path = pretrained_model_name_or_path
+        self.tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path)
+        self.vocab_size = self.tokenizer.vocab_size
+
+        # Map special tokens
+        self.PAD = self.tokenizer.pad_token_id
+        self.BOS = self.tokenizer.bos_token_id
+        self.EOS = self.tokenizer.eos_token_id
+        self.UNK = self.tokenizer.unk_token_id
+
+        # Update special token strings
+        self.PAD_TOKEN = self.tokenizer.pad_token
+        self.BOS_TOKEN = self.tokenizer.bos_token
+        self.EOS_TOKEN = self.tokenizer.eos_token
+        self.UNK_TOKEN = self.tokenizer.unk_token
+
+    def fit(self, texts: Iterable[str]):
+        # HuggingFace tokenizers are pre-trained, so we don't need to fit them
+        log.warn("Not implemented but huggingface tokenizers are already trained.")
+        pass
+
+    def to_tensor(self, text: Union[str, List[str]]) -> Tensor:
+        encoded = self.tokenizer(
+            text,
+            padding="max_length",
+            truncation=True,
+            max_length=self.max_length,
+            return_tensors="pt",
+        )
+        return encoded["input_ids"]
+
+    def tokenize(self, text: str) -> List[str]:
+        return self.tokenizer.tokenize(text)
+
+    def detokenize(
+        self, tokens: Union[Tensor, List[List[int]], List[int]], specials: bool = True
+    ) -> Union[str, List[str]]:
+        if isinstance(tokens, Tensor):
+            tokens = tokens.tolist()
+
+        if isinstance(tokens[0], int):
+            tokens = [tokens]
+
+        decoded = self.tokenizer.batch_decode(tokens, skip_special_tokens=not specials)
+        return decoded[0] if len(decoded) == 1 else decoded
+
+    def to_dict(self) -> dict:
+        d = super().to_dict()
+        d["kwargs"]["pretrained_model_name_or_path"] = (
+            self.pretrained_model_name_or_path
+        )
+        d["class"] = "HuggingFaceTokenizer"
+        return d
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "HuggingFaceTokenizer":
+        return cls(**d["kwargs"])
+
+    @classmethod
+    def from_file(cls, filepath: str, max_length: int) -> "HuggingFaceTokenizer":
+        # Assuming the filepath is the pretrained model name or path
+        return cls(
+            name=filepath, pretrained_model_name_or_path=filepath, max_length=max_length
+        )
+
+    def __repr__(self) -> str:
+        return f"HuggingFaceTokenizer(name={self.name}, model={self.pretrained_model_name_or_path}, max_length={self.max_length})"

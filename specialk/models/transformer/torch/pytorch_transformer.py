@@ -1,11 +1,12 @@
 """
 PyTorch native implementation of the Transformer.
 
-This is intentional to take advantage of native C level
-implementations (as reasonably as possible).
+This is intentional to take advantage of native
+implementations (as reasonably as possible), so a lot of this
+will be calling the relevant classes and modified afterwards.
 """
 
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -13,12 +14,99 @@ import torch.nn as nn
 import torch.nn.functional as F
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
+from torch.nn import LayerNorm
 from torch.optim import AdamW
 
 import specialk.core.constants as Constants
 from specialk.models.mt_model import NMTModule
 from specialk.models.optimizers.schedulers import CosineWarmupScheduler
 from specialk.models.transformer.pos_encoders import PositionalEncoder
+from specialk.models.utils.activations import SwiGLU
+
+
+class TransformerEncoderLayer(nn.TransformerEncoderLayer):
+    """Modified Transformer Encoder Layer so we can add optional SwiGLU."""
+
+    def __init__(
+        self,
+        d_model: int,
+        nhead: int,
+        dim_feedforward: int = 2048,
+        dropout: float = 0.1,
+        activation: Callable[[torch.Tensor], torch.Tensor] = F.relu,
+        layer_norm_eps: float = 1e-5,
+        batch_first: bool = False,
+        norm_first: bool = False,
+        bias: bool = True,
+        device=None,
+        dtype=None,
+    ):
+        super().__init__(
+            d_model,
+            nhead,
+            dim_feedforward,
+            dropout,
+            activation,
+            layer_norm_eps,
+            batch_first,
+            norm_first,
+            bias,
+            device,
+            dtype,
+        )
+
+        if activation == SwiGLU:
+            self.linear1 = SwiGLU(d_model, dim_feedforward, d_model, bias=bias)
+            self.linear2 = nn.Identity()
+
+
+class TransformerDecoderLayer(nn.TransformerDecoderLayer):
+    """Modified Transformer Decoder Layer so we can add optional SwiGLU."""
+
+    def __init__(
+        self,
+        d_model: int,
+        nhead: int,
+        dim_feedforward: int = 2048,
+        dropout: float = 0.1,
+        activation: Union[str, Callable[[Tensor], Tensor]] = F.relu,
+        layer_norm_eps: float = 1e-5,
+        batch_first: bool = False,
+        norm_first: bool = False,
+        bias: bool = True,
+        device=None,
+        dtype=None,
+    ) -> None:
+        super().__init__(
+            d_model,
+            nhead,
+            dim_feedforward,
+            dropout,
+            activation,
+            layer_norm_eps,
+            batch_first,
+            norm_first,
+            bias,
+            device,
+            dtype,
+        )
+        if activation == SwiGLU:
+            self.linear1 = SwiGLU(d_model, dim_feedforward, d_model, bias=bias)
+            self.linear2 = nn.Identity()
+
+
+class TransformerEncoder(nn.TransformerEncoder):
+    def __init__(
+        self,
+        encoder_layer: "TransformerEncoderLayer",
+        num_layers: int,
+        norm: Optional[nn.Module] = None,
+        enable_nested_tensor: bool = True,
+        mask_check: bool = True,
+    ) -> None:
+        super().__init__(
+            encoder_layer, num_layers, norm, enable_nested_tensor, mask_check
+        )
 
 
 class PyTorchTransformerModel(nn.Transformer):
@@ -35,9 +123,15 @@ class PyTorchTransformerModel(nn.Transformer):
         dropout=0.1,
         decoder_generator_weight_sharing=True,
         name: str = "PyTorchTransformer",
-        batch_first: bool = True,
+        activation: Callable = F.relu,
+        layer_norm_eps: float = 1e-5,
+        batch_first: bool = False,
+        norm_first: bool = False,
+        bias: bool = True,
+        device=None,
+        dtype=None,
         **kwargs,
-    ):
+    ) -> None:
         """PyTorch native implementation of a Transformer (see parent class).
 
         Args:
@@ -57,6 +151,43 @@ class PyTorchTransformerModel(nn.Transformer):
             decoder_generator_weight_sharing (bool, optional): If set, shares weight
                 between deocder and generator. Defaults to True.
         """
+        # initialize encoder and decoders separately.
+        factory_kwargs = {"device": device, "dtype": dtype}
+        encoder_layer = TransformerEncoderLayer(
+            dim_model,
+            n_heads,
+            dim_feedforward,
+            dropout,
+            activation,
+            layer_norm_eps,
+            batch_first,
+            norm_first,
+            bias,
+            **factory_kwargs,
+        )
+
+        encoder_norm = LayerNorm(
+            dim_model, eps=layer_norm_eps, bias=bias, **factory_kwargs
+        )
+        encoder = nn.TransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm)
+
+        decoder_layer = TransformerDecoderLayer(
+            dim_model,
+            n_heads,
+            dim_feedforward,
+            dropout,
+            activation,
+            layer_norm_eps,
+            batch_first,
+            norm_first,
+            bias,
+            **factory_kwargs,
+        )
+        decoder_norm = LayerNorm(
+            dim_model, eps=layer_norm_eps, bias=bias, **factory_kwargs
+        )
+        decoder = nn.TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm)
+
         super(PyTorchTransformerModel, self).__init__(
             d_model=dim_model,
             nhead=n_heads,
@@ -65,6 +196,8 @@ class PyTorchTransformerModel(nn.Transformer):
             num_decoder_layers=num_decoder_layers,
             dropout=dropout,
             batch_first=batch_first,
+            custom_encoder=encoder,
+            custom_decoder=decoder,
         )
         self.name = name
         self.model_type = "Transformer"

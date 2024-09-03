@@ -332,6 +332,48 @@ def test_transformer_inference(spm_dataloader):
     _ = F.cross_entropy(y_hat, y, ignore_index=model.PAD, reduction="sum")
 
 
+def test_transformer_swiglu_inference(spm_dataloader):
+    from specialk.models.utils.activations import SwiGLU
+
+    dataloader, tokenizer = spm_dataloader
+    model = TransformerModule(
+        name="transformer_swiglu",
+        vocabulary_size=tokenizer.vocab_size,
+        tokenizer=tokenizer,
+        sequence_length=SEQUENCE_LENGTH,
+        dim_model=2,
+        n_heads=1,
+        num_encoder_layers=1,
+        num_decoder_layers=1,
+        activation=SwiGLU,
+    )
+    model.change_pos_enc_len(SEQUENCE_LENGTH)
+    model.PAD = tokenizer.PAD
+    model.eval()
+
+    batch: dict = next(iter(dataloader))
+    x: torch.Tensor = batch[SOURCE]
+    y: torch.Tensor = batch[TARGET]
+
+    len_x = torch.arange(SEQUENCE_LENGTH).repeat((BATCH_SIZE, 1))
+    len_x = len_x.masked_fill((x == PAD), 0)
+    len_y = torch.arange(SEQUENCE_LENGTH).repeat((BATCH_SIZE, 1))
+    len_y = len_y.masked_fill((y == PAD), 0)
+
+    m = model.model
+
+    # forward pass
+    enc_output, *_ = m.encoder(x, len_x)
+    dec_output, *_ = m.decoder(y, len_y, x, enc_output)
+    y_hat = m.generator(dec_output) * m.x_logit_scale
+
+    y_hat: Float[Tensor, "batch_size*seq_length, vocab"] = y_hat.view(
+        -1, y_hat.size(-1)
+    )
+    y: Int[Tensor, "batch_size*vocab"] = y.view(-1)
+    _ = F.cross_entropy(y_hat, y, ignore_index=model.PAD, reduction="sum")
+
+
 def test_transformer_inference_separate_tokenizers(word_dataloader_separate):
     dataloader, src_tokenizer, tgt_tokenizer = word_dataloader_separate
     assert src_tokenizer.vocab_size != tgt_tokenizer.vocab_size

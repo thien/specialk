@@ -6,7 +6,9 @@ import lightning.pytorch as pl
 import torch
 import torch.nn as nn
 from jaxtyping import Int
+from peft import LoraConfig, TaskType, get_peft_model
 from torch import Tensor
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from specialk.core.utils import batch_texts, check_torch_device, log, namespace_to_dict
 from specialk.datasets.dataloaders import (
@@ -201,3 +203,98 @@ class CNNClassifier(TextClassifier):
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
         return torch.optim.Adam(self.model.parameters(), lr=0.02)
+
+
+class BERTClassifier(TextClassifier):
+    def __init__(
+        self,
+        name: str,
+        model_base_name: str = "bert-base-uncased",
+        peft_config: Optional[LoraConfig] = None,
+        vocabulary_size: Optional[int] = None,
+        sequence_length: Optional[int] = None,
+        tokenizer: Optional[Vocabulary] = None,
+    ):
+        """Uses Huggingface based BERT models."""
+        if tokenizer:
+            log.warn(
+                "You don't need to set a tokenizer, we're using HuggingFace's pre-trained models."
+            )
+        if vocabulary_size:
+            log.warn(
+                "You don't need to set a vocabulary size, we're using HuggingFace's pre-trained models."
+            )
+        super().__init__(
+            name=name,
+            vocabulary_size=vocabulary_size,
+            sequence_length=sequence_length,
+            tokenizer=tokenizer,
+        )
+        self.tokenizer = AutoTokenizer.from_pretrained(model_base_name)
+        model = AutoModelForSequenceClassification.from_pretrained(model_base_name)
+        self.sequence_length = model.bert.embeddings.position_embeddings.weight.shape[0]
+        if peft_config:
+            assert peft_config.task_type == TaskType.SEQ_CLS, (
+                "PeftConfig.task_type needs to be of type TaskType.SEQ_CLS."
+                f" (It's of {type(peft_config.task_type)})"
+            )
+            self.model = get_peft_model(model, peft_config)
+        else:
+            self.model = model
+
+    def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
+        """Run Training step.
+
+        Args:
+            batch (dict): individual batch generated from the DataLoader.
+            batch_idx (int): ID corresponding to the batch.
+
+        Returns:
+            torch.Tensor: Returns loss.
+        """
+        x, y = batch["text"], batch["label"]
+        batch_size, _ = x.size()
+
+        x_mask = x != self.tokenizer.pad_token_id
+        y_hat = self.model(x, attention_mask=x_mask, labels=y)
+
+        loss: torch.Tensor = y_hat.loss
+        accuracy = self.calculate_classification_metrics(y_hat.logits, y)
+
+        self.log_dict(
+            {"train_acc": accuracy, "batch_id": batch_idx, "train_loss": loss},
+            batch_size=batch_size,
+        )
+        return loss
+
+    def _shared_eval_step(
+        self, batch: dict, batch_idx: int
+    ) -> Tuple[torch.Tensor, float]:
+        """Run shared eval step.
+
+        Args:
+            batch (dict): individual batch generated from the DataLoader.
+            batch_idx (int): ID corresponding to the batch.
+
+        Returns:
+            Tuple[torch.Tensor, float]: Returns loss, accuracy.
+        """
+        x, y = batch["text"], batch["label"]
+
+        y_hat = self.model(x)
+
+        loss: torch.Tensor = y_hat.loss
+        accuracy = self.calculate_classification_metrics(y_hat.logits, y)
+        return loss, accuracy
+
+    def validation_step(self, batch: dict, batch_idx: int):
+        loss, acc = self._shared_eval_step(batch, batch_idx)
+        metrics = {"val_acc": acc, "val_loss": loss}
+        self.log_dict(metrics, batch_size=batch["text"].size(0))
+        return metrics
+
+    def test_step(self, batch: dict, batch_idx: int):
+        loss, acc = self._shared_eval_step(batch, batch_idx)
+        metrics = {"test_acc": acc, "test_loss": loss}
+        self.log_dict(metrics)
+        return metrics

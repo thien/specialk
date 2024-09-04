@@ -49,7 +49,7 @@ def word_tokenizer() -> WordVocabulary:
 
 
 @pytest.fixture(scope="session")
-def hf_tokenizer() -> HuggingFaceVocabulary:
+def hf_bert_tokenizer() -> HuggingFaceVocabulary:
     return HuggingFaceVocabulary(
         name="bert-base-uncased",
         pretrained_model_name_or_path="bert-base-uncased",
@@ -58,10 +58,34 @@ def hf_tokenizer() -> HuggingFaceVocabulary:
 
 
 @pytest.fixture(scope="session")
-def hf_dataloader(dataset: Dataset, hf_tokenizer: HuggingFaceVocabulary):
+def hf_distilbert_tokenizer() -> HuggingFaceVocabulary:
+    model_name = "distilbert/distilbert-base-cased"
+    return HuggingFaceVocabulary(
+        name=model_name,
+        pretrained_model_name_or_path=model_name,
+        max_length=512,
+    )
+
+
+@pytest.fixture(scope="session")
+def hf_bert_dataloader(dataset: Dataset, hf_bert_tokenizer: HuggingFaceVocabulary):
     def tokenize(example):
         # perform tokenization at this stage.
-        example["text"] = hf_tokenizer.to_tensor(example["text"])
+        example["text"] = hf_bert_tokenizer.to_tensor(example["text"])
+        return example
+
+    tokenized_dataset = dataset.with_format("torch").map(tokenize)
+    dataloader = DataLoader(tokenized_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    return dataloader
+
+
+@pytest.fixture(scope="session")
+def hf_distilbert_dataloader(
+    dataset: Dataset, hf_distilbert_tokenizer: HuggingFaceVocabulary
+):
+    def tokenize(example):
+        # perform tokenization at this stage.
+        example["text"] = hf_distilbert_tokenizer.to_tensor(example["text"])
         return example
 
     tokenized_dataset = dataset.with_format("torch").map(tokenize)

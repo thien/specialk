@@ -2,8 +2,9 @@ import lightning.pytorch as pl
 import pytest
 import torch
 from lightning.pytorch import Trainer
-from peft import LoraConfig
+from peft import LoraConfig, PeftModel
 from peft.utils.peft_types import TaskType
+from transformers import AutoModelForSequenceClassification
 
 from specialk.core.constants import PROJECT_DIR
 from specialk.core.utils import log
@@ -16,6 +17,14 @@ from tests.models.fixtures import hf_distilbert_tokenizer  # noqa: F401; noqa: F
 
 dirpath = "tests/tokenizer/test_files"
 
+import logging
+
+# supress bert renaming warnings (re. gamma, beta).
+# see https://github.com/huggingface/transformers/pull/31654
+loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict]
+for logger in loggers:
+    if "transformers" in logger.name.lower():
+        logger.setLevel(logging.ERROR)
 
 torch.manual_seed(1337)
 torch.use_deterministic_algorithms(True)
@@ -146,21 +155,67 @@ def test_save_load_distilbert_checkpoint(
 def test_save_load_peft_distilbert_checkpoint(
     hf_distilbert_dataloader, pretrained_peft_distilbert, tmp_path
 ):
-    checkpoint_path = PROJECT_DIR / "peft_distilbert_checkpoint.ckpt"
-    # checkpoint_path = tmp_path / "peft_distilbert_checkpoint.ckpt"
+    checkpoint_path = tmp_path / "peft_distilbert_checkpoint.ckpt"
     module = pretrained_peft_distilbert
 
-    trainer = Trainer(max_epochs=1, logger=False, limit_train_batches=1)
+    # Save initial state of PEFT parameters
+    initial_peft_state = {
+        name: param.clone()
+        for name, param in module.model.named_parameters()
+        if "lora_" in name
+    }
 
+    trainer = Trainer(max_epochs=1, logger=False, limit_train_batches=1)
     trainer.fit(module, train_dataloaders=hf_distilbert_dataloader)
 
-    # dump and load from checkpoint.
+    # Save checkpoint
     trainer.save_checkpoint(checkpoint_path)
+
+    # Load checkpoint
     ckpt_module = BERTClassifier.load_from_checkpoint(checkpoint_path)
 
-    for (name1, param1), (_, param2) in zip(
-        module.named_parameters(), ckpt_module.named_parameters()
-    ):
-        if not torch.allclose(param1, param2, rtol=1e-4, atol=1e-4):
-            log.error(f"Mismatch in parameter {name1}", original=param1, loaded=param2)
-            raise Exception
+    # Check PEFT weights
+    for name, param in ckpt_module.model.named_parameters():
+        if "lora_" in name:
+            if name not in initial_peft_state:
+                raise ValueError(
+                    f"Unexpected LoRA parameter {name} after loading checkpoint"
+                )
+            if not torch.allclose(
+                param, initial_peft_state[name], rtol=1e-4, atol=1e-4
+            ):
+                err_msg = f"LoRA parameter {name} changed unexpectedly after loading checkpoint"
+                log.error(err_msg, initial=initial_peft_state[name], ckpt=param)
+
+                raise ValueError(err_msg)
+
+
+def test_save_load_distilbert_checkpoint(
+    hf_distilbert_dataloader, pretrained_distilbert, tmp_path
+):
+    checkpoint_path = tmp_path / "distilbert_checkpoint.ckpt"
+
+    module = pretrained_distilbert
+
+    # Save initial state of PEFT parameters
+    trainer = Trainer(max_epochs=1, logger=False, limit_train_batches=1)
+    trainer.fit(module, train_dataloaders=hf_distilbert_dataloader)
+
+    # Save checkpoint
+    trainer.save_checkpoint(checkpoint_path)
+
+    # Load checkpoint
+    ckpt_module = BERTClassifier.load_from_checkpoint(checkpoint_path)
+
+    batch: dict = next(iter(hf_distilbert_dataloader))
+    x: torch.Tensor
+    y: torch.Tensor
+    x, y = batch["text"], batch["label"]
+
+    x = x.squeeze(2, 1)
+
+    x_mask = x != module.tokenizer.pad_token_id
+    log.info("input", x=x.shape)
+    y_old = module.model(x, attention_mask=x_mask, labels=y)
+    y_new = ckpt_module.model(x, attention_mask=x_mask, labels=y)
+    assert y_old == y_new

@@ -11,7 +11,7 @@ from specialk.datasets.preprocess import load_file
 from specialk.models.mt_model import NMTModule
 from specialk.models.tokenizer import (
     BPEVocabulary,
-    HuggingFaceTokenizer,
+    HuggingFaceVocabulary,
     SentencePieceVocabulary,
     WordVocabulary,
 )
@@ -129,7 +129,7 @@ def sentencepiece_tokenizer():
 
 @pytest.fixture(scope="session", autouse=True)
 def huggingface_tokenizer():
-    return HuggingFaceTokenizer(
+    return HuggingFaceVocabulary(
         name="bert-base-uncased",
         pretrained_model_name_or_path="bert-base-uncased",
         max_length=512,

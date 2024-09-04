@@ -740,13 +740,15 @@ class WordVocabulary(Vocabulary):
         return f"WordVocabulary(vocab_size={self.vocab_size}, max_length={self.max_length}, lower={self.lower})"
 
 
-class HuggingFaceTokenizer(Vocabulary):
+class HuggingFaceVocabulary(Vocabulary):
     def __init__(
         self, name: str, pretrained_model_name_or_path: str, max_length: int, **kwargs
     ):
         super().__init__(name=name, vocab_size=None, max_length=max_length, **kwargs)
         self.pretrained_model_name_or_path = pretrained_model_name_or_path
-        self.tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            pretrained_model_name_or_path, use_fast=False
+        )
         self.vocab_size = self.tokenizer.vocab_size
 
         # Map special tokens

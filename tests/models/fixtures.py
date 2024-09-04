@@ -10,7 +10,11 @@ from datasets import Dataset, load_dataset
 from datasets.exceptions import DatasetGenerationError
 from specialk.core.utils import log
 from specialk.models.classifier.onmt.CNNModels import ConvNet
-from specialk.models.tokenizer import BPEVocabulary, WordVocabulary
+from specialk.models.tokenizer import (
+    BPEVocabulary,
+    HuggingFaceVocabulary,
+    WordVocabulary,
+)
 from tests.tokenizer.test_tokenizer import VOCABULARY_SIZE
 
 dirpath = "tests/tokenizer/test_files"
@@ -42,6 +46,27 @@ def bpe_tokenizer() -> BPEVocabulary:
 @pytest.fixture(scope="session")
 def word_tokenizer() -> WordVocabulary:
     return WordVocabulary.from_file(Path(dirpath) / "word_tokenizer")
+
+
+@pytest.fixture(scope="session")
+def hf_tokenizer() -> HuggingFaceVocabulary:
+    return HuggingFaceVocabulary(
+        name="bert-base-uncased",
+        pretrained_model_name_or_path="bert-base-uncased",
+        max_length=512,
+    )
+
+
+@pytest.fixture(scope="session")
+def hf_dataloader(dataset: Dataset, hf_tokenizer: HuggingFaceVocabulary):
+    def tokenize(example):
+        # perform tokenization at this stage.
+        example["text"] = hf_tokenizer.to_tensor(example["text"])
+        return example
+
+    tokenized_dataset = dataset.with_format("torch").map(tokenize)
+    dataloader = DataLoader(tokenized_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    return dataloader
 
 
 @pytest.fixture(scope="session")

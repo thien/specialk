@@ -147,7 +147,7 @@ def main_new():
 
 
 def main_distilbert_peft():
-    BATCH_SIZE = 32 if DEVICE == "mps" else 48
+    BATCH_SIZE = 32 if DEVICE == "mps" else 32
     peft_config = LoraConfig(
         task_type=TaskType.SEQ_CLS,
         r=8,
@@ -170,6 +170,7 @@ def main_distilbert_peft():
     )
 
     hf_dataset_name = "thien/political"
+    hf_dataset_name = "thien/publications"
 
     dataset: Dataset = load_dataset(hf_dataset_name)
     dataset = dataset.class_encode_column("label")
@@ -181,7 +182,9 @@ def main_distilbert_peft():
         dataset["eval"], tokenizer, BATCH_SIZE, shuffle=False
     )
 
-    logger = TensorBoardLogger(LOGGING_DIR, name="pol_classifier/distilbert_peft")
+    project_name = f"{hf_dataset_name}/{task.name}"
+
+    logger = TensorBoardLogger(LOGGING_DIR, name=project_name)
     logger.log_hyperparams(
         params={
             "batch_size": BATCH_SIZE,

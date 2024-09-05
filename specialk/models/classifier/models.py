@@ -3,7 +3,7 @@ from __future__ import division
 import tempfile
 import warnings
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple
 
 import lightning.pytorch as pl
 import safetensors
@@ -20,17 +20,21 @@ from peft import (
 from torch import Tensor
 from transformers import AutoConfig, AutoModelForSequenceClassification, AutoTokenizer
 
+from specialk.core.constants import (
+    TEST_ACC,
+    TEST_LOSS,
+    TRAIN_ACC,
+    TRAIN_BATCH_ID,
+    TRAIN_LOSS,
+    VAL_ACC,
+    VAL_LOSS,
+)
 from specialk.core.utils import batch_texts, check_torch_device, log, namespace_to_dict
 from specialk.datasets.dataloaders import (
     init_classification_dataloaders as init_dataloaders,
 )
 from specialk.models.classifier.onmt.CNNModels import ConvNet
-from specialk.models.tokenizer import (
-    BPEVocabulary,
-    SentencePieceVocabulary,
-    Vocabulary,
-    WordVocabulary,
-)
+from specialk.models.tokenizer import Vocabulary
 
 warnings.filterwarnings("ignore", message="A parameter name that contains")
 
@@ -58,13 +62,13 @@ class TextClassifier(pl.LightningModule):
 
     def validation_step(self, batch: dict, batch_idx: int):
         loss, acc = self._shared_eval_step(batch, batch_idx)
-        metrics = {"val_acc": acc, "val_loss": loss}
+        metrics = {VAL_ACC: acc, VAL_LOSS: loss}
         self.log_dict(metrics, batch_size=batch["text"].size(0))
         return metrics
 
     def test_step(self, batch: dict, batch_idx: int):
         loss, acc = self._shared_eval_step(batch, batch_idx)
-        metrics = {"test_acc": acc, "test_loss": loss}
+        metrics = {TEST_ACC: acc, TEST_LOSS: loss}
         self.log_dict(metrics)
         return metrics
 
@@ -157,7 +161,7 @@ class CNNClassifier(TextClassifier):
         accuracy = self.calculate_classification_metrics(y_hat, y)
 
         self.log_dict(
-            {"train_acc": accuracy, "batch_id": batch_idx, "train_loss": loss},
+            {TRAIN_ACC: accuracy, TRAIN_BATCH_ID: batch_idx, TRAIN_LOSS: loss},
             batch_size=batch_size,
         )
         return loss
@@ -193,13 +197,13 @@ class CNNClassifier(TextClassifier):
 
     def validation_step(self, batch: dict, batch_idx: int):
         loss, acc = self._shared_eval_step(batch, batch_idx)
-        metrics = {"val_acc": acc, "val_loss": loss}
+        metrics = {VAL_ACC: acc, VAL_LOSS: loss}
         self.log_dict(metrics, batch_size=batch["text"].size(0))
         return metrics
 
     def test_step(self, batch: dict, batch_idx: int):
         loss, acc = self._shared_eval_step(batch, batch_idx)
-        metrics = {"test_acc": acc, "test_loss": loss}
+        metrics = {TEST_ACC: acc, TEST_LOSS: loss}
         self.log_dict(metrics)
         return metrics
 
@@ -292,7 +296,7 @@ class BERTClassifier(TextClassifier):
         accuracy = self.calculate_classification_metrics(y_hat.logits, y)
 
         self.log_dict(
-            {"train_acc": accuracy, "batch_id": batch_idx, "train_loss": loss},
+            {TRAIN_ACC: accuracy, TRAIN_BATCH_ID: batch_idx, TRAIN_LOSS: loss},
             batch_size=batch_size,
         )
         return loss
@@ -323,13 +327,13 @@ class BERTClassifier(TextClassifier):
 
     def validation_step(self, batch: dict, batch_idx: int):
         loss, acc = self._shared_eval_step(batch, batch_idx)
-        metrics = {"val_acc": acc, "val_loss": loss}
+        metrics = {VAL_ACC: acc, VAL_LOSS: loss}
         self.log_dict(metrics, batch_size=batch["text"].size(0))
         return metrics
 
     def test_step(self, batch: dict, batch_idx: int):
         loss, acc = self._shared_eval_step(batch, batch_idx)
-        metrics = {"test_acc": acc, "test_loss": loss}
+        metrics = {TEST_ACC: acc, TEST_LOSS: loss}
         self.log_dict(metrics)
         return metrics
 
@@ -342,6 +346,7 @@ class BERTClassifier(TextClassifier):
         peft_config = checkpoint["hyper_parameters"]["peft_config"]
         peft_state_dict = checkpoint["peft_state_dict"]
 
+        # TODO change this with a fake filesytem
         with tempfile.TemporaryDirectory() as temp_dir:
             # Save the modified config to the temp directory
             peft_config.save_pretrained(temp_dir)

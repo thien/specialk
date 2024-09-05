@@ -7,7 +7,7 @@ from typing import List
 
 import specialk
 
-SEED=1337
+SEED = 1337
 
 PAD = 0
 UNK = 1
@@ -45,3 +45,17 @@ PROJECT_DIR: Path = Path(specialk.__file__).parent.parent
 # for tensorboard; logging
 LOGGING_DIR: Path = PROJECT_DIR / "tb_logs"
 LOGGING_PERF_NAME: str = "perf_logs"
+
+# labels for logging
+TRAIN_BATCH_ID = "train_batch_id"
+VAL_BATCH_ID = "eval_batch_id"
+TRAIN_ACC = "train_acc"
+VAL_ACC = "eval_acc"
+TEST_ACC = "test_acc"
+TRAIN_LOSS = "train_loss"
+VAL_LOSS = "eval_loss"
+TEST_LOSS = "test_loss"
+TRAIN_PPLX = "train_perplexity"
+VAL_PPLX = "eval_perplexity"
+VAL_BLEU = "eval_bleu"
+TEACHER_FORCING_RATIO = "teacher_forcing_ratio"

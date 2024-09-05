@@ -13,7 +13,23 @@ from jaxtyping import Float, Int
 from schedulefree import AdamWScheduleFree
 from torch import Tensor
 
-from specialk.core.constants import PAD, SOURCE, TARGET
+from specialk.core.constants import (
+    PAD,
+    SOURCE,
+    TARGET,
+    TEACHER_FORCING_RATIO,
+    TEST_ACC,
+    TEST_LOSS,
+    TRAIN_ACC,
+    TRAIN_BATCH_ID,
+    TRAIN_LOSS,
+    TRAIN_PPLX,
+    VAL_ACC,
+    VAL_BATCH_ID,
+    VAL_BLEU,
+    VAL_LOSS,
+    VAL_PPLX,
+)
 from specialk.core.utils import log
 from specialk.metrics.metrics import SacreBLEU
 from specialk.models.ops import mask_out_special_tokens
@@ -113,12 +129,12 @@ class NMTModule(pl.LightningModule):
         accuracy = n_tokens_correct / n_tokens_total
         perplexity = self.calculate_perplexity(y_hat, y)
 
-        self.log("train_loss", loss, prog_bar=True, batch_size=batch_size)
+        self.log(TRAIN_LOSS, loss, prog_bar=True, batch_size=batch_size)
         self.log_dict(
             {
-                "train_acc": accuracy,
-                "train_batch_id": batch_idx,
-                "train_perplexity": perplexity,
+                TRAIN_ACC: accuracy,
+                TRAIN_BATCH_ID: batch_idx,
+                TRAIN_PPLX: perplexity,
             },
             batch_size=batch_size,
         )
@@ -148,13 +164,13 @@ class NMTModule(pl.LightningModule):
         perplexity = self.calculate_perplexity(y_hat, y)
 
         metric_dict = {
-            "eval_acc": accuracy,
-            "eval_batch_id": batch_idx,
-            "eval_loss": loss,
-            "eval_perplexity": perplexity,
+            VAL_ACC: accuracy,
+            VAL_BATCH_ID: batch_idx,
+            VAL_LOSS: loss,
+            VAL_PPLX: perplexity,
         }
         if self.decoder_tokenizer is not None:
-            metric_dict["eval_bleu"] = self.validation_bleu(y_hat, y)
+            metric_dict[VAL_BLEU] = self.validation_bleu(y_hat, y)
 
         self.log_dict(
             metric_dict,
@@ -191,7 +207,7 @@ class NMTModule(pl.LightningModule):
 
     def test_step(self, batch: dict, batch_idx: int):
         loss, acc = self._shared_eval_step(batch, batch_idx)
-        metrics = {"test_acc": acc, "test_loss": loss}
+        metrics = {TEST_ACC: acc, TEST_LOSS: loss}
         self.log_dict(metrics, batch_size=batch[SOURCE].size(0))
         return metrics
 
@@ -412,12 +428,12 @@ class RNNModule(NMTModule):
 
             self.model.decoder.teacher_forcing_ratio = ratio
             # you can observe this in tensorboard.scalars
-            self.log("teacher_forcing_ratio", ratio)
+            self.log(TEACHER_FORCING_RATIO, ratio)
 
     def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
         loss = super().training_step(batch, batch_idx)
         self.log_dict(
-            {"teacher_forcing_ratio": self.model.decoder.teacher_forcing_ratio},
+            {TEACHER_FORCING_RATIO: self.model.decoder.teacher_forcing_ratio},
             batch_size=batch[SOURCE].size(0),
         )
         return loss

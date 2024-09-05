@@ -280,7 +280,8 @@ class BERTClassifier(TextClassifier):
         """
         x, y = batch["text"], batch["label"]
 
-        x = x.squeeze(2, 1)
+        if x.dim() == 3:
+            x = x.squeeze(2, 1)
 
         batch_size, _ = x.size()
 
@@ -310,7 +311,11 @@ class BERTClassifier(TextClassifier):
         """
         x, y = batch["text"], batch["label"]
 
-        y_hat = self.model(x)
+        if x.dim() == 3:
+            x = x.squeeze(2, 1)
+
+        x_mask = x != self.tokenizer.pad_token_id
+        y_hat = self.model(x, attention_mask=x_mask, labels=y)
 
         loss: torch.Tensor = y_hat.loss
         accuracy = self.calculate_classification_metrics(y_hat.logits, y)

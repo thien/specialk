@@ -147,7 +147,7 @@ def main_new():
 
 
 def main_distilbert_peft():
-    BATCH_SIZE = 32 if DEVICE == "mps" else 64
+    BATCH_SIZE = 32 if DEVICE == "mps" else 48
     peft_config = LoraConfig(
         task_type=TaskType.SEQ_CLS,
         r=8,
@@ -191,6 +191,7 @@ def main_distilbert_peft():
             "tokenizer_path": None,
         }
     )
+    REVIEW_RATE = len(train_dataloader) // 32  # for debugging purposes.
 
     profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
     trainer = pl.Trainer(
@@ -199,6 +200,10 @@ def main_distilbert_peft():
         log_every_n_steps=20,
         logger=logger,
         profiler=profiler,
+        precision="16-mixed",
+        val_check_interval=REVIEW_RATE,
+        gradient_clip_val=0.5,
+        gradient_clip_algorithm="norm",
     )
 
     trainer.fit(

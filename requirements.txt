@@ -3,6 +3,8 @@
 -e file:///Users/t/Projects/specialk
 absl-py==0.7.0
     # via rouge-score
+accelerate==0.34.0
+    # via peft
 aiohttp==3.9.5
     # via
     #   datasets
@@ -66,10 +68,14 @@ confection==0.1.5
     # via
     #   thinc
     #   weasel
+contourpy==1.2.1
+    # via matplotlib
 crashtest==0.4.1
     # via
     #   cleo
     #   poetry
+cycler==0.12.1
+    # via matplotlib
 cymem==2.0.8
     # via
     #   preshed
@@ -117,6 +123,8 @@ filelock==3.13.1
     #   torch
     #   transformers
     #   virtualenv
+fonttools==4.53.1
+    # via matplotlib
 frozenlist==1.4.1
     # via
     #   aiohttp
@@ -133,8 +141,10 @@ ftfy==6.2.3
 gensim==4.3.2
 huggingface-hub==0.23.4
     # via
+    #   accelerate
     #   datasets
     #   evaluate
+    #   peft
     #   tokenizers
     #   transformers
 hydra-core==1.0.7
@@ -149,6 +159,8 @@ importlib-metadata==7.2.1
     #   jupyter-client
     #   keyring
     #   poetry
+importlib-resources==6.4.4
+    # via matplotlib
 iniconfig==2.0.0
     # via pytest
 installer==0.7.0
@@ -184,6 +196,8 @@ jupyterlab-widgets==3.0.11
     # via ipywidgets
 keyring==24.3.1
     # via poetry
+kiwisolver==1.4.5
+    # via matplotlib
 langcodes==3.4.0
     # via spacy
 language-data==1.2.0
@@ -202,6 +216,7 @@ markdown-it-py==3.0.0
     # via rich
 markupsafe==2.1.5
     # via jinja2
+matplotlib==3.9.2
 matplotlib-inline==0.1.7
     # via
     #   ipykernel
@@ -236,15 +251,19 @@ nltk==3.8.1
     # via rouge-score
 numpy==1.26.4
     # via
+    #   accelerate
     #   bayesian-optimization
     #   blis
+    #   contourpy
     #   datasets
     #   evaluate
     #   fairseq
     #   fasttext
     #   gensim
     #   lightning
+    #   matplotlib
     #   pandas
+    #   peft
     #   pot
     #   pyarrow
     #   pyemd
@@ -266,6 +285,7 @@ omegaconf==2.0.6
     #   hydra-core
 packaging==24.1
     # via
+    #   accelerate
     #   build
     #   datasets
     #   evaluate
@@ -273,6 +293,8 @@ packaging==24.1
     #   ipykernel
     #   lightning
     #   lightning-utilities
+    #   matplotlib
+    #   peft
     #   poetry
     #   pytest
     #   pytorch-lightning
@@ -290,12 +312,15 @@ pandas==2.2.2
     #   pandarallel
 parso==0.8.4
     # via jedi
+peft==0.12.0
 pexpect==4.9.0
     # via
     #   ipython
     #   poetry
 pillow==10.2.0
-    # via torchvision
+    # via
+    #   matplotlib
+    #   torchvision
 pip==21.2.3
 pkginfo==1.11.1
     # via poetry
@@ -328,9 +353,11 @@ protobuf==5.27.1
     # via tensorboardx
 psutil==6.0.0
     # via
+    #   accelerate
     #   ipykernel
     #   memory-profiler
     #   pandarallel
+    #   peft
 ptyprocess==0.7.0
     # via pexpect
 pure-eval==0.2.2
@@ -352,10 +379,13 @@ pydantic==2.8.2
 pydantic-core==2.20.1
     # via pydantic
 pyemd==1.0.0
+pyfakefs==5.6.0
 pygments==2.18.0
     # via
     #   ipython
     #   rich
+pyparsing==3.1.2
+    # via matplotlib
 pyproject-hooks==1.1.0
     # via
     #   build
@@ -368,6 +398,7 @@ pytest-watch==4.2.0
 python-dateutil==2.9.0.post0
     # via
     #   jupyter-client
+    #   matplotlib
     #   pandas
 pytorch-lightning==2.3.1
     # via lightning
@@ -375,10 +406,12 @@ pytz==2024.1
     # via pandas
 pyyaml==6.0.1
     # via
+    #   accelerate
     #   datasets
     #   huggingface-hub
     #   lightning
     #   omegaconf
+    #   peft
     #   pytorch-lightning
     #   transformers
 pyzmq==26.0.3
@@ -418,7 +451,10 @@ sacrebleu==2.4.2
     # via fairseq
 sacremoses==0.1.1
 safetensors==0.4.3
-    # via transformers
+    # via
+    #   accelerate
+    #   peft
+    #   transformers
 schedulefree==1.2.7
 scikit-learn==1.5.0
     # via bayesian-optimization
@@ -491,8 +527,10 @@ tomlkit==0.12.5
 toolz==0.12.1
 torch==2.3.1
     # via
+    #   accelerate
     #   fairseq
     #   lightning
+    #   peft
     #   pytorch-lightning
     #   torchaudio
     #   torchdata
@@ -520,6 +558,7 @@ tqdm==4.66.4
     #   huggingface-hub
     #   lightning
     #   nltk
+    #   peft
     #   pytorch-lightning
     #   sacremoses
     #   spacy
@@ -535,6 +574,7 @@ traitlets==5.14.3
     #   jupyter-core
     #   matplotlib-inline
 transformers==4.43.3
+    # via peft
 trove-classifiers==2024.5.22
     # via poetry
 typeguard==2.13.3
@@ -591,4 +631,6 @@ xxhash==3.4.1
 yarl==1.9.4
     # via aiohttp
 zipp==3.19.2
-    # via importlib-metadata
+    # via
+    #   importlib-metadata
+    #   importlib-resources

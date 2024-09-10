@@ -21,8 +21,8 @@ class LanguageModelSampler:
 
     def __init__(
         self,
-        model: NMTModule,
-        src_tokenizer: Vocabulary,
+        model: Optional[NMTModule] = None,
+        src_tokenizer: Optional[Vocabulary] = None,
         tgt_tokenizer: Optional[Vocabulary] = None,
         device: Optional[str] = "cpu",
     ):
@@ -200,7 +200,6 @@ class LanguageModelSampler:
         """
 
         assert num_return_sequences <= num_beams
-        self.model.eval()
         tokens = self.tokenizer.to_tensor(prompt).to(self.device)
 
         # keep track of final beams; early terminations.
@@ -218,7 +217,7 @@ class LanguageModelSampler:
             best_beam = best_beam.generate(
                 num_beams, no_repeat_ngram_size=no_repeat_ngram_size
             )
-            best_beam, early_terminated_beams = best_beam.filter(num_beams)
+            best_beams, early_terminated_beams = best_beam.filter(num_beams)
 
             beam_results.extend(early_terminated_beams.logprobs_and_completions)
 
@@ -235,172 +234,3 @@ class LanguageModelSampler:
         beam_results.extend(best_beams.logprobs_and_completions)
         beam_results = beam_results[:num_return_sequences]
         return beam_results
-
-    @torch.inference_mode()
-    def sample(
-        self,
-        input: str,
-        max_len=50,
-        start_symbol: int = constants.SOS,
-        **kwargs,
-    ):
-        """
-        Returns a string of autoregressively generated text from the decoder.
-
-        Sampling terminates at max_tokens_generated, or when the model generates an
-        end-of-sequence token.
-
-        kwargs are passed to sample_next_token, to give detailed instructions on how
-        new tokens are chosen.
-
-        args:
-            input_tokens (Int[Tensor, "batch_size seq_length"]): input sequence to
-                send to the MT model.
-            max_len (int): maximum length of generated sequence.
-        """
-        input_tokens: Int[Tensor, "batch seq_len"]
-        input_tokens = self.src_tokenizer.to_tensor(input).to(self.device)
-        batch_size, x_length = input_tokens.shape
-
-        # setup y output values.
-        y_hat = torch.full(
-            (batch_size, max_len), constants.PAD, dtype=torch.long, device=self.device
-        )
-        y_hat[:, 0] = start_symbol
-
-        # create encoder values
-        x_mask = torch.zeros((x_length, x_length), device=self.device, dtype=torch.bool)
-        x_pad_mask = self.model.create_pad_mask(input_tokens)
-        x_emb = self.model.pos_encoder(
-            self.model.input_emb(input_tokens) * np.sqrt(self.model.dim_model)
-        )
-        memory = self.model.encoder(x_emb, mask=x_mask, src_key_padding_mask=x_pad_mask)
-
-        for i in range(1, max_len):
-            # prepare decoder output to feed into the model.
-            y = y_hat[:, :i]
-            y_mask = self.model.generate_square_subsequent_mask(i)
-            y_padding_mask = self.model.create_pad_mask(y)
-            y_emb = self.model.pos_encoder(
-                self.model.output_emb(y) * np.sqrt(self.model.dim_model)
-            )
-
-            out = self.model.decoder(
-                tgt=y_emb,
-                memory=memory,
-                tgt_mask=y_mask,
-                tgt_key_padding_mask=y_padding_mask,
-                memory_key_padding_mask=x_pad_mask,
-                tgt_is_causal=True,
-            )
-            logits: Float[Tensor, "seq_len d_vocab"]
-            logits = torch.nn.functional.log_softmax(
-                self.model.generator(out[:, -1]), dim=-1
-            )
-
-            # TODO make this only 1D, but support batches later.
-            logits = logits.squeeze(0)
-            _y_hat = y_hat.squeeze(0)
-            next_token: Tensor = self.sample_next_token(_y_hat, logits, **kwargs)
-            next_token = Tensor([next_token]).to(self.device).long()
-            next_token = next_token.unsqueeze(0)
-
-            y_hat[:, i] = next_token[:, 0]
-            if next_token == self.tgt_tokenizer.EOS:
-                break
-
-        # convert tokens back into strings.
-        return self.tgt_tokenizer.detokenize(y_hat, specials=False)
-
-
-class EncoderDecoderSampler(LanguageModelSampler):
-    """Operations to perform text sampling from an encoder/decoder model."""
-
-    def __init__(
-        self,
-        model: NMTModule,
-        src_tokenizer: Vocabulary,
-        tgt_tokenizer: Optional[Vocabulary] = None,
-        device: Optional[str] = "cpu",
-    ):
-        self.model = model
-        self.src_tokenizer = src_tokenizer
-        self.tgt_tokenizer = tgt_tokenizer if tgt_tokenizer else src_tokenizer
-        self.device = device
-
-    @torch.inference_mode()
-    def sample(
-        self,
-        input: Union[str, List[str]],
-        max_len=50,
-        start_symbol: int = constants.SOS,
-        **kwargs,
-    ):
-        """
-        Returns a string of autoregressively generated text from the decoder.
-
-        Sampling terminates at max_tokens_generated, or when the model generates an
-        end-of-sequence token.
-
-        kwargs are passed to sample_next_token, to give detailed instructions on how
-        new tokens are chosen.
-
-        args:
-            input_tokens (Int[Tensor, "batch_size seq_length"]): input sequence
-                to send to the MT model.
-            max_len (int): maximum length of generated sequence.
-        """
-        input_tokens: Int[Tensor, "batch seq_len"]
-        input_tokens = self.src_tokenizer.to_tensor(input).to(self.device)
-
-        batch_size, _ = input_tokens.shape
-        logits: Float[Tensor, "seq_len d_vocab"]
-
-        # setup y output values.
-        y_hat = torch.full(
-            (batch_size, max_len), constants.PAD, dtype=torch.long, device=self.device
-        )
-        y_hat[:, 0] = start_symbol
-
-        # Track which sequences have finished
-        y_completed = torch.zeros(batch_size, dtype=torch.bool, device=self.device)
-
-        memory, x_pad_mask = self.model.encode(input_tokens)
-
-        for i in range(1, max_len):
-            # prepare decoder output to feed into the model.
-            y = y_hat[:, :i]
-            y_mask = self.model.generate_square_subsequent_mask(i)
-            y_padding_mask = self.model.create_pad_mask(y)
-            y_emb = self.model.pos_encoder(
-                self.model.output_emb(y) * np.sqrt(self.model.dim_model)
-            )
-
-            out = self.model.decoder(
-                tgt=y_emb,
-                memory=memory,
-                tgt_mask=y_mask,
-                tgt_key_padding_mask=y_padding_mask,
-                memory_key_padding_mask=x_pad_mask,
-                tgt_is_causal=True,
-            )
-            logits = torch.nn.functional.log_softmax(
-                self.model.generator(out[:, -1]), dim=-1
-            )
-
-            # Sample next tokens for all unfinished sequences.
-            next_tokens = torch.where(
-                y_completed,
-                constants.PAD,
-                self.sample_next_token(y_hat, logits, **kwargs),
-            )
-            y_hat[:, i] = next_tokens
-
-            # damn, look at that bitwise or!
-            y_completed |= next_tokens == self.tgt_tokenizer.EOS
-
-            if y_completed.all():
-                break
-
-        # convert tokens back into strings.
-        return self.tgt_tokenizer.detokenize(y_hat, specials=False)

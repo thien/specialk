@@ -1,7 +1,8 @@
-from __future__ import division
+from __future__ import annotations, division
 
 import math
 from argparse import Namespace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
@@ -32,6 +33,7 @@ from specialk.core.constants import (
 )
 from specialk.core.utils import log
 from specialk.metrics.metrics import SacreBLEU
+from specialk.models.generators.beam import Beam
 from specialk.models.ops import mask_out_special_tokens
 from specialk.models.recurrent.models import Decoder as RNNDecoder
 from specialk.models.recurrent.models import Encoder as RNNEncoder
@@ -45,6 +47,23 @@ from specialk.models.transformer.legacy.Models import (
 from specialk.models.transformer.legacy.Optim import ScheduledOptim
 
 bleu = SacreBLEU()
+
+
+@dataclass
+class EncoderDecoderBeam(Beam["NMTModule"]):
+    memory: Tensor
+
+    def new_beams(self, logprob_sums: Tensor, tokens: Tensor) -> EncoderDecoderBeam:
+        """Creates a new EncoderDecoderBeam object with the
+        same model, tokenizer, and encoder_output."""
+        return EncoderDecoderBeam(
+            self.model, self.tokenizer, logprob_sums, tokens, self.memory
+        )
+
+    @torch.inference_mode()
+    def get_logits(self) -> Tensor:
+        logits = self.model.decoder(self.tokens, encoder_output=self.memory)[:, -1, :]
+        return logits.log_softmax(-1)
 
 
 class NMTModule(pl.LightningModule):
@@ -303,10 +322,22 @@ class NMTModule(pl.LightningModule):
         return torch.optim.AdamW(self.model.parameters(), lr=self.learning_rate)
 
     @torch.inference_mode()
-    def generate(self, text: Union[str, List[str]], **kwargs) -> torch.Tensor:
+    def generate(
+        self,
+        input_text: Optional[Union[str, List[str]]],
+        output_text: Optional[Union[str, List[str]]],
+        input_tokens: Optional[Int[Tensor, "batch seq_len"]],
+        output_tokens: Optional[Int[Tensor, "batch seq_len"]],
+        **kwargs,
+    ) -> Float[torch.Tensor, "batch d_vocab"]:
         """
-        Generate tokens using decoder strategies, such as greedy,
-        beam search, top-k, nucleus sampling.
+        Generate next tokens in the sequence, given text and output.
+
+        Args:
+            input_text (Union[str, List[str]]): Input token sequence to.
+
+        Note:
+            Put either input_text or input_tokens. This is the same as output_text or output_tokens.
         """
         raise NotImplementedError
 

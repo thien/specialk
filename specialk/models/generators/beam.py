@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import Generic, List, Optional, Tuple, TypeVar
 
 import einops
 import torch
@@ -9,23 +9,33 @@ from jaxtyping import Float, Int
 from rich import print as rprint
 from rich.table import Table
 from torch import Tensor
-from tqdm import tqdm
 
-from specialk.core import log
-from specialk.models.mt_model import NMTModule
 from specialk.models.tokenizer import Vocabulary
+
+T = TypeVar("T")
 
 
 @dataclass
-class Beam:
-    """Class to store beams during beam search."""
+class Beam(Generic[T]):
+    """Class to store Beams for Beam Search.
 
-    model: NMTModule
+    More detailed explanation of the class, its purpose,
+    and any important information about its usage.
+
+    Attributes:
+        model (type): Description of field1.
+        tokenizer (type): Description of field2.
+        logprob_sums (type): Description of field2.
+        tokens (type): Description of field2.
+        ...
+    """
+
+    model: T
     tokenizer: Vocabulary
-    logprob_sums: Float[Tensor, "batch"]  # each item corresponds to index 0 of tokens.
+    logprob_sums: Float[Tensor, "batch"]
     tokens: Int[Tensor, "batch seq"]
 
-    def new_beams(self, logprob_sums, tokens) -> Beam:
+    def new_beams(self, logprob_sums: Tensor, tokens: Tensor) -> Beam:
         """Creates a new Beam object with the same model and tokenizer."""
         return Beam(self.model, self.tokenizer, logprob_sums, tokens)
 
@@ -34,101 +44,92 @@ class Beam:
         return self.new_beams(self.logprob_sums[idx], self.tokens[idx])
 
     @property
-    def logprobs_and_completions(self) -> List[Tuple[float, str]]:
-        """Returns self as a list of logprob sums and completions (useful for getting final output)."""
+    def logprobs_and_completions(self) -> List[Tuple[float, List[str]]]:
+        """Returns self as a list of logprob sums and completions."""
         return [
-            (logprob_sum.item(), self.tokenizer.decode(tokens))
+            (logprob_sum.item(), self.tokenizer.detokenize(tokens))
+            for (logprob_sum, tokens) in zip(self.logprob_sums, self.tokens)
+        ]
+
+    @property
+    def logprobs_and_tensors(self) -> List[Tuple[float, Tensor]]:
+        """Returns self as a list of logprob sums and tensors. The tensors
+        will require detokeniisation."""
+        return [
+            (logprob_sum.item(), tokens)
             for (logprob_sum, tokens) in zip(self.logprob_sums, self.tokens)
         ]
 
     def generate(
-        self, toks_per_beam: int, no_repeat_ngram_size: Optional[int] = None
+        self, tokens_per_beam: int, no_repeat_ngram_size: Optional[int] = None
     ) -> Beam:
-        """
-        Arguments:
-            toks_per_beam: beam size.
-            no_repeat_ngram_size (int, Optional): if set, determines n-gram for duplication killing.
-        Returns:
-            Beam: Beam of next tokens with the new tokens.
+        """Generate next set of beams."""
+        log_logits = self.get_logits()
 
-        Starting from the current set of beams (which has length `num_beams`),
-        returns a new set of `num_beams * toks_per_beam`, containing the best
-        `toks_per_beam` continuations for each of the original beams.
-
-        Optional argument `no_repeat_ngram_size` means your model won't generate
-        any sequences with a repeating n-gram of this length.
-        """
-        logits: Float[Tensor, "seq_len d_vocab"]
-
-        # generate dist of next tokens.
-        with torch.no_grad():
-            logits = self.model(self.tokens)[:, -1, :]
-            log_logits = logits.log_softmax(-1)
-
-        # sample top-k.
-        topk_log_probs: Float[Tensor, "batch toks_per_beam"]
-        topk_token_idx: Int[Tensor, "batch toks_per_beam"]
         topk_log_probs, topk_token_idx = self.get_topk_non_repeating(
-            log_logits, no_repeat_ngram_size, k=toks_per_beam
+            log_logits, no_repeat_ngram_size, k=tokens_per_beam
         )
 
-        # Calculate new log probabilities.
-        # Below, we increase the size of logprob_sums by logprob_sums*toks_per_beam.
-        # so we need to add the generated log prob to each item.
-        new_logprob_sums = sum(
-            [
-                einops.repeat(self.logprob_sums, "batch -> (batch k)", k=toks_per_beam),
-                einops.rearrange(topk_log_probs, "batch k -> (batch k)"),
-            ]
+        new_logprob_sums = self._calculate_new_logprob_sums(
+            topk_log_probs, tokens_per_beam
         )
+        new_tokens = self._generate_new_tokens(topk_token_idx, tokens_per_beam)
 
-        new_tokens = torch.concat(
+        return self.new_beams(new_logprob_sums, new_tokens)
+
+    def _calculate_new_logprob_sums(
+        self, topk_log_probs: Tensor, tokens_per_beam: int
+    ) -> Tensor:
+        """Repeats the logprob_sums down the batch dimension."""
+        return einops.repeat(
+            self.logprob_sums, "batch -> (batch k)", k=tokens_per_beam
+        ) + einops.rearrange(topk_log_probs, "batch k -> (batch k)")
+
+    def _generate_new_tokens(
+        self, topk_token_idx: Tensor, tokens_per_beam: int
+    ) -> Tensor:
+        return torch.cat(
             [
                 einops.repeat(
-                    self.tokens, "batch seq -> (batch k) seq", k=toks_per_beam
+                    self.tokens, "batch seq -> (batch k) seq", k=tokens_per_beam
                 ),
                 einops.rearrange(topk_token_idx, "batch k -> (batch k) 1"),
             ],
             dim=-1,
         ).long()
 
-        return self.new_beams(new_logprob_sums, new_tokens)
-
-    def filter(self, num_beams: int) -> Tuple["Beam", "Beam"]:
-        """
-        Returns:
-            best_beams: Beam
-                filtered version of self, containing all best `num_beams` which are
-                also not terminated.
-
-            early_terminations: Beam
-                filtered version of self, containing all best `num_beams` which are
-                also terminated. i.e. the sum of lengths of these two should equal
-                `num_beams`.
-        """
-        # early termination is caused by predicting the EOS token.
-        EOS: int = self.tokenizer.eos_token_id
-        # split self.tokens based on whether EOS is predicted or notorch.
-        idx_terminated = (self.tokens == EOS).any(dim=-1)
-        return self[~idx_terminated], self[idx_terminated]
-
-    def print(self, title="Best completions", max_print_chars=80) -> None:
-        """
-        Prints out a set of sequences with their corresponding logitsums.
-        """
+    def print(self, title: str = "Best completions", max_print_chars: int = 80) -> None:
+        """Prints out a set of sequences with their corresponding logit sums."""
         if len(self.tokens) == 0:
             return
         table = Table("logitsum", "completion", title=title)
         for logprob_sum, tokens in zip(self.logprob_sums, self.tokens):
-            text = self.tokenizer.decode(tokens)
+            text = self.tokenizer.detokenize(tokens)
             if len(repr(text)) > max_print_chars:
-                text = (
-                    text[: int(0.3 * max_print_chars)]
-                    + " ... "
-                    + text[-int(0.7 * max_print_chars) :]
-                )
+                text = f"{text[:int(0.3 * max_print_chars)]} ... {text[-int(0.7 * max_print_chars):]}"
             table.add_row(f"{logprob_sum:>8.3f}", repr(text))
         rprint(table)
+
+    def filter(self, num_beams: int) -> Tuple[Beam, Beam]:
+        """Filter beams based on termination condition.
+
+        Returns:
+            (Beam): filtered version of self, containing all best `num_beams`
+                which are also not terminated.
+            (Beam): filtered version of self, containing all best `num_beams`
+                which are also terminated.
+                i.e. the sum of lengths of these two should equal `num_beams`.
+        """
+        top_beam_indices = self.logprob_sums.topk(k=num_beams, dim=0).indices
+        is_terminated = (self.tokens == self.tokenizer.EOS).any(dim=-1)
+
+        top_beam_mask = torch.zeros_like(is_terminated, dtype=torch.bool)
+        top_beam_mask[top_beam_indices] = True
+
+        best_continuing_mask = top_beam_mask & ~is_terminated
+        best_terminated_mask = top_beam_mask & is_terminated
+
+        return self[best_continuing_mask], self[best_terminated_mask]
 
     def get_topk_non_repeating(
         self,
@@ -136,49 +137,30 @@ class Beam:
         no_repeat_ngram_size: Optional[int],
         k: int,
     ) -> Tuple[Float[Tensor, "k"], Int[Tensor, "k"]]:
-        """
-        logprobs:
-            tensor of the log-probs for the next token
-        no_repeat_ngram_size:
-            size of ngram to avoid repeating
-        k:
-            number of top logits to return, for each beam in our collection
+        """Get top-k logprobs ensuring no ngram repetitions."""
+        if (
+            no_repeat_ngram_size is None
+            or self.tokens.shape[1] <= no_repeat_ngram_size - 1
+        ):
+            return logprobs.topk(k=k, dim=-1)
 
-        Returns:
-            equivalent to the output of `logprobs.topk(dim=-1)`, but makes sure
-            that no returned tokens would produce an ngram of size  `no_repeat_ngram_size`
-            which has already appeared in `self.tokens`.
-        """
         batch, seq_len = self.tokens.shape
-        neg_inf = torch.tensor(-1.0e4).to(logprobs.device)
+        neg_inf = torch.tensor(-1.0e4, device=logprobs.device)
 
-        # If completion isn't long enough for a repetition, or we have no restructions, just return topk
-        if (no_repeat_ngram_size is not None) and (seq_len > no_repeat_ngram_size - 1):
-            # Otherwise, we need to check for ngram repetitions
-            # First, get the most recent `no_repeat_ngram_size-1` tokens
-            last_ngram_prefix = self.tokens[:, seq_len - (no_repeat_ngram_size - 1) :]
-            # Next, find all the tokens we're not allowed to generate (by going iterating through past
-            # ngrams and seeing if those ngram prefixes match the last one)
-            for i in range(seq_len - (no_repeat_ngram_size - 1)):
-                ngrams = self.tokens[:, i : i + no_repeat_ngram_size]  # (batch, ngram)
-                ngrams_are_repeated = (ngrams[:, :-1] == last_ngram_prefix).all(
-                    -1
-                )  # (batch,)
-                ngram_end_tokens = ngrams[:, [-1]]  # (batch, 1)
-                # Fill logprobs with neginf wherever the ngrams are repeated
-                logprobs[range(batch), ngram_end_tokens] = torch.where(
-                    ngrams_are_repeated,
-                    neg_inf,
-                    logprobs[range(batch), ngram_end_tokens],
-                )
+        last_ngram_prefix = self.tokens[:, seq_len - (no_repeat_ngram_size - 1) :]
+        for i in range(seq_len - (no_repeat_ngram_size - 1)):
+            ngrams = self.tokens[:, i : i + no_repeat_ngram_size]
+            ngrams_are_repeated = (ngrams[:, :-1] == last_ngram_prefix).all(-1)
+            ngram_end_tokens = ngrams[:, [-1]]
+            logprobs[range(batch), ngram_end_tokens] = torch.where(
+                ngrams_are_repeated,
+                neg_inf,
+                logprobs[range(batch), ngram_end_tokens],
+            )
 
-        # Finally, get our actual tokens
         return logprobs.topk(k=k, dim=-1)
 
-    def __repr__(self) -> str:
-        return (
-            f"Beam(model={self.model.__class__.__name__}, "
-            f"tokenizer={self.tokenizer.__class__.__name__}, "
-            f"logprob_sums={self.logprob_sums.shape}, "
-            f"tokens={self.tokens.shape})"
-        )
+    @torch.inference_mode()
+    def get_logits(self) -> Tensor:
+        """This method should be implemented by subclasses."""
+        raise NotImplementedError

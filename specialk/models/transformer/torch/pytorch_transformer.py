@@ -139,10 +139,6 @@ class TransformerEncoderDecoderBeam(EncoderDecoderBeam):
     memory: Tensor
     x_pad_mask: Tensor
 
-    @property
-    def num_beams(self) -> int:
-        return self.logprob_sums.size(0)
-
     def new(
         self,
         logprob_sums: Float[Tensor, "batch"],
@@ -162,7 +158,7 @@ class TransformerEncoderDecoderBeam(EncoderDecoderBeam):
         )
 
     @torch.inference_mode()
-    def get_logits(self) -> Tensor:
+    def get_logits(self) -> Float[Tensor, "batch vocab"]:
         logits = self.model.decode(
             self.tokens,
             tgt_mask=None,
@@ -175,20 +171,6 @@ class TransformerEncoderDecoderBeam(EncoderDecoderBeam):
         )
         return logits
 
-    def expand_encoder_outputs(self, tokens_per_beam: int) -> Tensor:
-        return einops.repeat(
-            self.memory,
-            "batch enc_seq hidden -> (batch beam) enc_seq hidden",
-            beam=tokens_per_beam,
-        )
-
-    def expand_x_pad_masks(self, tokens_per_beam: int) -> Tensor:
-        return einops.repeat(
-            self.x_pad_mask,
-            "batch enc_seq -> (batch beam) enc_seq",
-            beam=tokens_per_beam,
-        )
-
     def __getitem__(self, idx) -> TransformerEncoderDecoderBeam:
         """Allows you to take a slice of the beams object along the batch dimension."""
         return self.new(
@@ -199,9 +181,13 @@ class TransformerEncoderDecoderBeam(EncoderDecoderBeam):
         )
 
     def generate(
-        self, tokens_per_beam: int, no_repeat_ngram_size: Optional[int] = None
-    ) -> "Beam":
-        log_logits = self.get_logits()
+        self,
+        tokens_per_beam: int,
+        no_repeat_ngram_size: Optional[int] = None,
+        log_logits: Optional[Float[Tensor, "batch vocab"]] = None,
+    ) -> TransformerEncoderDecoderBeam:
+        if log_logits is None:
+            log_logits = self.get_logits()
 
         topk_log_probs, topk_token_idx = self.get_topk_non_repeating(
             log_logits, no_repeat_ngram_size, k=tokens_per_beam
@@ -211,8 +197,16 @@ class TransformerEncoderDecoderBeam(EncoderDecoderBeam):
             topk_log_probs, tokens_per_beam
         )
         new_tokens = self._generate_new_tokens(topk_token_idx, tokens_per_beam)
-        new_encoder_outputs = self.expand_encoder_outputs(tokens_per_beam)
-        new_x_pad_mask = self.expand_x_pad_masks(tokens_per_beam)
+        new_encoder_outputs = einops.repeat(
+            self.memory,
+            "batch enc_seq hidden -> (batch beam) enc_seq hidden",
+            beam=tokens_per_beam,
+        )
+        new_x_pad_mask = einops.repeat(
+            self.x_pad_mask,
+            "batch enc_seq -> (batch beam) enc_seq",
+            beam=tokens_per_beam,
+        )
         return self.new(
             new_logprob_sums, new_tokens, new_encoder_outputs, new_x_pad_mask
         )
@@ -700,7 +694,6 @@ class PyTorchTransformerModule(NMTModule):
 
         log.info("scores", sc=scores_tensor.shape, tok=tokens_tensor.shape)
         return scores_tensor, tokens_tensor
-
 
     @torch.inference_mode()
     def generate(

@@ -62,10 +62,14 @@ class Beam(Generic[T]):
         ]
 
     def generate(
-        self, tokens_per_beam: int, no_repeat_ngram_size: Optional[int] = None
+        self,
+        tokens_per_beam: int,
+        no_repeat_ngram_size: Optional[int] = None,
+        log_logits: Optional[Float[Tensor, "batch vocab"]] = None,
     ) -> Beam:
         """Generate next set of beams."""
-        log_logits = self.get_logits()
+        if log_logits is None:
+            log_logits = self.get_logits()
 
         topk_log_probs, topk_token_idx = self.get_topk_non_repeating(
             log_logits, no_repeat_ngram_size, k=tokens_per_beam
@@ -123,10 +127,9 @@ class Beam(Generic[T]):
         """
         if num_beams is None:
             num_beams = self.num_beams
-
         top_beam_indices = self.logprob_sums.topk(k=num_beams, dim=0).indices
         is_terminated = (self.tokens == self.tokenizer.EOS).any(dim=-1)
-
+        print("IS_TERMINATED", is_terminated)
         top_beam_mask = torch.zeros_like(is_terminated, dtype=torch.bool)
         top_beam_mask[top_beam_indices] = True
 

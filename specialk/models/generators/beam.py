@@ -10,6 +10,7 @@ from rich import print as rprint
 from rich.table import Table
 from torch import Tensor
 
+from specialk.core import log
 from specialk.models.tokenizer import Vocabulary
 
 T = TypeVar("T")
@@ -32,17 +33,24 @@ class Beam(Generic[T]):
     logprob_sums: Float[Tensor, "batch"]
     tokens: Int[Tensor, "batch seq"]
 
-    @property
-    def num_beams(self) -> int:
-        return self.logprob_sums.size(0)
+    @classmethod
+    def create(
+        cls, model: T, tokenizer: Vocabulary, logprob_sums: Tensor, tokens: Tensor
+    ) -> Beam:
+        """Creates a new Beam object."""
+        return cls(model, tokenizer, logprob_sums, tokens)
 
     def new(self, logprob_sums: Tensor, tokens: Tensor) -> Beam:
         """Creates a new Beam object with the same model and tokenizer."""
-        return Beam(self.model, self.tokenizer, logprob_sums, tokens)
+        return self.__class__.create(self.model, self.tokenizer, logprob_sums, tokens)
 
     def __getitem__(self, idx) -> Beam:
         """Allows you to take a slice of the beams object along the batch dimension."""
         return self.new(self.logprob_sums[idx], self.tokens[idx])
+
+    @property
+    def num_beams(self) -> int:
+        return self.logprob_sums.size(0)
 
     @property
     def logprobs_and_completions(self) -> List[Tuple[float, List[str]]]:
@@ -129,7 +137,7 @@ class Beam(Generic[T]):
             num_beams = self.num_beams
         top_beam_indices = self.logprob_sums.topk(k=num_beams, dim=0).indices
         is_terminated = (self.tokens == self.tokenizer.EOS).any(dim=-1)
-        print("IS_TERMINATED", is_terminated)
+
         top_beam_mask = torch.zeros_like(is_terminated, dtype=torch.bool)
         top_beam_mask[top_beam_indices] = True
 
@@ -229,3 +237,106 @@ class Beam(Generic[T]):
     def get_logits(self) -> Tensor:
         """This method should be implemented by subclasses."""
         raise NotImplementedError
+
+
+@dataclass
+class EncoderDecoderBeam(Beam["NMTModule"]):
+    memory: Tensor
+
+    @classmethod
+    def create(
+        cls,
+        model: T,
+        tokenizer: Vocabulary,
+        logprob_sums: Tensor,
+        tokens: Tensor,
+        memory: Tensor,
+    ) -> Beam:
+        """Creates a new Beam object."""
+        return cls(model, tokenizer, logprob_sums, tokens, memory)
+
+    def new(self, logprob_sums: Tensor, tokens: Tensor) -> EncoderDecoderBeam:
+        """Creates a new EncoderDecoderBeam object with the
+        same model, tokenizer, and encoder_output."""
+        return self.__class__.create(
+            self.model, self.tokenizer, logprob_sums, tokens, self.memory
+        )
+
+    def _repeat_memory(self, k: int) -> Float[Tensor, "batch seq hidden"]:
+        """Stretches self.memory k times."""
+        return einops.repeat(self.memory, "b s h -> (b beam) s h", beam=k)
+
+    @torch.inference_mode()
+    def get_logits(self) -> Tensor:
+        logits = self.model.decoder(self.tokens, encoder_output=self.memory)[:, -1, :]
+        return logits.log_softmax(-1)
+
+
+@dataclass
+class BeamBatch:
+    beams: List[Beam]
+
+    @property
+    def batch_size(self) -> int:
+        return len(self.beams)
+
+    def new(self, beams: List[Beam]) -> BeamBatch:
+        return BeamBatch(beams)
+
+    @classmethod
+    def create(cls, beams: List[Beam]) -> "BeamBatch":
+        return cls(beams)
+
+    @torch.inference_mode()
+    def get_logits(self) -> List[Float[torch.Tensor, "beam*beam vocab"]]:
+        """Aggregates logits into a single input for
+        batched implementation.
+
+        Returns:
+            List[Float[torch.Tensor, "beam*beam vocab"]]: List of logits for each
+            batch in self.beams.
+        """
+        raise NotImplementedError
+
+    def filter(self, num_beams: int) -> Tuple["BeamBatch", "BeamBatch"]:
+        """Filters tokens at a batch level."""
+        continuing_beams, terminated_beams = [], []
+        for beam in self.beams:
+            continuing, terminated = beam.filter(num_beams)
+            continuing_beams.append(continuing)
+            terminated_beams.append(terminated)
+        return (
+            self.__class__.create(continuing_beams),
+            self.__class__.create(terminated_beams),
+        )
+
+    def generate(
+        self, tokens_per_beam: int, no_repeat_ngram_size: int = None
+    ) -> "BeamBatch":
+        return self.__class__.create(
+            [
+                beam.generate(
+                    tokens_per_beam=tokens_per_beam,
+                    no_repeat_ngram_size=no_repeat_ngram_size,
+                    log_logits=log_probs,
+                )
+                for beam, log_probs in zip(self.beams, self.get_logits())
+            ]
+        )
+
+    def print(
+        self, title: str = "Best completions", max_print_chars: int = 80, display=True
+    ) -> None:
+        """Prints out a set of sequences with their corresponding logit sums."""
+        if len(self.beams[0].tokens) == 0:
+            return
+        table = Table("batch", "logitsum", "completion", title=title)
+        for i, batch in enumerate(self.beams):
+            for logprob_sum, tokens in zip(batch.logprob_sums, batch.tokens):
+                text = batch.tokenizer.detokenize(tokens)
+                if len(repr(text)) > max_print_chars:
+                    text = f"{text[:int(0.3 * max_print_chars)]} ... {text[-int(0.7 * max_print_chars):]}"
+                table.add_row(f"{i}", f"{logprob_sum:>8.3f}", repr(text))
+        if display:
+            rprint(table)
+        return table

@@ -4,7 +4,7 @@ import math
 from argparse import Namespace
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, TypeVar
 
 import lightning.pytorch as pl
 import torch
@@ -47,24 +47,6 @@ from specialk.models.transformer.legacy.Models import (
 from specialk.models.transformer.legacy.Optim import ScheduledOptim
 
 bleu = SacreBLEU()
-
-
-@dataclass
-class EncoderDecoderBeam(Beam["NMTModule"]):
-    memory: Tensor
-
-    def new_beams(self, logprob_sums: Tensor, tokens: Tensor) -> EncoderDecoderBeam:
-        """Creates a new EncoderDecoderBeam object with the
-        same model, tokenizer, and encoder_output."""
-        return EncoderDecoderBeam(
-            self.model, self.tokenizer, logprob_sums, tokens, self.memory
-        )
-
-    @torch.inference_mode()
-    def get_logits(self) -> Tensor:
-        logits = self.model.decoder(self.tokens, encoder_output=self.memory)[:, -1, :]
-        return logits.log_softmax(-1)
-
 
 class NMTModule(pl.LightningModule):
     """auto-regressive neural machine translation module."""

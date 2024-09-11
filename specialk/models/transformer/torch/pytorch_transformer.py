@@ -25,82 +25,11 @@ from torch.optim import AdamW
 import specialk.core.constants as Constants
 from specialk.core.utils import log
 from specialk.models.generators.sampling import LanguageModelSampler
-from specialk.models.mt_model import EncoderDecoderBeam, NMTModule
+from specialk.models.mt_model import NMTModule
+from specialk.models.generators.beam import BeamBatch, EncoderDecoderBeam
 from specialk.models.optimizers.schedulers import CosineWarmupScheduler
 from specialk.models.transformer.pos_encoders import PositionalEncoder
 from specialk.models.utils.activations import SwiGLU
-
-
-@dataclass
-class BatchOfBeams:
-    beams: List[TransformerEncoderDecoderBeam]
-
-    @property
-    def batch_size(self) -> int:
-        return len(self.beams)
-
-    def new(self, beams: List[TransformerEncoderDecoderBeam]) -> "BatchOfBeams":
-        return BatchOfBeams(beams)
-
-    @torch.inference_mode()
-    def get_logits(self) -> List[Float[torch.Tensor, "beam*beam vocab"]]:
-        # Aggregate inputs from all beams
-        all_tokens = torch.cat([beam.tokens for beam in self.beams])
-        all_memory = torch.cat([beam.memory for beam in self.beams])
-        all_x_pad_mask = torch.cat([beam.x_pad_mask for beam in self.beams])
-        decode = self.beams[0].model.decode
-        generator = self.beams[0].model.generator
-
-        # Perform the logits computation in one go
-        logits: Float[Tensor, "batch*beam vocab"] = decode(
-            all_tokens,
-            tgt_mask=None,
-            memory=all_memory,
-            x_pad_mask=all_x_pad_mask,
-        )[:, -1]
-        log_probs: Float[Tensor, "batch*beam vocab"]
-        log_probs = torch.nn.functional.log_softmax(generator(logits), dim=-1)
-
-        # Disperse the results back to individual beams
-        return list(log_probs.split([beam.num_beams for beam in self.beams]))
-
-    def filter(self, num_beams: int) -> Tuple[BatchOfBeams, BatchOfBeams]:
-        continuing_beams, terminated_beams = [], []
-        for beam in self.beams:
-            continuing, terminated = beam.filter(num_beams)
-            continuing_beams.append(continuing)
-            terminated_beams.append(terminated)
-        return (
-            self.new(continuing_beams),
-            self.new(terminated_beams),
-        )
-
-    def generate(
-        self, tokens_per_beam: int, no_repeat_ngram_size: int = None
-    ) -> "BatchOfBeams":
-        return self.new(
-            [
-                beam.generate(
-                    tokens_per_beam=tokens_per_beam,
-                    no_repeat_ngram_size=no_repeat_ngram_size,
-                    log_logits=log_probs,
-                )
-                for beam, log_probs in zip(self.beams, self.get_logits())
-            ]
-        )
-
-    def print(self, title: str = "Best completions", max_print_chars: int = 80) -> None:
-        """Prints out a set of sequences with their corresponding logit sums."""
-        if len(self.beams[0].tokens) == 0:
-            return
-        table = Table("batch", "logitsum", "completion", title=title)
-        for i, batch in enumerate(self.beams):
-            for logprob_sum, tokens in zip(batch.logprob_sums, batch.tokens):
-                text = batch.tokenizer.detokenize(tokens)
-                if len(repr(text)) > max_print_chars:
-                    text = f"{text[:int(0.3 * max_print_chars)]} ... {text[-int(0.7 * max_print_chars):]}"
-                table.add_row(f"{i}", f"{logprob_sum:>8.3f}", repr(text))
-        rprint(table)
 
 
 @dataclass
@@ -127,7 +56,7 @@ class TransformerEncoderDecoderBeam(EncoderDecoderBeam):
         x_pad_mask: Tensor,
     ) -> TransformerEncoderDecoderBeam:
         """Creates a new EncoderDecoderBeam object with the
-        same model, tokenizer, and encoder_output."""
+        same model, tokenizer, and encoder_output. Includes an x_pad_mask."""
         return TransformerEncoderDecoderBeam(
             model=self.model,
             tokenizer=self.tokenizer,
@@ -145,14 +74,11 @@ class TransformerEncoderDecoderBeam(EncoderDecoderBeam):
             memory=self.memory,
             x_pad_mask=self.x_pad_mask,
         )
-
-        logits = torch.nn.functional.log_softmax(
+        return torch.nn.functional.log_softmax(
             self.model.generator(logits[:, -1]), dim=-1
         )
-        return logits
 
     def __getitem__(self, idx) -> TransformerEncoderDecoderBeam:
-        """Allows you to take a slice of the beams object along the batch dimension."""
         return self.new(
             self.logprob_sums[idx],
             self.tokens[idx],
@@ -169,27 +95,46 @@ class TransformerEncoderDecoderBeam(EncoderDecoderBeam):
         if log_logits is None:
             log_logits = self.get_logits()
 
-        topk_log_probs, topk_token_idx = self.get_topk_non_repeating(
+        log_probs, tok_idx = self.get_topk_non_repeating(
             log_logits, no_repeat_ngram_size, k=tokens_per_beam
         )
 
-        new_logprob_sums = self._calculate_new_logprob_sums(
-            topk_log_probs, tokens_per_beam
-        )
-        new_tokens = self._generate_new_tokens(topk_token_idx, tokens_per_beam)
-        new_encoder_outputs = einops.repeat(
-            self.memory,
-            "batch enc_seq hidden -> (batch beam) enc_seq hidden",
-            beam=tokens_per_beam,
-        )
+        new_logprob_sums = self._calculate_new_logprob_sums(log_probs, tokens_per_beam)
+        new_tokens = self._generate_new_tokens(tok_idx, tokens_per_beam)
+        new_encoder_outputs = self._repeat_memory(k=tokens_per_beam)
         new_x_pad_mask = einops.repeat(
-            self.x_pad_mask,
-            "batch enc_seq -> (batch beam) enc_seq",
-            beam=tokens_per_beam,
+            self.x_pad_mask, "b s -> (b beam) s", beam=tokens_per_beam
         )
         return self.new(
             new_logprob_sums, new_tokens, new_encoder_outputs, new_x_pad_mask
         )
+
+
+@dataclass
+class TransformerBeamBatch(BeamBatch):
+    beams: List[TransformerEncoderDecoderBeam]
+
+    @torch.inference_mode()
+    def get_logits(self) -> List[Float[torch.Tensor, "beam*beam vocab"]]:
+        # Aggregate inputs from all beams
+        all_tokens = torch.cat([beam.tokens for beam in self.beams])
+        all_memory = torch.cat([beam.memory for beam in self.beams])
+        all_x_pad_mask = torch.cat([beam.x_pad_mask for beam in self.beams])
+        decode = self.beams[0].model.decode
+        generator = self.beams[0].model.generator
+
+        # Perform the logits computation in one go
+        logits: Float[Tensor, "batch*beam vocab"] = decode(
+            all_tokens,
+            tgt_mask=None,
+            memory=all_memory,
+            x_pad_mask=all_x_pad_mask,
+        )[:, -1]
+        log_probs: Float[Tensor, "batch*beam vocab"]
+        log_probs = torch.nn.functional.log_softmax(generator(logits), dim=-1)
+
+        # Disperse the results back to individual beams
+        return list(log_probs.split([beam.num_beams for beam in self.beams]))
 
 
 class TransformerEncoderLayer(nn.TransformerEncoderLayer):
@@ -618,7 +563,7 @@ class PyTorchTransformerModule(NMTModule):
                     x_pad_mask=item_x_pad_mask,
                 )
             )
-        batch_of_beams = BatchOfBeams(beams)
+        batch_of_beams = TransformerBeamBatch.create(beams)
 
         # List for final beams to return (and early terminations)
         finished_beams: List[List[Tuple[float, Tensor]]]

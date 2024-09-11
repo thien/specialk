@@ -16,25 +16,19 @@ from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
 import lightning.pytorch as pl
-import torch
-import torch.nn as nn
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.profilers import AdvancedProfiler
 from peft import LoraConfig, TaskType
-from torch.autograd import Variable
-from torch.nn.modules.loss import _Loss as Loss
 from torch.utils.data import DataLoader
-from tqdm import tqdm
 
-import specialk.models.classifier.onmt as onmt
 from datasets import Dataset, load_dataset
 from specialk.core.constants import LOGGING_DIR, LOGGING_PERF_NAME, PROJECT_DIR
 from specialk.core.utils import check_torch_device, log, namespace_to_dict
-from specialk.datasets.dataloaders import (
-    init_classification_dataloaders as init_dataloaders,
+from specialk.models.classifier.models import (
+    BERTClassifier,
+    CNNClassifier,
+    TextClassifier,
 )
-from specialk.models.classifier.models import BERTClassifier, CNNClassifier
-from specialk.models.classifier.onmt.CNNModels import ConvNet
 from specialk.models.tokenizer import (
     BPEVocabulary,
     HuggingFaceVocabulary,
@@ -80,11 +74,7 @@ def init_dataloader(
     return dataloader
 
 
-def main_new():
-    BATCH_SIZE = 128 if DEVICE == "mps" else 680
-
-    # tokenizer
-    tokenizer_option = "spm"  # "word"
+def get_tokenizer(tokenizer_option: str = "spm") -> Vocabulary:
     # interestingly the bpe tokenizer is a lot slwoer to run instead of the word tokenizer.
     # we should see how well this performs with sentencepience.
     dir_tokenizer = PROJECT_DIR / "assets" / "tokenizer"
@@ -100,10 +90,54 @@ def main_new():
         # sentencepiece
         tokenizer_filepath = str(dir_tokenizer / "sentencepiece" / "enfr.model")
         tokenizer = SentencePieceVocabulary.from_file(tokenizer_filepath, max_length=72)
+    return tokenizer
+
+
+def get_model(model_option: str, tokenizer: Vocabulary) -> TextClassifier:
+    if model_option == "cnn":
+        task = CNNClassifier(
+            "political",
+            vocabulary_size=tokenizer.vocab_size,
+            sequence_length=tokenizer.max_length,
+            tokenizer=tokenizer,
+        )
+    elif model_option == "bert":
+        peft_config = LoraConfig(
+            task_type=TaskType.SEQ_CLS,
+            r=8,
+            lora_alpha=32,
+            lora_dropout=0.1,
+            bias="none",
+            target_modules=["q_lin", "k_lin", "v_lin", "out_lin"],
+        )
+
+        model_base_name = "distilbert/distilbert-base-cased"
+        task = BERTClassifier(
+            name="test_distilbert",
+            model_base_name=model_base_name,
+            peft_config=peft_config,
+        )
+    else:
+        raise Exception("Model not chosen")
+
+    return task
+
+
+def main_new(args):
+    BATCH_SIZE = 128 if DEVICE == "mps" else 680
+
+    # tokenizer
+    tokenizer = get_tokenizer(args.tokenizer)
+    task = get_model(args.model, tokenizer)
 
     log.info("Loaded tokenizer", tokenizer=tokenizer)
 
+    """
+    TODO we should add a wrapper function so we can intelligently describe the hf dataset
+    so we know which columns correspond to the label and the dataset also.
+    """
     hf_dataset_name = "thien/political"
+    hf_dataset_name = "thien/publications"
 
     dataset: Dataset = load_dataset(hf_dataset_name)
     dataset = dataset.class_encode_column("label")
@@ -115,22 +149,18 @@ def main_new():
         dataset["eval"], tokenizer, BATCH_SIZE, shuffle=False
     )
 
-    task = CNNClassifier(
-        "political",
-        vocabulary_size=tokenizer.vocab_size,
-        sequence_length=tokenizer.max_length,
-        tokenizer=tokenizer,
-    )
+    project_name = f"{hf_dataset_name}/{task.name}"
 
-    logger = TensorBoardLogger(LOGGING_DIR, name="pol_classifier")
+    logger = TensorBoardLogger(LOGGING_DIR, name=project_name)
     logger.log_hyperparams(
         params={
             "batch_size": BATCH_SIZE,
             "tokenizer": tokenizer.__class__.__name__,
             "dataset": hf_dataset_name,
-            "tokenizer_path": tokenizer_filepath,
+            "tokenizer_path": None,
         }
     )
+    REVIEW_RATE = len(train_dataloader) // 32  # for debugging purposes.
 
     profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
     trainer = pl.Trainer(
@@ -139,6 +169,10 @@ def main_new():
         log_every_n_steps=20,
         logger=logger,
         profiler=profiler,
+        precision="16-mixed",
+        val_check_interval=REVIEW_RATE,
+        gradient_clip_val=0.5,
+        gradient_clip_algorithm="norm",
     )
 
     trainer.fit(
@@ -169,6 +203,10 @@ def main_distilbert_peft():
         max_length=512,
     )
 
+    """
+    TODO we should add a wrapper function so we can intelligently describe the hf dataset
+    so we know which columns correspond to the label and the dataset also.
+    """
     hf_dataset_name = "thien/political"
     hf_dataset_name = "thien/publications"
 
@@ -212,6 +250,40 @@ def main_distilbert_peft():
     trainer.fit(
         task, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader
     )
+
+
+def get_args():
+    parser = argparse.ArgumentParser(description="CNN Training Runner")
+    parser.add_argument(
+        "--model_type",
+        choices=["cnn", "bert"],
+        default="cnn",
+        help="Type of model to use",
+    )
+    parser.add_argument(
+        "--model_name", type=str, default="political", help="Name of the model"
+    )
+    parser.add_argument(
+        "--tokenizer",
+        choices=["bpe", "word", "spm"],
+        default="spm",
+        help="Type of tokenizer to use (for CNN model)",
+    )
+    parser.add_argument(
+        "--dataset_name",
+        type=str,
+        default="thien/political",
+        help="Name of the dataset to use",
+    )
+    parser.add_argument(
+        "--batch_size", type=int, default=128, help="Batch size for training"
+    )
+    parser.add_argument(
+        "--epochs", type=int, default=2, help="Number of epochs for training"
+    )
+
+    args = parser.parse_args()
+    return args
 
 
 if __name__ == "__main__":

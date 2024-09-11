@@ -78,36 +78,16 @@ class BatchOfBeams:
     def generate(
         self, tokens_per_beam: int, no_repeat_ngram_size: int = None
     ) -> "BatchOfBeams":
-        log_probs_list = self.get_logits()
-        new_beams = []
-        for beam, log_probs in zip(self.beams, log_probs_list):
-            vocab_size = log_probs.size(-1)
-
-            # Expand current log probs to (beam, vocab)
-            expanded_log_probs = beam.logprob_sums.unsqueeze(-1) + log_probs
-
-            # Select top-k*tokens_per_beam
-            topk_log_probs, topk_indices = expanded_log_probs.view(-1).topk(
-                beam.num_beams * tokens_per_beam
-            )
-
-            # Convert flat indices back to beam and token indices
-            beam_indices = topk_indices // vocab_size
-            token_indices = topk_indices % vocab_size
-
-            # Gather new tokens and update sequences
-            new_tokens = beam.tokens[beam_indices]
-            new_tokens = torch.cat([new_tokens, token_indices.unsqueeze(1)], dim=1)
-
-            # Update memory and x_pad_mask
-            new_memory = beam.memory[beam_indices]
-            new_x_pad_mask = beam.x_pad_mask[beam_indices]
-
-            new_beams.append(
-                beam.new(topk_log_probs, new_tokens, new_memory, new_x_pad_mask)
-            )
-
-        return self.new(new_beams)
+        return self.new(
+            [
+                beam.generate(
+                    tokens_per_beam=tokens_per_beam,
+                    no_repeat_ngram_size=no_repeat_ngram_size,
+                    log_logits=log_probs,
+                )
+                for beam, log_probs in zip(self.beams, self.get_logits())
+            ]
+        )
 
     def print(self, title: str = "Best completions", max_print_chars: int = 80) -> None:
         """Prints out a set of sequences with their corresponding logit sums."""

@@ -19,14 +19,11 @@ T = TypeVar("T")
 class Beam(Generic[T]):
     """Class to store Beams for Beam Search.
 
-    More detailed explanation of the class, its purpose,
-    and any important information about its usage.
-
     Attributes:
-        model (type): Description of field1.
-        tokenizer (type): Description of field2.
-        logprob_sums (type): Description of field2.
-        tokens (type): Description of field2.
+        model (T): Model used to generate logits.
+        tokenizer (Vocabulary): Tokenizer to decode logits into words.
+        logprob_sums (Tensor): Logprobs of the tokens.
+        tokens (Tensor): Tokens generated from the model.
         ...
     """
 
@@ -35,13 +32,13 @@ class Beam(Generic[T]):
     logprob_sums: Float[Tensor, "batch"]
     tokens: Int[Tensor, "batch seq"]
 
-    def new_beams(self, logprob_sums: Tensor, tokens: Tensor) -> Beam:
+    def new(self, logprob_sums: Tensor, tokens: Tensor) -> Beam:
         """Creates a new Beam object with the same model and tokenizer."""
         return Beam(self.model, self.tokenizer, logprob_sums, tokens)
 
     def __getitem__(self, idx) -> Beam:
         """Allows you to take a slice of the beams object along the batch dimension."""
-        return self.new_beams(self.logprob_sums[idx], self.tokens[idx])
+        return self.new(self.logprob_sums[idx], self.tokens[idx])
 
     @property
     def logprobs_and_completions(self) -> List[Tuple[float, List[str]]]:
@@ -75,7 +72,7 @@ class Beam(Generic[T]):
         )
         new_tokens = self._generate_new_tokens(topk_token_idx, tokens_per_beam)
 
-        return self.new_beams(new_logprob_sums, new_tokens)
+        return self.new(new_logprob_sums, new_tokens)
 
     def _calculate_new_logprob_sums(
         self, topk_log_probs: Tensor, tokens_per_beam: int
@@ -137,28 +134,86 @@ class Beam(Generic[T]):
         no_repeat_ngram_size: Optional[int],
         k: int,
     ) -> Tuple[Float[Tensor, "k"], Int[Tensor, "k"]]:
-        """Get top-k logprobs ensuring no ngram repetitions."""
-        if (
-            no_repeat_ngram_size is None
-            or self.tokens.shape[1] <= no_repeat_ngram_size - 1
-        ):
+        """
+        Get top-k logprobs ensuring no ngram repetitions.
+
+        Args:
+            logprobs: Tensor of shape (batch, d_vocab) containing log probabilities.
+            no_repeat_ngram_size: Size of ngrams to avoid repeating.
+            k: Number of top probabilities to return.
+
+        Returns:
+            Tuple of (top-k values, top-k indices)
+        """
+        if self._should_skip_ngram_check(no_repeat_ngram_size):
             return logprobs.topk(k=k, dim=-1)
 
-        batch, seq_len = self.tokens.shape
-        neg_inf = torch.tensor(-1.0e4, device=logprobs.device)
+        _, seq_len = self.tokens.shape
 
-        last_ngram_prefix = self.tokens[:, seq_len - (no_repeat_ngram_size - 1) :]
+        last_ngram_prefix = self._get_last_ngram_prefix(no_repeat_ngram_size)
+
         for i in range(seq_len - (no_repeat_ngram_size - 1)):
             ngrams = self.tokens[:, i : i + no_repeat_ngram_size]
-            ngrams_are_repeated = (ngrams[:, :-1] == last_ngram_prefix).all(-1)
-            ngram_end_tokens = ngrams[:, [-1]]
-            logprobs[range(batch), ngram_end_tokens] = torch.where(
-                ngrams_are_repeated,
-                neg_inf,
-                logprobs[range(batch), ngram_end_tokens],
-            )
+            self._mask_repeated_ngrams(logprobs, ngrams, last_ngram_prefix)
 
         return logprobs.topk(k=k, dim=-1)
+
+    def _should_skip_ngram_check(self, no_repeat_ngram_size: Optional[int]) -> bool:
+        """
+        Determine if the ngram repetition check should be skipped.
+
+        Args:
+            no_repeat_ngram_size: Size of ngrams to avoid repeating
+
+        Returns:
+            Boolean indicating whether to skip the ngram check
+        """
+        return (
+            no_repeat_ngram_size is None
+            or self.tokens.shape[1] <= no_repeat_ngram_size - 1
+        )
+
+    def _get_last_ngram_prefix(self, no_repeat_ngram_size: int) -> Tensor:
+        """
+        Get the prefix of the last ngram in the sequence.
+
+        Args:
+            no_repeat_ngram_size: Size of ngrams to avoid repeating
+
+        Returns:
+            Tensor containing the prefix of the last ngram
+        """
+        return self.tokens[:, -no_repeat_ngram_size + 1 :]
+
+    def _mask_repeated_ngrams(
+        self,
+        logprobs: Tensor,
+        ngrams: Tensor,
+        last_ngram_prefix: Tensor,
+        neg_inf: Tensor = torch.tensor(-1.0e4),
+    ) -> None:
+        """
+        Mask the logprobs of repeated ngrams with negative infinity.
+
+        Args:
+            logprobs: Tensor of shape (batch, d_vocab) containing log probabilities
+            ngrams: Tensor of current ngrams being checked
+            last_ngram_prefix: Tensor containing the prefix of the last ngram
+            neg_inf (Optional[Tensor]): Tensor with negative infinity value for masking.
+
+        Returns:
+            None (modifies logprobs in-place).
+        """
+        if neg_inf.device != logprobs.device:
+            neg_inf = neg_inf.to(logprobs.device)
+
+        ngrams_are_repeated = (ngrams[:, :-1] == last_ngram_prefix).all(-1)
+        ngram_end_tokens = ngrams[:, -1]
+
+        batch_indices = torch.arange(logprobs.shape[0], device=logprobs.device)
+        logprobs[batch_indices, ngram_end_tokens] = torch.where(
+            ngrams_are_repeated, neg_inf, logprobs[batch_indices, ngram_end_tokens]
+        )
 
     @torch.inference_mode()
     def get_logits(self) -> Tensor:

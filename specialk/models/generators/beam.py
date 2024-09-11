@@ -32,6 +32,10 @@ class Beam(Generic[T]):
     logprob_sums: Float[Tensor, "batch"]
     tokens: Int[Tensor, "batch seq"]
 
+    @property
+    def num_beams(self) -> int:
+        return self.logprob_sums.size(0)
+
     def new(self, logprob_sums: Tensor, tokens: Tensor) -> Beam:
         """Creates a new Beam object with the same model and tokenizer."""
         return Beam(self.model, self.tokenizer, logprob_sums, tokens)
@@ -107,7 +111,7 @@ class Beam(Generic[T]):
             table.add_row(f"{logprob_sum:>8.3f}", repr(text))
         rprint(table)
 
-    def filter(self, num_beams: int) -> Tuple[Beam, Beam]:
+    def filter(self, num_beams: Optional[int] = None) -> Tuple[Beam, Beam]:
         """Filter beams based on termination condition.
 
         Returns:
@@ -117,6 +121,9 @@ class Beam(Generic[T]):
                 which are also terminated.
                 i.e. the sum of lengths of these two should equal `num_beams`.
         """
+        if num_beams is None:
+            num_beams = self.num_beams
+
         top_beam_indices = self.logprob_sums.topk(k=num_beams, dim=0).indices
         is_terminated = (self.tokens == self.tokenizer.EOS).any(dim=-1)
 

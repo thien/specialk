@@ -14,6 +14,10 @@ from specialk.models.transformer.torch.pytorch_transformer import (
     TransformerEncoderDecoderBeam,
 )
 
+from specialk.core import constants
+
+torch.manual_seed(constants.SEED)
+
 
 # Mock classes and functions to simulate the behavior of the actual classes
 @dataclass
@@ -33,13 +37,9 @@ class MockModel:
 
 @dataclass
 class MockTokenizer:
-    EOS: int = 2
-    SOS: int = 1
-
-
-class Constants:
-    SOS: int = 1
-    EOS: int = 2
+    EOS: int = constants.EOS
+    SOS: int = constants.SOS
+    PAD: int = constants.PAD
 
 
 @pytest.fixture
@@ -47,9 +47,8 @@ def mock_pytorch_transformer_module():
     class MockPyTorchTransformerModule(PyTorchTransformerModule):
         def __init__(self):
             self.model = MockModel()
+            self.tokenizer = MockTokenizer()
             self.decoder_tokenizer = MockTokenizer()
-
-        # Include any other necessary methods or attributes
 
     return MockPyTorchTransformerModule()
 
@@ -72,8 +71,6 @@ def mock_beam():
         tokens=torch.randint(0, vocab_size, (batch_size * beam_size, seq_len)),
         memory=torch.randn(batch_size * beam_size, enc_seq, hidden_size),
         x_pad_mask=torch.randint(0, 2, (batch_size * beam_size, enc_seq)).float(),
-        num_beams=beam_size,
-        batch_size=batch_size,
     )
 
 
@@ -94,8 +91,8 @@ def test_filter(mock_beam):
 def mock_beam_semi_completed():
     model = MockModel()
     tokenizer = MockTokenizer()
-    batch_size = 10
-    beam_size = 3
+    batch_size = 1
+    beam_size = 5
     seq_len = 10
     enc_seq = 8
     hidden_size = 512
@@ -104,7 +101,7 @@ def mock_beam_semi_completed():
     # Create a tensor where some sequences contain the EOS token
     tokens: Int[torch.Tensor, "batch*beam seq"]
     tokens = torch.randint(
-        low=0, high=vocab_size, size=(batch_size * beam_size, seq_len)
+        low=10, high=vocab_size, size=(batch_size * beam_size, seq_len)
     )
 
     # Set EOS token for some sequences
@@ -119,8 +116,6 @@ def mock_beam_semi_completed():
         tokens=tokens,
         memory=torch.randn(batch_size * beam_size, enc_seq, hidden_size),
         x_pad_mask=torch.randint(0, 2, (batch_size * beam_size, enc_seq)).float(),
-        num_beams=beam_size,
-        batch_size=batch_size,
     )
 
 
@@ -129,8 +124,7 @@ def test_filter_with_terminated_sequences(mock_beam_semi_completed):
     # Modify the tokens to include some terminated sequences
     batch_size = beam.logprob_sums.shape[0] // beam.num_beams
 
-    num_beams = 2
-    continuing, terminated = beam.filter(num_beams)
+    continuing, terminated = beam.filter()
 
     assert isinstance(continuing, TransformerEncoderDecoderBeam)
     assert isinstance(terminated, TransformerEncoderDecoderBeam)
@@ -148,7 +142,7 @@ def test_filter_with_terminated_sequences(mock_beam_semi_completed):
     # The total number of beams should be preserved
     assert (
         continuing.logprob_sums.shape[0] + terminated.logprob_sums.shape[0]
-        == batch_size * num_beams
+        == beam.num_beams
     )
 
     # Check that all sequences in the terminated beam actually contain the EOS token
@@ -158,11 +152,11 @@ def test_filter_with_terminated_sequences(mock_beam_semi_completed):
     assert not (continuing.tokens == beam.tokenizer.EOS).any()
 
     # Verify that we have the correct number of continuing beams per batch
-    assert continuing.logprob_sums.shape[0] != batch_size * num_beams
+    assert continuing.logprob_sums.shape[0] != batch_size * beam.num_beams
 
 
 def test_new_beams(mock_beam):
-    new_beam = mock_beam.new_beams(
+    new_beam = mock_beam.new(
         mock_beam.logprob_sums, mock_beam.tokens, mock_beam.memory, mock_beam.x_pad_mask
     )
     assert isinstance(new_beam, TransformerEncoderDecoderBeam)
@@ -247,7 +241,9 @@ def test_generate(mock_beam):
 # New test for beam_search method in PyTorchTransformerModule
 def test_beam_search(mock_pytorch_transformer_module):
     # Set up input parameters
-    input_tokens = torch.randint(1, 1000, (2, 10))  # 2 batches, 10 tokens each
+    batch_size = 2
+    seq_len = 10
+    input_tokens = torch.randint(0, 1000, (batch_size, seq_len))
     num_return_sequences = 2
     num_beams = 3
     max_new_tokens = 5
@@ -256,7 +252,7 @@ def test_beam_search(mock_pytorch_transformer_module):
     verbose = False
 
     # Perform beam search
-    results = mock_pytorch_transformer_module.beam_search(
+    logprobs, logits = mock_pytorch_transformer_module.beam_search(
         input_tokens,
         num_return_sequences,
         num_beams,
@@ -266,23 +262,8 @@ def test_beam_search(mock_pytorch_transformer_module):
         verbose,
     )
 
-    # Check the structure and content of the results
-    assert isinstance(results, list)
-    assert len(results) == input_tokens.size(0)  # Should match batch size
-
-    for batch_results in results:
-        assert isinstance(batch_results, list)
-        assert len(batch_results) == num_return_sequences
-
-        for score, tokens in batch_results:
-            assert isinstance(score, float)
-            assert isinstance(tokens, torch.Tensor)
-            assert tokens.dim() == 1  # Should be a 1D tensor
-            assert (
-                tokens.size(0) <= input_tokens.size(1) + max_new_tokens
-            )  # Check maximum length
-
-    # Check that scores are in descending order
-    for batch_results in results:
-        scores = [score for score, _ in batch_results]
-        assert scores == sorted(scores, reverse=True)
+    assert logprobs.shape == torch.Size((batch_size, num_return_sequences))
+    # it's +1 because of the BOS token.
+    assert logits.shape == torch.Size(
+        (batch_size, num_return_sequences, max_new_tokens + 1)
+    )

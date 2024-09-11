@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from jaxtyping import Int
 from torch import Tensor
-
+import torch
 from specialk.core.constants import EOS, PAD, PROJECT_DIR, SEED, SOS
 from specialk.core.utils import log
 
@@ -11,7 +11,7 @@ from specialk.core.utils import log
 from specialk.models.transformer.torch.pytorch_transformer import (
     PyTorchTransformerModule,
 )
-
+torch.manual_seed(SEED)
 
 @pytest.fixture(scope="session", autouse=True)
 def module() -> PyTorchTransformerModule:

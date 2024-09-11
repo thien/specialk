@@ -1,6 +1,6 @@
 import torch
 
-from specialk.models.ops import FuncMaxPool3d
+from specialk.models.ops.ops import FuncMaxPool3d
 
 
 def test_maxpool2d(n_tests=20):

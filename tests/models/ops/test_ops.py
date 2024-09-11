@@ -2,7 +2,7 @@ import torch
 from torch import LongTensor
 
 from specialk.core.constants import EOS, PAD
-from specialk.models.ops import mask_out_special_tokens, n_tokens_correct
+from specialk.models.ops.ops import mask_out_special_tokens, n_tokens_correct
 
 
 def test_n_tokens_correct_2d():

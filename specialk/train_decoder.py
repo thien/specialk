@@ -17,7 +17,7 @@ from specialk.models.classifier.trainer import CNNClassifier, TextClassifier
 from specialk.models.mt_model import NMTModule
 
 # from specialk.lib.recurrent_model import RecurrentModel as recurrent
-from specialk.models.transformer_model import TransformerModel as transformer
+from specialk.models.legacy.transformer_model import TransformerModel as transformer
 
 description = """
 train_decoder.py

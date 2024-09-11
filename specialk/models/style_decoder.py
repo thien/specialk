@@ -15,8 +15,8 @@ from torch.utils.data import DataLoader
 from specialk.core.constants import SOURCE, TARGET
 from specialk.models.classifier.trainer import CNNClassifier, TextClassifier
 from specialk.models.mt_model import NMTModule
-from specialk.models.ops import token_accuracy
-from specialk.models.transformer_model import TransformerModel as transformer
+from specialk.models.ops.ops import token_accuracy
+from specialk.models.legacy.transformer_model import TransformerModel as transformer
 
 
 class StyleBackTranslationModel(pl.LightningModule):

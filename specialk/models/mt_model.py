@@ -34,7 +34,7 @@ from specialk.core.constants import (
 from specialk.core.utils import log
 from specialk.metrics.metrics import SacreBLEU
 from specialk.models.generators.beam import Beam
-from specialk.models.ops import mask_out_special_tokens
+from specialk.models.ops.ops import mask_out_special_tokens
 from specialk.models.recurrent.models import Decoder as RNNDecoder
 from specialk.models.recurrent.models import Encoder as RNNEncoder
 from specialk.models.recurrent.models import NMTModel as Seq2Seq

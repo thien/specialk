@@ -6,7 +6,7 @@ from torch import Tensor
 
 from specialk.core import constants
 from specialk.core.utils import log
-from specialk.models.transformer.torch.attention import Attention
+from specialk.models.transformer.torch.attention import Attention, RotaryAttention
 
 torch.manual_seed(constants.SEED)
 np.random.seed(constants.SEED)
@@ -297,7 +297,6 @@ def test_reference_attention_batch_first():
     y = y.reshape(bs, seq_len, embed_dim)
 
     torch.allclose(attn_output, y)
-    # xxx
 
 
 @torch.inference_mode()
@@ -309,7 +308,6 @@ def test_attention_equivalence_no_bias():
     num_heads = 8
     head_dim = embed_dim // num_heads
 
-    # Initialize your custom Attention
     custom_attn = Attention(
         d_head=head_dim,
         num_heads=num_heads,
@@ -367,32 +365,45 @@ def test_attention_equivalence_no_bias():
         == torch.Size([batch_size, seq_len, seq_len])
     )
 
-    # print(custom_output)
-    # print(mha_output)
-
-    log.info("x.shape", x=x.shape)
-
-    log.info(
-        "attention weights",
-        mine=custom_attn_weights.shape,
-        torch=mha_attn_weights.shape,
-    )
-    # mine: [4, 8, 10, 10]
-    # torch [4, 10, 11]
-
     # Compare outputs
     max_diff_weights = torch.max(torch.abs(custom_attn_weights - mha_attn_weights))
-    if max_diff_weights > 1e-4:
-        print(
-            f"Maximum difference between attention weights: {max_diff_weights.item()}"
-        )
-    assert torch.allclose(custom_attn_weights, mha_attn_weights, rtol=1e-4, atol=1e-4)
+    assert torch.allclose(
+        custom_attn_weights, mha_attn_weights, rtol=1e-4, atol=1e-4
+    ), f"Maximum difference between attention weights: {max_diff_weights.item()}"
 
     # Check for close values (allowing for small numerical differences)
     max_diff_output = torch.max(torch.abs(custom_output - mha_output))
-    print(f"Maximum difference between outputs: {max_diff_output.item()}")
-    assert torch.allclose(custom_output, mha_output, rtol=1e-4, atol=1e-4)
+    assert torch.allclose(
+        custom_output, mha_output, rtol=1e-4, atol=1e-4
+    ), f"Maximum difference between outputs: {max_diff_output.item()}"
 
-    print(
-        f"Test passed for batch_size={batch_size}, seq_len={seq_len}, embed_dim={embed_dim}, num_heads={num_heads}"
+    log.info(
+        f"Test passed for batch_size={batch_size}, seq_len={seq_len}"
+        f"embed_dim={embed_dim}, num_heads={num_heads}"
     )
+
+
+@torch.inference_mode()
+def test_rotary_attention_forward():
+    # Set up parameters
+    batch_size = 4
+    seq_len = 10
+    embed_dim = 128
+    num_heads = 8
+    head_dim = embed_dim // num_heads
+
+    attn = RotaryAttention(
+        d_head=head_dim,
+        num_heads=num_heads,
+        embed_dim=embed_dim,
+        dropout=0.0,
+        bias=False,
+        add_bias_kv=False,
+        add_zero_attn=False,
+        batch_first=True,
+    )
+    # Generate random input
+    x = torch.rand(batch_size, seq_len, embed_dim)
+
+    # Run both attention mechanisms
+    custom_output, custom_attn_weights = attn(x)

@@ -190,7 +190,8 @@ class Attention(nn.Module):
         return attn_scores.masked_fill(mask, self.IGNORE)
 
     def _reset_parameters(self):
-        """Initialize weights with random values."""
+        """Initialize weights with random values. This initialisation is
+        equivalent to nn.MultiheadAttention."""
         xavier_uniform_(self.W_Q)
         xavier_uniform_(self.W_K)
         xavier_uniform_(self.W_V)
@@ -206,9 +207,12 @@ class Attention(nn.Module):
 
 
 class RotaryAttention(Attention):
+    """Attention with RoPE Embeddings."""
+
     def __init__(self, d_head: int, **kwargs):
-        super().__init__(**kwargs)
-        self.rotary_emb = RotaryPositionalEncoder(self.head_dim, d_head)
+        super().__init__(d_head=d_head, **kwargs)
+        # note that max_seq_len will be replaced by whatever the sequence length of the input is.
+        self.rotary_emb = RotaryPositionalEncoder(dim_model=d_head)
 
     def forward(
         self,
@@ -234,8 +238,7 @@ class RotaryAttention(Attention):
         if self.b_V is not None:
             k += self.b_V
 
-        q = self.rotary_emb(q)
-        k = self.rotary_emb(k)
+        q, k = self.rotary_emb(q), self.rotary_emb(k)
 
         # calculate attention scores; scale, mask, softmax.
         attn_scores: Float[Tensor, "b num_heads q_pos k_pos"]

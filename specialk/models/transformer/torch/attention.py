@@ -123,8 +123,6 @@ class Attention(nn.Module):
         """
         Run Attention calculation.
         """
-        d_head = self.W_Q.shape[-1]
-
         # get query, key, value vectors. Note that *seq_pos for q (q_pos)
         # and k (k_pos) are the same in self-attn*, but different in cross-attn.
         q: Float[Tensor, "b q_pos num_heads d_head"]
@@ -144,7 +142,7 @@ class Attention(nn.Module):
         # calculate attention scores; scale, mask, softmax.
         attn_scores: Float[Tensor, "b num_heads q_pos k_pos"]
         attn_scores = einops.einsum(q, k, "b p_q n h, b p_k n h -> b n p_q p_k")
-        attn_scores /= np.sqrt(d_head)  # scale down.
+        attn_scores /= np.sqrt(self.W_Q.shape[-1])  # scale down by d_head.
 
         if is_causal:
             attn_scores = self.apply_causal_mask(attn_scores)
@@ -158,7 +156,6 @@ class Attention(nn.Module):
         z: Float[Tensor, "b q_pos num_heads d_head"]
         z = einops.einsum(v, attn_scores, "b p_k n h, b n p_q p_k -> b p_q n h")
 
-        # return out. sum the num_heads.
         o: Float[Tensor, "b o_pos num_heads d_head"]  # n is summed in the process.
         o = einops.einsum(self.W_O, z, "n h m, b p_q n h -> b p_q m")
 
@@ -206,3 +203,65 @@ class Attention(nn.Module):
             xavier_normal_(self.b_V)
         if self.b_O is not None:
             constant_(self.b_O, 0.0)
+
+
+class RotaryAttention(Attention):
+    def __init__(self, d_head: int, **kwargs):
+        super().__init__(**kwargs)
+        self.rotary_emb = RotaryPositionalEncoder(self.head_dim, d_head)
+
+    def forward(
+        self,
+        x: Float[Tensor, "batch pos embed_dim"],
+        is_causal=False,
+        average_attn_weights=True,
+    ) -> Tuple[
+        Float[Tensor, "batch pos embed_dim"], Float[Tensor, "b num_heads q_pos k_pos"]
+    ]:
+        # get query, key, value vectors. Note that *seq_pos for q (q_pos)
+        # and k (k_pos) are the same in self-attn*, but different in cross-attn.
+        q: Float[Tensor, "b q_pos num_heads d_head"]
+        k: Float[Tensor, "b k_pos num_heads d_head"]
+        v: Float[Tensor, "b v_pos num_heads d_head"]
+
+        q = einops.einsum(self.W_Q, x, "n_h m d_h, b p m -> b p n_h d_h")
+        if self.b_Q is not None:
+            q += self.b_Q
+        k = einops.einsum(self.W_K, x, "n_h m d_h, b p m -> b p n_h d_h")
+        if self.b_K is not None:
+            k += self.b_K
+        v = einops.einsum(self.W_V, x, "n_h m d_h, b p m -> b p n_h d_h")
+        if self.b_V is not None:
+            k += self.b_V
+
+        q = self.rotary_emb(q)
+        k = self.rotary_emb(k)
+
+        # calculate attention scores; scale, mask, softmax.
+        attn_scores: Float[Tensor, "b num_heads q_pos k_pos"]
+        attn_scores = einops.einsum(q, k, "b p_q n h, b p_k n h -> b n p_q p_k")
+        attn_scores /= np.sqrt(self.W_Q.shape[-1])  # scale down by d_head.
+
+        if is_causal:
+            attn_scores = self.apply_causal_mask(attn_scores)
+
+        attn_scores = attn_scores.softmax(dim=-1)
+
+        if self.dropout is not None:
+            attn_scores = self.dropout(attn_scores)
+
+        # take weighted average of value vectors (weighted from attn_scores)
+        z: Float[Tensor, "b q_pos num_heads d_head"]
+        z = einops.einsum(v, attn_scores, "b p_k n h, b n p_q p_k -> b p_q n h")
+
+        o: Float[Tensor, "b o_pos num_heads d_head"]  # n is summed in the process.
+        o = einops.einsum(self.W_O, z, "n h m, b p_q n h -> b p_q m")
+
+        if self.b_O is not None:
+            o += self.b_O
+
+        if average_attn_weights:
+            # attention scores are averaged across the n_head dimension.
+            attn_scores = attn_scores.mean(dim=1)
+
+        return o, attn_scores

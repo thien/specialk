@@ -9,6 +9,7 @@ import lightning.pytorch as pl
 import safetensors
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from jaxtyping import Float, Int
 from peft import (
     LoraConfig,
@@ -56,7 +57,6 @@ class TextClassifier(pl.LightningModule):
         self.name = name
         self.vocabulary_size = vocabulary_size
         self.sequence_length = sequence_length
-        self.criterion = nn.BCELoss()
         self.model = None
         self.tokenizer = tokenizer
 
@@ -110,6 +110,10 @@ class TextClassifier(pl.LightningModule):
         n_correct: float = outputs.eq(target).sum().item() / outputs.size(0)
         return n_correct
 
+    @staticmethod
+    def criterion(y_hat: Tensor, y: Tensor) -> Tensor:
+        return F.binary_cross_entropy(y_hat.squeeze(-1), y.float())
+
 
 class CNNClassifier(TextClassifier):
     """CNN Text Classifier. Operates on one-hot."""
@@ -134,6 +138,9 @@ class CNNClassifier(TextClassifier):
             vocab_size=self.vocabulary_size, sequence_length=self.sequence_length
         )
 
+    def forward(self, *args, **kwargs):
+        return self.model(*args, **kwargs)
+
     def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
         """Run Training step.
 
@@ -157,7 +164,7 @@ class CNNClassifier(TextClassifier):
 
         y_hat = self.model(one_hot).squeeze(-1)
 
-        loss: torch.Tensor = self.criterion(y_hat, y.float())
+        loss: torch.Tensor = F.binary_cross_entropy(y_hat, y.float())
         accuracy = self.calculate_classification_metrics(y_hat, y)
 
         self.log_dict(
@@ -190,7 +197,7 @@ class CNNClassifier(TextClassifier):
         one_hot = self.one_hot(x)
 
         y_hat = self.model(one_hot).squeeze(-1)
-        loss: torch.Tensor = self.criterion(y_hat, y.float())
+        loss: torch.Tensor = F.binary_cross_entropy(y_hat, y.float())
 
         accuracy = self.calculate_classification_metrics(y_hat, y)
         return loss, accuracy
@@ -261,6 +268,14 @@ class BERTClassifier(TextClassifier):
         else:
             self.model = self.base_model
         self.save_hyperparameters(logger=False)
+
+    def forward(self, *args, **kwargs):
+        return self.model(*args, **kwargs)
+
+    @staticmethod
+    def criterion(y_hat: Tensor, y: Tensor) -> Tensor:
+        loss: torch.Tensor = F.cross_entropy(y_hat, y.float())
+        return loss
 
     def _load_base_model(self):
         """Load the base model from HuggingFace."""

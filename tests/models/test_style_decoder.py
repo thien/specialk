@@ -1,3 +1,5 @@
+from argparse import Namespace
+
 import numpy as np
 import pytest
 import torch
@@ -9,7 +11,9 @@ from torch.utils.data import DataLoader
 from datasets import Dataset
 from specialk import Constants
 from specialk.core.utils import log
+from specialk.models.classifier.models import BERTClassifier, CNNClassifier
 from specialk.models.classifier.onmt.CNNModels import ConvNet
+from specialk.models.style_decoder import StyleBackTranslationModel
 from specialk.models.tokenizer import SentencePieceVocabulary
 from specialk.models.transformer.torch.pytorch_transformer import (
     PyTorchTransformerModule,
@@ -19,18 +23,15 @@ dirpath = "tests/tokenizer/test_files"
 dev_path = "/Users/t/Projects/datasets/political/political_data/democratic_only.dev.en_fr.parquet"
 dir_tokenizer = Constants.PROJECT_DIR / "assets" / "tokenizer"
 
-BATCH_SIZE = 32
-SEQUENCE_LENGTH = 100
-
 torch.manual_seed(1337)
 
+
+BATCH_SIZE = 50
+SEQUENCE_LENGTH = 150
 VOCAB_SIZE_SMALL = 1000
-VOCAB_SIZE_BIG = 5000
+VOCAB_SIZE_BIG = 25000
 
 PAD = 0
-
-criterion_class = nn.BCELoss()
-crirerion_recon = torch.nn.CrossEntropyLoss(ignore_index=PAD)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -85,8 +86,9 @@ def seq2seq_transformer_model(tokenizer):
 
 
 def classifier_small_vocab():
-    classifier = ConvNet(
-        vocab_size=VOCAB_SIZE_SMALL,
+    classifier = CNNClassifier(
+        name="test_model",
+        vocabulary_size=VOCAB_SIZE_SMALL,
         sequence_length=SEQUENCE_LENGTH,
     )
     classifier.eval()
@@ -97,8 +99,9 @@ def classifier_small_vocab():
 
 
 def classifier_spm(spm_tokenizer):
-    classifier = ConvNet(
-        vocab_size=spm_tokenizer.vocab_size,
+    classifier = CNNClassifier(
+        name="test_model",
+        vocabulary_size=spm_tokenizer.vocab_size,
         sequence_length=SEQUENCE_LENGTH,
     )
     classifier.eval()
@@ -109,7 +112,9 @@ def classifier_spm(spm_tokenizer):
 
 
 def test_model_inference_transformer(spm_tokenizer, spm_dataloader):
-    vocabulary_size = spm_tokenizer.vocab_size
+    """
+    Test the transformer with a CNN classifier.
+    """
     seq2seq = seq2seq_transformer_model(spm_tokenizer)
     classifier = classifier_spm(spm_tokenizer)
 
@@ -122,69 +127,24 @@ def test_model_inference_transformer(spm_tokenizer, spm_dataloader):
     )  # not sure why there's additional indexes.
 
     # sequence 2 sequence forward pass
-    tgt_pred: Float[Tensor, "batch length vocab"] = seq2seq.model._forward(
+    tgt_pred_tokens: Float[Tensor, "batch length vocab"] = seq2seq.model(
         src_text, tgt_text
     )
-    tgt_pred_tokens: Float[Tensor, "batch seq generator"] = F.log_softmax(
-        seq2seq.model.generator(tgt_pred), dim=-1
-    )
-
-    # the forward pass
-
-    # wrap into one-hot encoding of tokens for activation.
-    # this implementation won't pass gradients because of the argmax.
-    # x_argmax = torch.argmax(tgt_pred, dim=-1)
-    # classifier_x: Float[Tensor, "length batch vocab"]
-    # classifier_x = torch.zeros(SEQUENCE_LENGTH, BATCH_SIZE, vocabulary_size).scatter_(
-    #    2, torch.unsqueeze(x_argmax.T, 2), 1
-    # )
 
     # if the tokenizers are the same, then you can do this approach.
+    classifier_x: Float[Tensor, "seq_len batch d_vocab"]
     classifier_x = tgt_pred_tokens.transpose(0, 1)
 
-    # otherwise you need to learn a mapping on top.
-    # also throw a warning out.
-
-    """
-    method here is the original(ish) implementation
-    """
-    # TODO: you need to learn a different projection from the decoder to the tokenizer's input space.
-    # class_input = nn.Linear(
-    #     seq2seq.model.generator.weight.shape[1],
-    #     classifier.word_lut.weight.shape[0],
-    # )
-
-    # linear: Tensor = class_input(tgt_pred)
-    # dim_batch, dim_length, dim_vocab = linear.size()
-
-    # # reshape it for softmax, and shape it back.
-    # out: Tensor = F.softmax(linear.view(-1, dim_vocab), dim=-1).view(
-    #     dim_batch, dim_length, dim_vocab
-    # )
-
-    # out = out.transpose(0, 1)
-    # dim_length, dim_batch, dim_vocab = out.size()
-
-    # # setup padding because the CNN only accepts inputs of certain dimension
-    # if dim_length < SEQUENCE_LENGTH:
-    #     # pad sequences
-    #     cnn_padding = torch.zeros(
-    #         (abs(SEQUENCE_LENGTH - dim_length), dim_batch, dim_vocab)
-    #     )
-    #     cat = torch.cat((out, cnn_padding), dim=0)
-    # else:
-    #     # trim sequences
-    #     cat = out[:SEQUENCE_LENGTH]
-    # classifier_x = cat
-
     # classifer pass
-    y_hat: Float[Tensor, "batch length vocab"] = classifier(classifier_x).squeeze(-1)
+    y_hat: Float[Tensor, "batch length vocab"] = classifier.model(classifier_x).squeeze(
+        -1
+    )
 
     # classifier loss
-    loss_class = criterion_class(y_hat.squeeze(-1), label.float())
+    loss_class = classifier.criterion(y_hat.squeeze(-1), label.float())
 
     # reconstruction loss
-    loss_reconstruction = crirerion_recon(
+    loss_reconstruction = seq2seq.criterion(
         tgt_pred_tokens.view(-1, tgt_pred_tokens.size(-1)), tgt_text.view(-1)
     )
 
@@ -196,5 +156,99 @@ def test_model_inference_transformer(spm_tokenizer, spm_dataloader):
     assert encoder_grad is None
     decoder_grad = seq2seq.model.decoder.layers[0].linear1.weight.grad
     assert isinstance(decoder_grad, Tensor)
-    classifier_grad = classifier.conv.weight.grad
+    classifier_grad = classifier.model.conv.weight.grad
     assert classifier_grad is None
+
+
+def test_model_inference_transformer_cnn_with_class(spm_tokenizer, spm_dataloader):
+    from argparse import Namespace
+
+    from specialk.models.style_decoder import StyleBackTranslationModel
+
+    seq2seq: PyTorchTransformerModule = seq2seq_transformer_model(spm_tokenizer)
+    seq2seq.model.encoder.eval()
+
+    classifier: CNNClassifier = classifier_spm(spm_tokenizer)
+    classifier.refs = Namespace()
+    classifier.refs.tgt_label = 1
+
+    module = StyleBackTranslationModel(seq2seq, classifier)
+
+    # classifier stuff
+    batch: dict = next(iter(spm_dataloader))
+    x, y, label = (
+        batch["text_fr"].squeeze(1),
+        batch["text"].squeeze(1),
+        batch["label"],
+    )  # not sure why there's additional indexes.
+
+    y_hat_text: Float[Tensor, "batch length vocab"]
+    y_hat_text = module.nmt_model.model(x, y)
+
+    if module.mapping is not None:
+        # tokenizers for the models are different so
+        # we need to project that over.
+        y_hat_text: Float[Tensor, "length batch vocab_classifier"]
+        y_hat_text = y_hat_text.transpose(0, 1) @ module.mapping
+
+    y_hat_label: Float[Tensor, "batch"]
+    y_hat_label = module.classifier(y_hat_text)
+
+    # Calculate losses.
+    loss_reconstruction = module.reconstruction_loss(y_hat_text, y)
+    loss_class = module.classifier_loss(y_hat_label, label)
+    joint_loss = loss_class + loss_reconstruction
+
+
+@pytest.fixture(scope="session", autouse=True)
+def pretrained_bert() -> BERTClassifier:
+    return BERTClassifier(name="test", model_base_name="bert-base-uncased")
+
+
+def test_model_inference_transformer_bert_with_class(
+    spm_tokenizer, spm_dataloader, pretrained_bert
+):
+    seq2seq: PyTorchTransformerModule = seq2seq_transformer_model(spm_tokenizer)
+    seq2seq.model.encoder.eval()
+
+    # dataset
+    # src; tgt; class.
+    # pre-filter class.
+
+    classifier: BERTClassifier = pretrained_bert
+    classifier.vocabulary_size = classifier.tokenizer.vocab_size
+    classifier.refs = Namespace()
+    classifier.refs.tgt_label = 1
+
+    module = StyleBackTranslationModel(seq2seq, classifier)
+
+    # classifier stuff
+    batch: dict = next(iter(spm_dataloader))
+    x, y, label = (
+        batch["text_fr"].squeeze(1),
+        batch["text"].squeeze(1),
+        batch["label"],
+    )  # not sure why there's additional indexes.
+
+    y_hat_text: Float[Tensor, "batch length vocab"]
+    y_hat_text = module.nmt_model.model(x, y)
+
+    if module.mapping is not None:
+        # tokenizers for the models are different so
+        # we need to project that over.
+        y_hat_embs = (
+            y_hat_text
+            @ module.mapping
+            @ classifier.model.bert.embeddings.word_embeddings.weight
+        )
+
+    y_hat_mask = torch.argmax(y_hat_text, dim=-1) == PAD
+
+    y_hat_label = module.classifier.model(
+        inputs_embeds=y_hat_embs, attention_mask=y_hat_mask, labels=label
+    )
+
+    # Calculate losses.
+    loss_reconstruction = module.reconstruction_loss(y_hat_text, y)
+    loss_class = y_hat_label.loss
+    joint_loss = loss_class + loss_reconstruction

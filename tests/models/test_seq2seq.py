@@ -20,6 +20,8 @@ from specialk.models.transformer.torch.pytorch_transformer import (
     PyTorchTransformerModel,
     PyTorchTransformerModule,
 )
+
+# below are being used, but the linter won't agree with that
 from tests.models.fixtures import (
     hf_marianmt_dataloader,
     hf_marianmt_tokenizer,

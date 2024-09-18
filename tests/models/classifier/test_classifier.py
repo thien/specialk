@@ -2,7 +2,8 @@ from pathlib import Path
 
 import pytest
 import torch
-from torch import nn
+from jaxtyping import Float
+from torch import Tensor, nn
 from torchmetrics.functional import accuracy
 
 from specialk.core.utils import log
@@ -104,7 +105,6 @@ def test_load_model_from_checkpoint():
 
         text = ["Donald Trump!!!", "obama rules"] * 10
         batch_size = 3
-        output = module.generate(text, batch_size)
+        output: Float[Tensor, "batch 1"] = module.generate(text, batch_size)
         log.info("output", out=output, shape=output.shape)
-        assert output.shape == torch.Size((len(text)))
-        assert isinstance(output, torch.Tensor)
+        assert output.shape == torch.Size((len(text), 1))

@@ -15,9 +15,15 @@ from specialk.core.constants import PAD, PROJECT_DIR, SOURCE, TARGET
 from specialk.core.utils import log
 from specialk.models.mt_model import RNNModule, TransformerModule
 from specialk.models.tokenizer import SentencePieceVocabulary, WordVocabulary
+from specialk.models.transformer.hf_transformer import MarianMTModule
 from specialk.models.transformer.torch.pytorch_transformer import (
     PyTorchTransformerModel,
     PyTorchTransformerModule,
+)
+from tests.models.fixtures import (
+    hf_marianmt_dataloader,
+    hf_marianmt_tokenizer,
+    mt_dataset,
 )
 
 dirpath: Path = Path("tests/tokenizer/test_files")
@@ -37,6 +43,7 @@ BATCH_SIZE = 7
 SEQUENCE_LENGTH = 50
 
 torch.manual_seed(1337)
+torch.use_deterministic_algorithms(True)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -442,3 +449,168 @@ def test_pt_transformer_inference(spm_dataloader):
     )
     y: Int[Tensor, "batch_size*vocab"] = y.view(-1)
     _ = F.cross_entropy(y_hat, y, ignore_index=model.PAD, reduction="sum")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def pretrained_marianmt() -> MarianMTModule:
+    model_base_name: str = "Helsinki-NLP/opus-mt-fr-en"
+    return MarianMTModule(
+        name=model_base_name,
+        model_base_name=model_base_name,
+    )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def pretrained_marianmt_peft() -> MarianMTModule:
+    from peft import LoraConfig
+    from peft.utils.peft_types import TaskType
+
+    modules = [
+        "decoder.layers.0.encoder_attn.q_proj",
+        "decoder.layers.0.encoder_attn.k_proj",
+        "decoder.layers.0.encoder_attn.v_proj",
+        "decoder.layers.1.encoder_attn.q_proj",
+        "decoder.layers.1.encoder_attn.k_proj",
+        "decoder.layers.1.encoder_attn.v_proj",
+        "decoder.layers.2.encoder_attn.q_proj",
+        "decoder.layers.2.encoder_attn.k_proj",
+        "decoder.layers.2.encoder_attn.v_proj",
+        "decoder.layers.3.encoder_attn.q_proj",
+        "decoder.layers.3.encoder_attn.k_proj",
+        "decoder.layers.3.encoder_attn.v_proj",
+        "decoder.layers.4.encoder_attn.q_proj",
+        "decoder.layers.4.encoder_attn.k_proj",
+        "decoder.layers.4.encoder_attn.v_proj",
+        "decoder.layers.5.encoder_attn.q_proj",
+        "decoder.layers.5.encoder_attn.k_proj",
+        "decoder.layers.5.encoder_attn.v_proj",
+        "lm_head",
+    ]
+    model_base_name: str = "Helsinki-NLP/opus-mt-fr-en"
+    peft_config = LoraConfig(
+        task_type=TaskType.SEQ_CLS,
+        r=8,
+        lora_alpha=32,
+        lora_dropout=0.1,
+        bias="none",
+        target_modules=modules,
+    )
+    return MarianMTModule(
+        name=model_base_name,
+        model_base_name=model_base_name,
+        peft_config=peft_config,
+    )
+
+
+def test_marianmt_inference(pretrained_marianmt, hf_marianmt_dataloader):
+    module = pretrained_marianmt
+    dataloader = hf_marianmt_dataloader
+
+    batch: dict = next(iter(dataloader))
+    x: torch.Tensor = batch[SOURCE]
+    y: torch.Tensor = batch[TARGET]
+
+    # forward pass
+    x_mask = x != module.tokenizer.pad_token_id
+    _ = module.model(x, labels=y, attention_mask=x_mask)
+
+
+def test_marianmt_peft_inference(pretrained_marianmt_peft, hf_marianmt_dataloader):
+    dataloader = hf_marianmt_dataloader  # TODO this tokenizer isn't really it.
+    module = pretrained_marianmt_peft
+    model = module.model
+
+    batch: dict = next(iter(dataloader))
+    x: torch.Tensor = batch[SOURCE]
+    y: torch.Tensor = batch[TARGET]
+
+    # forward pass
+    x_mask = x != module.tokenizer.pad_token_id
+    y_hat = model(x, labels=y, attention_mask=x_mask)
+
+
+def test_marianmt_peft_inference(pretrained_marianmt_peft, hf_marianmt_dataloader):
+    dataloader = hf_marianmt_dataloader  # TODO this tokenizer isn't really it.
+    module = pretrained_marianmt_peft
+    model = module.model
+
+    batch: dict = next(iter(dataloader))
+    x: torch.Tensor = batch[SOURCE]
+    y: torch.Tensor = batch[TARGET]
+
+    # forward pass
+    x_mask = x != module.tokenizer.pad_token_id
+    y_hat = model(x, labels=y, attention_mask=x_mask)
+
+
+def test_save_load_marianmt_checkpoint(
+    pretrained_marianmt, hf_marianmt_dataloader, tmp_path
+):
+    dataloader = hf_marianmt_dataloader  # TODO this tokenizer isn't really it.
+    module = pretrained_marianmt
+    checkpoint_path = tmp_path / "marianmt.ckpt"
+
+    # Save initial state of PEFT parameters
+    trainer = Trainer(max_epochs=1, logger=False, limit_train_batches=1)
+    trainer.fit(module, train_dataloaders=hf_marianmt_dataloader)
+
+    # Save checkpoint
+    trainer.save_checkpoint(checkpoint_path)
+
+    # Load checkpoint
+    ckpt_module = MarianMTModule.load_from_checkpoint(checkpoint_path)
+
+    batch: dict = next(iter(dataloader))
+    x: torch.Tensor = batch[SOURCE]
+    y: torch.Tensor = batch[TARGET]
+
+    # forward pass
+    x_mask = x != module.tokenizer.pad_token_id
+
+    y_old = module.model(x, attention_mask=x_mask, labels=y)
+    y_new = ckpt_module.model(x, attention_mask=x_mask, labels=y)
+    print(y_old.logits.shape)
+    print(y_new.logits.shape)
+
+    torch.testing.assert_close(y_old.logits, y_new.logits, atol=1e-4, rtol=1e-4)
+
+
+def test_save_load_marianmt_peft_checkpoint(
+    pretrained_marianmt_peft, hf_marianmt_dataloader, tmp_path
+):
+    dataloader = hf_marianmt_dataloader  # TODO this tokenizer isn't really it.
+    module = pretrained_marianmt_peft
+    checkpoint_path = tmp_path / "marianmt.ckpt"
+
+    trainer = Trainer(max_epochs=1, accelerator="cpu", logger=False)
+    trainer.fit(module, train_dataloaders=dataloader)
+
+    # Save initial state of PEFT parameters
+    initial_peft_state = {
+        name: param.clone()
+        for name, param in module.model.named_parameters()
+        if "lora_" in name
+    }
+
+    # Save checkpoint
+    trainer.save_checkpoint(checkpoint_path)
+
+    # Load checkpoint
+    ckpt_module = MarianMTModule.load_from_checkpoint(checkpoint_path)
+
+    # Check PEFT weights
+    for name, param in ckpt_module.model.named_parameters():
+        if "lora_" in name:
+            if name not in initial_peft_state:
+                raise ValueError(
+                    f"Unexpected LoRA parameter {name} after loading checkpoint"
+                )
+            if not torch.allclose(
+                param, initial_peft_state[name], rtol=1e-4, atol=1e-4
+            ):
+                err_msg = f"LoRA parameter {name} changed unexpectedly after loading checkpoint"
+                log.error(err_msg, initial=initial_peft_state[name], ckpt=param)
+
+                raise ValueError(err_msg)
+            else:
+                log.info(f"Parameter {name} is the same.")

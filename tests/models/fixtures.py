@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pandas as pd
 import pytest
 import torch
 from torch import nn
@@ -8,6 +9,7 @@ from torchmetrics.functional import accuracy
 
 from datasets import Dataset, load_dataset
 from datasets.exceptions import DatasetGenerationError
+from specialk.core.constants import PROJECT_DIR, SOURCE, TARGET
 from specialk.core.utils import log
 from specialk.models.classifier.onmt.CNNModels import ConvNet
 from specialk.models.tokenizer import (
@@ -65,6 +67,37 @@ def hf_distilbert_tokenizer() -> HuggingFaceVocabulary:
         pretrained_model_name_or_path=model_name,
         max_length=512,
     )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def mt_dataset() -> Dataset:
+    dataset_path = PROJECT_DIR / "tests/test_files/datasets/en_fr.parquet"
+    return Dataset.from_pandas(pd.read_parquet(dataset_path)[:10])
+
+
+@pytest.fixture(scope="session")
+def hf_marianmt_tokenizer() -> HuggingFaceVocabulary:
+    model_name = "Helsinki-NLP/opus-mt-fr-en"
+    return HuggingFaceVocabulary(
+        name=model_name,
+        pretrained_model_name_or_path=model_name,
+        max_length=100,
+    )
+
+
+@pytest.fixture(scope="session")
+def hf_marianmt_dataloader(
+    mt_dataset: Dataset, hf_marianmt_tokenizer: HuggingFaceVocabulary
+):
+    def tokenize(example):
+        # perform tokenization at this stage.
+        example[SOURCE] = hf_marianmt_tokenizer.to_tensor(example[SOURCE]).squeeze(0)
+        example[TARGET] = hf_marianmt_tokenizer.to_tensor(example[TARGET]).squeeze(0)
+        return example
+
+    tokenized_dataset = mt_dataset.with_format("torch").map(tokenize)
+    dataloader = DataLoader(tokenized_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    return dataloader
 
 
 @pytest.fixture(scope="session")

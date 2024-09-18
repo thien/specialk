@@ -4,7 +4,7 @@ import math
 from argparse import Namespace
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple, Union, TypeVar
+from typing import List, Optional, Tuple, TypeVar, Union
 
 import lightning.pytorch as pl
 import torch
@@ -47,6 +47,7 @@ from specialk.models.transformer.legacy.Models import (
 from specialk.models.transformer.legacy.Optim import ScheduledOptim
 
 bleu = SacreBLEU()
+
 
 class NMTModule(pl.LightningModule):
     """auto-regressive neural machine translation module."""
@@ -214,7 +215,8 @@ class NMTModule(pl.LightningModule):
 
     def optimizer_step(self, *args, **kwargs):
         super().optimizer_step(*args, **kwargs)
-        self.lr_scheduler.step()
+        if hasattr(self, "lr_scheduler"):
+            self.lr_scheduler.step()
 
     def loss(
         self,

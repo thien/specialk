@@ -2,7 +2,7 @@
 Style Decoder Model.
 """
 
-from typing import Dict
+from typing import Dict, Optional, Tuple
 
 import lightning.pytorch as pl
 import torch
@@ -12,8 +12,13 @@ from jaxtyping import Float, Int
 from torch import Tensor
 from torch.utils.data import DataLoader
 
-from specialk.core.constants import SOURCE, TARGET
-from specialk.models.classifier.trainer import TextClassifier
+from specialk.core import log
+from specialk.core.constants import PAD, SOURCE, TARGET
+from specialk.models.classifier.trainer import (
+    BERTClassifier,
+    CNNClassifier,
+    TextClassifier,
+)
 from specialk.models.mt_model import NMTModule
 from specialk.models.ops.ops import token_accuracy
 
@@ -23,8 +28,9 @@ class StyleBackTranslationModel(pl.LightningModule):
         self,
         mt_model: NMTModule,
         classifier: TextClassifier,
-        smoothing: bool = True,
+        target_label: int = 1,
         use_mapping=True,
+        mapping_dim: int = 256,
     ):
         """
         Args:
@@ -32,35 +38,32 @@ class StyleBackTranslationModel(pl.LightningModule):
                 Machine Translation model (with target language to english).
             classifier (CNNModels):
                 Style classifier model.
-            smoothing (bool, optional):
-                If set, adds smothing to reconstruction loss function.
-                Defaults to True.
+            mapping_dim (int):
+                Dimension to learn the mapping between vocabularies
+                from the sequence model to the classifier model.
         """
         super().__init__()
-        self.nmt_model: NMTModule = mt_model
+        self.sequence_model: NMTModule = mt_model
         self.classifier: TextClassifier = classifier
         # the mapping matrix is learnt as we fine-tune the decoder model.
-        self.mapping = (
-            nn.Parameter(
-                torch.zeros(
-                    (self.nmt_model.vocabulary_size, self.classifier.vocabulary_size)
-                )
-            )
-            if use_mapping
+        self.use_mapping = use_mapping
+
+        # having one tensor is an unreaonable size; (marianMT is 50k, BERT 30k)...
+        self.seq_projection = (
+            nn.Linear(self.sequence_model.vocabulary_size, mapping_dim)
+            if self.use_mapping
             else None
         )
-        self.target_label: int = self.classifier.refs.tgt_label
+        self.clf_projection = (
+            nn.Linear(mapping_dim, self.classifier.vocabulary_size)
+            if self.use_mapping
+            else None
+        )
+
+        self.target_label: int = target_label
 
         # encoder will always be in eval mode.
-        # We're only updating the decoder weights.
         self.classifier.eval()
-
-        # loss functions.
-        self.criterion_class = nn.BCELoss()
-        self.criterion_recon = torch.nn.CrossEntropyLoss(
-            ignore_index=self.nmt_model.PAD
-        )
-        self.smoothing = smoothing
 
     def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
         """
@@ -71,31 +74,25 @@ class StyleBackTranslationModel(pl.LightningModule):
             Loss value to run gradients against.
         """
 
-        x: Int[Tensor, "batch seq_len"] = batch[SOURCE]
-        y: Int[Tensor, "batch seq_len"] = batch[TARGET]
-        label: Int[Tensor, "batch"] = batch["class"]
+        x: Int[Tensor, "batch seq_len"] = batch[SOURCE].squeeze(1)
+        y: Int[Tensor, "batch seq_len"] = batch[TARGET].squeeze(1)
+        y_label: Int[Tensor, "batch"] = batch["label"]
 
-        y_hat_text: Float[Tensor, "batch length vocab"]
-        y_hat_text = self.nmt_model.model(x, y)
+        log.info("x.shape", xhape=x.shape)
 
-        if self.mapping is not None:
-            # tokenizers for the models are different so
-            # we need to project that over.
-            y_hat_text: Float[Tensor, "batch length vocab_classifier"]
-            y_hat_text = y_hat_text @ self.mapping
-
-        y_hat_label: Float[Tensor, "batch"]
-        y_hat_label = self.classifier(y_hat_text)
+        y_hat_text, y_hat_label = self._forward(x, y, y_label)
 
         # Calculate losses.
-        loss_class = self.classifier_loss(y_hat_label, label)
+        y_hat_text = y_hat_text.view(-1, y_hat_text.size(-1))
+        y = y.view(-1)
         loss_reconstruction = self.reconstruction_loss(y_hat_text, y)
+        loss_class = y_hat_label.loss
         joint_loss = loss_class + loss_reconstruction
 
         # report metrics.
         self.log_dict(
             {
-                "train_acc": token_accuracy(y_hat_text, y, self.constants.PAD),
+                "train_acc": token_accuracy(y_hat_text, y, PAD),
                 "batch_id": batch_idx,
                 "train_joint_loss": joint_loss,
                 "train_recon_loss": loss_reconstruction,
@@ -104,7 +101,28 @@ class StyleBackTranslationModel(pl.LightningModule):
         )
         return joint_loss
 
-    def _shared_eval_step(self, batch: DataLoader, batch_idx: int):
+    def _forward(
+        self,
+        x: Int[Tensor, "batch seq_len"],
+        y: Int[Tensor, "batch seq_len"],
+        y_label: Optional[Int[Tensor, "batch"]] = None,
+    ) -> Tuple[Tensor, Optional[Tensor]]:
+        """Performs forward pass on the mt model and the discriminator model."""
+        y_hat_text: Float[Tensor, "batch length vocab"]
+        y_hat_text = self.sequence_model(x, y)
+
+        if self.use_mapping:
+            # tokenizers for the models are different so
+            # we need to project that over.
+            y_hat_text: Float[Tensor, "batch length vocab_classifier"]
+            y_hat_text = self.seq_projection(y_hat_text)
+            y_hat_text = self.clf_projection(y_hat_text)
+
+        y_hat_label: Float[Tensor, "batch"]
+        y_hat_label = self.classifier(y_hat_text)
+        return y_hat_text, y_hat_label
+
+    def _shared_eval_step(self, batch: dict, batch_idx: int):
         """Evaluation step used for both eval/test runs on a given dataset.
 
         Args:
@@ -114,19 +132,17 @@ class StyleBackTranslationModel(pl.LightningModule):
         Returns:
             _type_: _description_
         """
-        x: Int[Tensor, "batch seq_len"] = batch[SOURCE]
-        y: Int[Tensor, "batch seq_len"] = batch[TARGET]
-        label: Int[Tensor, "batch"] = batch["class"]
+        x: Int[Tensor, "batch seq_len"] = batch[SOURCE].squeeze(1)
+        y: Int[Tensor, "batch seq_len"] = batch[TARGET].squeeze(1)
+        y_label: Int[Tensor, "batch"] = batch["class"]
 
-        y_hat_text: Float[Tensor, "batch length vocab"]
-        y_hat_text = self.mt_forward(x, y)
-
-        y_hat_label: Float[Tensor, "batch"]
-        y_hat_label = self.classifier(y_hat_text)
+        y_hat_text, y_hat_label = self._forward(x, y, y_label)
 
         # Calculate losses.
-        loss_class = self.classifier_loss(y_hat_label, label)
+        y_hat_text = y_hat_text.view(-1, y_hat_text.size(-1))
+        y = y.view(-1)
         loss_reconstruction = self.reconstruction_loss(y_hat_text, y)
+        loss_class = y_hat_label.loss
         joint_loss = loss_class + loss_reconstruction
         accuracy = token_accuracy(y_hat_text, y, self.constants.PAD)
 
@@ -158,22 +174,99 @@ class StyleBackTranslationModel(pl.LightningModule):
         self.log_dict(metrics)
         return metrics
 
-    def classifier_loss(
-        self, pred: Float[Tensor, "batch 1"], ref: Int[Tensor, "batch"]
-    ) -> Tensor:
-        """
-        Computes classifier loss.
-        """
-        return self.classifier.criterion(pred, ref)
+    def reconstruction_loss(self, y_hat, y) -> Tensor:
+        return self.sequence_model.criterion(y_hat, y)
 
-    def reconstruction_loss(
-        self, pred: Float[Tensor, "batch seq vocab"], ref: Int[Tensor, "batch seq"]
-    ) -> Tensor:
-        """
-        Computes reconstruction loss.
-        """
-        return self.nmt_model.criterion(pred.view(-1, pred.size(-1)), ref.view(-1))
+    def classifier_loss(self, y_hat, y) -> Tensor:
+        return self.classifier.criterion(y_hat, y)
+
+    def _get_lora_params(self):
+        """Filter and return only the LoRA parameters."""
+        lora_params = []
+        for name, param in self.sequence_model.model.named_parameters():
+            # Assuming LoRA parameters have 'lora_' in their name
+            if "lora_" in name:
+                lora_params.append(param)
+        return lora_params
 
     def configure_optimizers(self):
-        # return torch.optim.Adam(self.model.parameters(), lr=0.02)
-        return None
+        params = self._get_lora_params()
+        if len(params) == 0:
+            params = list(self.sequence_model.model.parameters())
+
+        if self.use_mapping:
+            params += list(self.clf_projection.parameters())
+            params += list(self.seq_projection.parameters())
+        return torch.optim.AdamW(params, lr=0.002)
+
+
+class StyleBackTranslationModelWithCNN(StyleBackTranslationModel):
+    def __init__(
+        self,
+        mt_model: NMTModule,
+        classifier: CNNClassifier,
+        **kwargs,
+    ):
+        assert isinstance(
+            classifier, CNNClassifier
+        ), f"Classifier is not a CNNClassifier (found {type(classifier).__name__})"
+        super().__init__(mt_model=mt_model, classifier=classifier, **kwargs)
+
+    def _forward(
+        self,
+        x: Int[Tensor, "batch seq_len"],
+        y: Int[Tensor, "batch seq_len"],
+        y_label: Optional[Int[Tensor, "batch"]] = None,
+    ) -> Tuple[Tensor, Optional[Tensor]]:
+        y_hat_text: Float[Tensor, "batch length vocab_seq2seq"]
+        y_hat_text = self.sequence_model(x, y)
+
+        classifier_text: Float[Tensor, "seq_len batch d_vocab_classifier"]
+        classifier_text = y_hat_text.transpose(0, 1)
+        if self.use_mapping:
+            classifier_text = self.seq_projection(classifier_text)
+            classifier_text = self.clf_projection(classifier_text)
+
+        # classifer pass
+        y_hat_label: Float[Tensor, "batch length vocab"]
+        y_hat_label = self.classifier.model(classifier_text).squeeze(-1)
+        return y_hat_text, y_hat_label
+
+
+class StyleBackTranslationModelWithBERT(StyleBackTranslationModel):
+    def __init__(self, mt_model: NMTModule, classifier: BERTClassifier, **kwargs):
+        assert isinstance(
+            classifier, BERTClassifier
+        ), f"Classifier is not a BERTClassifier (found {type(classifier).__name__})"
+        super().__init__(
+            mt_model=mt_model, classifier=classifier, use_mapping=True, **kwargs
+        )
+
+    def _forward(
+        self,
+        x: Int[Tensor, "batch seq_len"],
+        y: Int[Tensor, "batch seq_len"],
+        y_label: Optional[Int[Tensor, "batch"]] = None,
+    ) -> Tuple[Tensor, Optional[Tensor]]:
+        y_hat_text: Float[Tensor, "batch length vocab"]
+        y_hat_text = self.sequence_model(x, y)
+
+        # tokenizers for the models are going to be different. We're going to
+        # learn the mapping as we go.
+
+        # tokenizers for the models are different so
+        # we need to project that over.
+        y_hat_text: Float[Tensor, "batch length vocab_classifier"]
+        y_hat_text = self.seq_projection(y_hat_text)
+        y_hat_text = self.clf_projection(y_hat_text)
+        y_hat_embs = (
+            y_hat_text @ self.classifier.model.bert.embeddings.word_embeddings.weight
+        )
+
+        y_hat_mask = torch.argmax(y_hat_text, dim=-1) == PAD
+
+        y_hat_label: Float[Tensor, "batch"]
+        y_hat_label = self.classifier.model(
+            inputs_embeds=y_hat_embs, attention_mask=y_hat_mask, labels=y_label
+        )
+        return y_hat_text, y_hat_label

@@ -274,7 +274,7 @@ class BERTClassifier(TextClassifier):
 
     @staticmethod
     def criterion(y_hat: Tensor, y: Tensor) -> Tensor:
-        loss: torch.Tensor = F.cross_entropy(y_hat, y.float())
+        loss: torch.Tensor = F.cross_entropy(y_hat, y)
         return loss
 
     def _load_base_model(self):

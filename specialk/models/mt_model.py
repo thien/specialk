@@ -109,6 +109,9 @@ class NMTModule(pl.LightningModule):
         self.kwargs = kwargs
         self.save_hyperparameters()
 
+    def forward(self, x: Tensor, y: Tensor) -> Tensor:
+        return self.model(x, y)
+
     def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
         """Run Training step.
 

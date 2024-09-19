@@ -60,6 +60,10 @@ class MarianMTModule(NMTModule):
             self.model = self.base_model
         self.save_hyperparameters(logger=False)
 
+    def forward(self, x: Tensor, y: Tensor) -> Tensor:
+        x_mask = x != self.tokenizer.pad_token_id
+        return self.model(x, labels=y, attention_mask=x_mask).logits
+
     def get_lora_config_modules(
         self, num_decoder_layers=6, add_encoder=False
     ) -> List[str]:
@@ -180,6 +184,12 @@ class MarianMTModule(NMTModule):
         else:
             # For non-PEFT models, load the entire state dict
             self.model.load_state_dict(checkpoint["state_dict"])
+
+    def _freeze_non_lora_weights(self):
+        for name, param in self.model.named_parameters():
+            if "lora_" not in name:
+                param.requires_grad = False
+                # log.info(f"froze {name}")
 
     @classmethod
     def load_from_checkpoint(cls, checkpoint_path, map_location=None):

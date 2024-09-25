@@ -1,18 +1,18 @@
-# Style-Transfer with Transformers
+# Scalable Text-Based Style-Transfer
 
 ![Style Transfer from Popular Press to Quality](doc/images/preview.png)
 
 [![wakatime](https://wakatime.com/badge/user/4251d8c6-f363-4bc2-92de-31e3923c596a/project/41ffd15c-a534-4e52-9250-6e308379d529.svg)](https://wakatime.com/badge/user/4251d8c6-f363-4bc2-92de-31e3923c596a/project/41ffd15c-a534-4e52-9250-6e308379d529)
 
-This repository contains the implementation of my summer thesis.
+This repository contains the implementation of what used to be my summer thesis. This has evolved over time. 
 
 ## Requirements
 
-You'll need `python3`, `pytorch`, `spacy`, `numpy`, `pyemd`, `bayesian-optimisation`, `rouge`, and `pyTelegramBotAPI`. You can install them via `pip3` (but you'll want to make use of CUDA so you might want to look into that too).
-
-To make life easier I've added a `requirements.txt` that'll allow you to install everything necessary (after installing `python3.6+`):
+Using `uv`, I've added a `requirements.txt` that'll allow you to install everything necessary (after installing `python3.9.7+`):
 
    uv pip install -e .  
+
+This has been tested to run on both Linux and macOS Sequoia and above, and has not been tested on Windows.
 
 ## Datasets
 

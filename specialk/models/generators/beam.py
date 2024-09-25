@@ -274,6 +274,8 @@ class EncoderDecoderBeam(Beam["NMTModule"]):
 
 @dataclass
 class BeamBatch:
+    """Batch implementation of Beam Search."""
+
     beams: List[Beam]
 
     @property
@@ -311,7 +313,7 @@ class BeamBatch:
         )
 
     def generate(
-        self, tokens_per_beam: int, no_repeat_ngram_size: int = None
+        self, tokens_per_beam: int, no_repeat_ngram_size: Optional[int] = None
     ) -> "BeamBatch":
         return self.__class__.create(
             [
@@ -339,4 +341,3 @@ class BeamBatch:
                 table.add_row(f"{i}", f"{logprob_sum:>8.3f}", repr(text))
         if display:
             rprint(table)
-        return table

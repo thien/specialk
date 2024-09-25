@@ -131,27 +131,6 @@ def test_model_inference_peft_distilbert(
     output = y_hat.logits
 
 
-def test_save_load_distilbert_checkpoint(
-    hf_distilbert_dataloader, pretrained_distilbert, tmp_path
-):
-    checkpoint_path = tmp_path / "checkpoint.ckpt"
-    module = pretrained_distilbert
-    trainer = Trainer(max_epochs=0, accelerator="cpu", logger=False)
-    trainer.fit(module, train_dataloaders=hf_distilbert_dataloader)
-
-    m = module.model
-
-    # generate temporary path to save checkpoint and load from.
-    trainer.save_checkpoint(checkpoint_path)
-
-    ckpt_module = BERTClassifier.load_from_checkpoint(checkpoint_path)
-    m2 = ckpt_module.model
-    torch.testing.assert_close(
-        m.distilbert.embeddings.word_embeddings.weight,
-        m2.distilbert.embeddings.word_embeddings.weight,
-    )
-
-
 def test_save_load_peft_distilbert_checkpoint(
     hf_distilbert_dataloader, pretrained_peft_distilbert, tmp_path
 ):
@@ -188,6 +167,27 @@ def test_save_load_peft_distilbert_checkpoint(
                 log.error(err_msg, initial=initial_peft_state[name], ckpt=param)
 
                 raise ValueError(err_msg)
+
+
+def test_save_load_distilbert_checkpoint_cpu(
+    hf_distilbert_dataloader, pretrained_distilbert, tmp_path
+):
+    checkpoint_path = tmp_path / "checkpoint.ckpt"
+    module = pretrained_distilbert
+    trainer = Trainer(max_epochs=0, accelerator="cpu", logger=False)
+    trainer.fit(module, train_dataloaders=hf_distilbert_dataloader)
+
+    m = module.model
+
+    # generate temporary path to save checkpoint and load from.
+    trainer.save_checkpoint(checkpoint_path)
+
+    ckpt_module = BERTClassifier.load_from_checkpoint(checkpoint_path)
+    m2 = ckpt_module.model
+    torch.testing.assert_close(
+        m.distilbert.embeddings.word_embeddings.weight,
+        m2.distilbert.embeddings.word_embeddings.weight,
+    )
 
 
 def test_save_load_distilbert_checkpoint(

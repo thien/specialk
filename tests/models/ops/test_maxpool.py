@@ -1,9 +1,11 @@
 import numpy as np
+import pytest
 import torch
 
 from specialk.models.ops.ops import FuncMaxPool3d
 
 
+@pytest.mark.skip(reason="Not using implementation; not pre-training on MPS for now.")
 def test_maxpool3d(n_tests=20):
     for _ in range(n_tests):
         b = np.random.randint(2, 10)

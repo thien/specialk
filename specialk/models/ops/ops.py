@@ -163,7 +163,7 @@ def conv3d(
     )
 
 
-def maxpool2d(
+def FuncMaxPool2d(
     x: Float[Tensor, "b ic h w"],
     kernel_size: IntOrPair,
     stride: Optional[IntOrPair] = None,

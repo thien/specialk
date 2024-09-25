@@ -13,13 +13,12 @@ from typing import Callable, List, Optional, Tuple, Union
 
 import safetensors
 import torch
-from peft import (
-    LoraConfig,
-    PeftModel,
-    TaskType,
-    get_peft_model,
-    get_peft_model_state_dict,
-)
+from peft.mapping import get_peft_model
+from peft.peft_model import PeftModel
+from peft.tuners.lora.config import LoraConfig
+from peft.utils.peft_types import TaskType
+from peft.utils.save_and_load import get_peft_model_state_dict
+from torch import Tensor
 from torch.nn import LayerNorm
 from torch.optim import AdamW
 from transformers import AutoConfig, AutoModelForSeq2SeqLM, AutoTokenizer
@@ -175,7 +174,7 @@ class MarianMTModule(NMTModule):
             # For non-PEFT models, save the entire state dict
             checkpoint["state_dict"] = self.model.state_dict()
 
-    def on_load_checkpoint(self, checkpoint):
+    def on_load_checkpoint(self, checkpoint: dict):
         # Reload the base model to ensure clean slate
         if "peft_state_dict" in checkpoint:
             # Re-initialize the PEFT model
@@ -189,10 +188,9 @@ class MarianMTModule(NMTModule):
         for name, param in self.model.named_parameters():
             if "lora_" not in name:
                 param.requires_grad = False
-                # log.info(f"froze {name}")
 
     @classmethod
-    def load_from_checkpoint(cls, checkpoint_path, map_location=None):
+    def load_from_checkpoint(cls, checkpoint_path: Path, map_location=None):
         checkpoint = torch.load(checkpoint_path, map_location=map_location)
 
         model = cls(

@@ -238,6 +238,8 @@ class RotaryAttention(Attention):
         if self.b_V is not None:
             k += self.b_V
 
+        # the line below is the main implementation difference between Attention
+        # and RotaryAttention.
         q, k = self.rotary_emb(q), self.rotary_emb(k)
 
         # calculate attention scores; scale, mask, softmax.

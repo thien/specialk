@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 
 from specialk.core import log
 from specialk.core.constants import PAD, SOURCE, TARGET
-from specialk.models.classifier.trainer import (
+from specialk.models.classifier.models import (
     BERTClassifier,
     CNNClassifier,
     TextClassifier,

@@ -100,6 +100,7 @@ def word_dataloader_separate(
     return dataloader, de_word_tokenizer, en_word_tokenizer
 
 
+@pytest.mark.lightweight
 def test_rnn_inference_separate_tokenizers(word_dataloader_separate):
     dataloader, src_tokenizer, tgt_tokenizer = word_dataloader_separate
     assert src_tokenizer.vocab_size != tgt_tokenizer.vocab_size
@@ -135,6 +136,7 @@ def test_rnn_inference_separate_tokenizers(word_dataloader_separate):
     loss.backward()
 
 
+@pytest.mark.lightweight
 def test_rnn_inference(spm_dataloader):
     dataloader, tokenizer = spm_dataloader
 
@@ -167,6 +169,7 @@ def test_rnn_inference(spm_dataloader):
     loss.backward()
 
 
+@pytest.mark.lightweight
 def test_rnn_inference_brnn(spm_dataloader):
     dataloader, tokenizer = spm_dataloader
 

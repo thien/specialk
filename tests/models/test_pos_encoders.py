@@ -1,8 +1,10 @@
+import pytest
 import torch
 
 from specialk.models.transformer.pos_encoders import RotaryPositionalEncoder
 
 
+@pytest.mark.lightweight
 @torch.inference_mode()
 def test_rope():
     # Parameters
@@ -32,6 +34,7 @@ def test_rope():
     assert torch.allclose(y_hat, actual, rtol=1e-4, atol=1e-4)
 
 
+@pytest.mark.lightweight
 @torch.inference_mode()
 def test_rope_simple():
     # Reference test case from
@@ -55,4 +58,3 @@ def test_rope_simple():
         ]
     )
     assert torch.allclose(y_hat, actual, rtol=1e-4, atol=1e-4)
-

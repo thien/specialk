@@ -78,6 +78,7 @@ def pretrained_peft_distilbert() -> BERTClassifier:
     )
 
 
+@pytest.mark.lightweight
 def test_model_inference(hf_bert_dataloader, pretrained_bert):  # noqa: F811
     model = pretrained_bert
     model.eval()
@@ -96,6 +97,7 @@ def test_model_inference(hf_bert_dataloader, pretrained_bert):  # noqa: F811
     output = y_hat.logits
 
 
+@pytest.mark.lightweight
 def test_model_inference_peft(hf_bert_dataloader, pretrained_peft_bert):  # noqa: F811
     model = pretrained_peft_bert
     model.eval()
@@ -114,6 +116,7 @@ def test_model_inference_peft(hf_bert_dataloader, pretrained_peft_bert):  # noqa
     output = y_hat.logits
 
 
+@pytest.mark.heavyweight
 def test_model_inference_peft_distilbert(
     hf_distilbert_dataloader, pretrained_peft_distilbert
 ):  # noqa: F811
@@ -134,6 +137,7 @@ def test_model_inference_peft_distilbert(
     output = y_hat.logits
 
 
+@pytest.mark.heavyweight
 def test_save_load_peft_distilbert_checkpoint(
     hf_distilbert_dataloader, pretrained_peft_distilbert, tmp_path
 ):
@@ -172,6 +176,7 @@ def test_save_load_peft_distilbert_checkpoint(
                 raise ValueError(err_msg)
 
 
+@pytest.mark.heavyweight
 def test_save_load_distilbert_checkpoint_cpu(
     hf_distilbert_dataloader, pretrained_distilbert, tmp_path
 ):
@@ -193,6 +198,7 @@ def test_save_load_distilbert_checkpoint_cpu(
     )
 
 
+@pytest.mark.heavyweight
 def test_save_load_distilbert_checkpoint(
     hf_distilbert_dataloader, pretrained_distilbert, tmp_path
 ):

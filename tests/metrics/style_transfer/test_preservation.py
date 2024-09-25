@@ -13,6 +13,7 @@ def preservation():
     )
 
 
+@pytest.mark.heavyweight
 def test_preservation(preservation):
     text_close = ("the fox was sleeping", "the fox slept")
     text_far = ("the fox was sleeping", "chicken wings are gerat")

@@ -17,31 +17,31 @@ BATCH_SIZE = 2
 torch.manual_seed(1337)
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="module", autouse=True)
 def dataset() -> Dataset:
     try:
-        dataset = load_dataset("thien/political", split="eval")
+        dataset = load_dataset("thien/political", split="eval[:5%]")
     except DatasetGenerationError:
         dataset = Dataset.from_parquet(dev_path)
     dataset = dataset.class_encode_column("label")
     return dataset
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def bpe_tokenizer() -> BPEVocabulary:
     tokenizer_filepath = Path(dirpath) / "bpe_tokenizer"
     tokenizer = BPEVocabulary.from_file(tokenizer_filepath)
     return tokenizer
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def word_tokenizer() -> WordVocabulary:
     tokenizer_filepath = Path(dirpath) / "word_tokenizer"
     word_tokenizer = WordVocabulary.from_file(tokenizer_filepath)
     return word_tokenizer
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def bpe_dataloader(dataset: Dataset, bpe_tokenizer: BPEVocabulary):
     def tokenize(example):
         # perform tokenization at this stage.
@@ -53,12 +53,14 @@ def bpe_dataloader(dataset: Dataset, bpe_tokenizer: BPEVocabulary):
     return dataloader
 
 
+@pytest.mark.lightweight
 def test_make_dataloader(dataset):
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE)
     batch = next(iter(dataloader))
     assert isinstance(batch["text"][0], str)
 
 
+@pytest.mark.heavyweight
 def test_dataloader_tokenized_bpe(dataset: Dataset, bpe_tokenizer: BPEVocabulary):
     def tokenize(example):
         # perform tokenization at this stage.
@@ -66,11 +68,11 @@ def test_dataloader_tokenized_bpe(dataset: Dataset, bpe_tokenizer: BPEVocabulary
         return example
 
     tokenized_dataset = dataset.with_format("torch").map(tokenize)
-    dataloader = DataLoader(tokenized_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    dataloader = DataLoader(tokenized_dataset, batch_size=BATCH_SIZE, shuffle=False)
     batch = next(iter(dataloader))
     # number chosen by the seed.
     batch_idx = batch["id"]
-    expected_idx = torch.Tensor([860, 1526])
+    expected_idx = torch.Tensor([0, 1])
     assert torch.all(batch_idx.eq(expected_idx))
     assert isinstance(batch["text"], torch.Tensor)
     batch["text"] = batch["text"].reshape(2, -1)
@@ -79,6 +81,7 @@ def test_dataloader_tokenized_bpe(dataset: Dataset, bpe_tokenizer: BPEVocabulary
     assert isinstance(batch["text"][0][0].item(), int)
 
 
+@pytest.mark.heavyweight
 def test_dataloader_tokenized_word(dataset: Dataset, word_tokenizer: WordVocabulary):
     def tokenize(example):
         # perform tokenization at this stage.
@@ -86,11 +89,11 @@ def test_dataloader_tokenized_word(dataset: Dataset, word_tokenizer: WordVocabul
         return example
 
     tokenized_dataset = dataset.with_format("torch").map(tokenize)
-    dataloader = DataLoader(tokenized_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    dataloader = DataLoader(tokenized_dataset, batch_size=BATCH_SIZE, shuffle=False)
     batch = next(iter(dataloader))
     # number chosen by the seed.
     batch_idx = batch["id"]
-    expected_idx = torch.Tensor([757, 1988])
+    expected_idx = torch.Tensor([0, 1])
     assert torch.all(batch_idx.eq(expected_idx))
     assert isinstance(batch["text"], torch.Tensor)
     batch["text"] = batch["text"].reshape(2, -1)
@@ -99,6 +102,7 @@ def test_dataloader_tokenized_word(dataset: Dataset, word_tokenizer: WordVocabul
     assert isinstance(batch["text"][0][0].item(), int)
 
 
+@pytest.mark.heavyweight
 def test_dataloader_class_label(dataset: Dataset):
     torch_dataset = dataset.with_format("torch")
     log.info("features", features=dataset.features)

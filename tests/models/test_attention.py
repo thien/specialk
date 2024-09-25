@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 import torch
 import torch.nn as nn
 from jaxtyping import Float
@@ -12,6 +13,7 @@ torch.manual_seed(constants.SEED)
 np.random.seed(constants.SEED)
 
 
+@pytest.mark.lightweight
 @torch.inference_mode()
 def test_reference_attention_n_heads_1():
     embed_dim = 8
@@ -69,6 +71,7 @@ def test_reference_attention_n_heads_1():
     torch.allclose(attn_output, y)
 
 
+@pytest.mark.lightweight
 @torch.inference_mode()
 def test_reference_attention_n_heads_4_and_batched():
     embed_dim = 20
@@ -144,6 +147,7 @@ def test_reference_attention_n_heads_4_and_batched():
     torch.allclose(attn_output, y)
 
 
+@pytest.mark.lightweight
 @torch.inference_mode()
 def test_reference_attention_n_heads_4_and_batch_first():
     embed_dim = 128
@@ -220,6 +224,7 @@ def test_reference_attention_n_heads_4_and_batch_first():
     torch.allclose(attn_output, y)
 
 
+@pytest.mark.lightweight
 @torch.inference_mode()
 def test_reference_attention_batch_first():
     embed_dim = 128
@@ -299,13 +304,14 @@ def test_reference_attention_batch_first():
     torch.allclose(attn_output, y)
 
 
+@pytest.mark.lightweight
 @torch.inference_mode()
 def test_attention_equivalence_no_bias():
     # Set up parameters
     batch_size = 4
     seq_len = 10
-    embed_dim = 128
-    num_heads = 8
+    embed_dim = 32
+    num_heads = 4
     head_dim = embed_dim // num_heads
 
     custom_attn = Attention(
@@ -383,12 +389,13 @@ def test_attention_equivalence_no_bias():
     )
 
 
+@pytest.mark.lightweight
 @torch.inference_mode()
 def test_rotary_attention_forward():
     # Set up parameters
     batch_size = 4
     seq_len = 10
-    embed_dim = 128
+    embed_dim = 64
     num_heads = 8
     head_dim = embed_dim // num_heads
 

@@ -28,6 +28,7 @@ SEQUENCE_LENGTH = 100
 torch.manual_seed(1337)
 
 
+@pytest.mark.heavyweight
 def test_model_inference(bpe_dataloader):  # noqa: F811
     model = ConvNet(
         vocab_size=VOCABULARY_SIZE,
@@ -77,6 +78,7 @@ def test_model_inference(bpe_dataloader):  # noqa: F811
     _ = criterion(y_hat, y.float())
 
 
+@pytest.mark.lightweight
 def test_accuracy():
     y = torch.LongTensor([0, 0, 1, 1, 1, 1]).float()
     y_pred = torch.LongTensor([0, 0, 0, 1, 1, 1])
@@ -85,6 +87,7 @@ def test_accuracy():
     assert acc == pytest.approx(0.833, 0.1)
 
 
+@pytest.mark.heavyweight
 def test_load_model_from_checkpoint():
     path_classifier = Path(
         "/Users/t/Projects/specialk/assets/classifiers/legacy/cnn_classifier/"

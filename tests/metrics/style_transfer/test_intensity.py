@@ -7,7 +7,7 @@ from specialk.metrics import Intensity
 def intensity():
     return Intensity("political")
 
-
+@pytest.mark.heavyweight
 def test_intensity(intensity):
     test_democrat_tweets = [
         "lets 'federalize all gun crimes.",

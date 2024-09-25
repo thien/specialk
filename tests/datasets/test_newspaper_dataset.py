@@ -36,12 +36,14 @@ def word_tokenizer() -> WordVocabulary:
     return word_tokenizer
 
 
+@pytest.mark.heavyweight
 def test_make_dataloader(dataset):
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE)
     batch = next(iter(dataloader))
     assert isinstance(batch["text"][0], str)
 
 
+@pytest.mark.heavyweight
 def test_dataloader_tokenized_bpe(dataset: Dataset, bpe_tokenizer: BPEVocabulary):
     def tokenize(example):
         # perform tokenization at this stage.
@@ -62,6 +64,7 @@ def test_dataloader_tokenized_bpe(dataset: Dataset, bpe_tokenizer: BPEVocabulary
     assert isinstance(batch["text"][0][0].item(), int)
 
 
+@pytest.mark.heavyweight
 def test_dataloader_tokenized_word(dataset: Dataset, word_tokenizer: WordVocabulary):
     def tokenize(example):
         # perform tokenization at this stage.
@@ -81,6 +84,7 @@ def test_dataloader_tokenized_word(dataset: Dataset, word_tokenizer: WordVocabul
     assert isinstance(batch["text"][0][0].item(), int)
 
 
+@pytest.mark.heavyweight
 def test_dataloader_class_label(dataset: Dataset):
     torch_dataset = dataset.with_format("torch")
     log.info("features", features=dataset.features)

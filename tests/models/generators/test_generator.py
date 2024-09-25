@@ -28,6 +28,7 @@ def module() -> PyTorchTransformerModule:
     return module
 
 
+@pytest.mark.heavyweight
 def test_generator_sampling(module):
     test_src_text = "Eine Gruppe von Männern lädt Baumwolle auf einen Lastwagen"
     tokens = module.tokenizer.to_tensor(test_src_text).to("mps")
@@ -37,6 +38,7 @@ def test_generator_sampling(module):
     assert text[0].lower().startswith("a group of men")
 
 
+@pytest.mark.heavyweight
 def test_generator_sampling_batch(module):
     test_src = [
         "Eine Gruppe von Männern lädt Baumwolle auf einen Lastwagen",
@@ -58,6 +60,7 @@ def test_generator_sampling_batch(module):
         assert expected.lower().startswith(actual.lower())
 
 
+@pytest.mark.heavyweight
 def test_generator_beam(module):
     test_src_text = "Eine Gruppe von Männern lädt Baumwolle auf einen Lastwagen"
     tokens: Int[Tensor, "batch seq_len"]
@@ -78,6 +81,7 @@ def test_generator_beam(module):
     assert text[0].lower().startswith("a group of men")
 
 
+@pytest.mark.heavyweight
 def test_generator_beam_batch(module):
     test_src_text = [
         "Eine Gruppe von Männern lädt Baumwolle auf einen Lastwagen",

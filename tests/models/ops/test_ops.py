@@ -1,3 +1,4 @@
+import pytest
 import torch
 from torch import LongTensor
 
@@ -5,6 +6,7 @@ from specialk.core.constants import EOS, PAD
 from specialk.models.ops.ops import mask_out_special_tokens, n_tokens_correct
 
 
+@pytest.mark.lightweight
 def test_n_tokens_correct_2d():
     # Test Case 1: Basic test case with no padding
     pred1 = torch.tensor([[0.1, 0.9], [0.8, 0.2], [0.4, 0.6]])
@@ -37,6 +39,7 @@ def test_n_tokens_correct_2d():
     assert n_tokens_correct(pred5, gold5, pad_token5) == 0
 
 
+@pytest.mark.lightweight
 def test_n_tokens_correct_3d():
     # Test Case 1: Basic test case with no padding
     pred1 = torch.tensor([[[0.1, 0.9], [0.8, 0.2], [0.4, 0.6]]])
@@ -88,6 +91,7 @@ def test_n_tokens_correct_3d():
     assert n_tokens_correct(pred6, gold6, pad_token6) == 2
 
 
+@pytest.mark.lightweight
 def test_mask_out_special_tokens():
     """Mostly for my sanity checking to see if masking is actually happening."""
     test_cases = [

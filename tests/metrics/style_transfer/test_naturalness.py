@@ -7,7 +7,7 @@ from specialk.metrics import Naturalness
 def naturalness():
     return Naturalness("political")
 
-
+@pytest.mark.heavyweight
 def test_naturalness(naturalness):
     test_natural_tweets = [
         "let 'federalize all gun crimes.",

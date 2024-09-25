@@ -1,13 +1,12 @@
+import numpy as np
 import torch
 
 from specialk.models.ops.ops import FuncMaxPool3d
 
 
-def test_maxpool2d(n_tests=20):
-    import numpy as np
-
-    for i in range(n_tests):
-        b = np.random.randint(1, 10)
+def test_maxpool3d(n_tests=20):
+    for _ in range(n_tests):
+        b = np.random.randint(2, 10)
         h = np.random.randint(10, 50)
         w = np.random.randint(10, 50)
         l = np.random.randint(10, 50)
@@ -38,4 +37,4 @@ def test_maxpool2d(n_tests=20):
             padding=padding,
         )
         torch.testing.assert_close(my_output, torch_output)
-    print("All tests in `test_maxpool2d` passed!")
+    print("All tests in `test_maxpool3d` passed!")

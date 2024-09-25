@@ -16,6 +16,9 @@ from tests.models.fixtures import hf_distilbert_dataloader  # noqa: F401; noqa: 
 from tests.models.fixtures import hf_distilbert_tokenizer  # noqa: F401; noqa: F402
 
 dirpath = "tests/tokenizer/test_files"
+ref_model_base_name = "bert-base-uncased"
+ref_distil_model_base_name = "distilbert/distilbert-base-cased"
+
 
 import logging
 
@@ -32,7 +35,7 @@ torch.use_deterministic_algorithms(True)
 
 @pytest.fixture(scope="session", autouse=True)
 def pretrained_bert() -> BERTClassifier:
-    return BERTClassifier(name="test", model_base_name="bert-base-uncased")
+    return BERTClassifier(name="test", model_base_name=ref_model_base_name)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -46,7 +49,7 @@ def pretrained_peft_bert() -> BERTClassifier:
         target_modules=["query", "key", "value"],
     )
     return BERTClassifier(
-        name="test", model_base_name="bert-base-uncased", peft_config=peft_config
+        name="test", model_base_name=ref_model_base_name, peft_config=peft_config
     )
 
 
@@ -54,7 +57,7 @@ def pretrained_peft_bert() -> BERTClassifier:
 def pretrained_distilbert() -> BERTClassifier:
     return BERTClassifier(
         name="test_distilbert",
-        model_base_name="distilbert/distilbert-base-cased",
+        model_base_name=ref_distil_model_base_name,
     )
 
 
@@ -70,7 +73,7 @@ def pretrained_peft_distilbert() -> BERTClassifier:
     )
     return BERTClassifier(
         name="test_distilbert",
-        model_base_name="distilbert/distilbert-base-cased",
+        model_base_name=ref_distil_model_base_name,
         peft_config=peft_config,
     )
 
@@ -218,4 +221,4 @@ def test_save_load_distilbert_checkpoint(
     log.info("input", x=x.shape)
     y_old = module.model(x, attention_mask=x_mask, labels=y)
     y_new = ckpt_module.model(x, attention_mask=x_mask, labels=y)
-    assert y_old == y_new
+    torch.testing.assert_close(y_old, y_new)

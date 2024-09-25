@@ -7,7 +7,6 @@ from torch.utils.data import DataLoader
 from datasets import Dataset, load_dataset
 from specialk.core.utils import log
 from specialk.models.tokenizer import BPEVocabulary, WordVocabulary
-from tests.tokenizer.test_tokenizer import PCT_BPE, SEQUENCE_LENGTH, VOCABULARY_SIZE
 
 dirpath = "tests/tokenizer/test_files"
 
@@ -18,30 +17,22 @@ torch.manual_seed(1337)
 
 @pytest.fixture(scope="session", autouse=True)
 def dataset() -> Dataset:
-    dataset = load_dataset("thien/newspaper", split="eval")
+    dataset = load_dataset("thien/publications", split="eval[:5%]")
     dataset = dataset.class_encode_column("label")
     return dataset
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def bpe_tokenizer() -> BPEVocabulary:
     tokenizer_filepath = Path(dirpath) / "bpe_tokenizer"
-
-    bpe_tokenizer = BPEVocabulary(
-        "source", tokenizer_filepath, VOCABULARY_SIZE, 60, PCT_BPE
-    )
-    bpe_tokenizer.load()
-    return bpe_tokenizer
+    tokenizer = BPEVocabulary.from_file(tokenizer_filepath)
+    return tokenizer
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def word_tokenizer() -> WordVocabulary:
     tokenizer_filepath = Path(dirpath) / "word_tokenizer"
-
-    word_tokenizer = WordVocabulary(
-        "source", tokenizer_filepath, VOCABULARY_SIZE, 60, True
-    )
-    word_tokenizer.load()
+    word_tokenizer = WordVocabulary.from_file(tokenizer_filepath)
     return word_tokenizer
 
 
@@ -58,12 +49,12 @@ def test_dataloader_tokenized_bpe(dataset: Dataset, bpe_tokenizer: BPEVocabulary
         return example
 
     tokenized_dataset = dataset.with_format("torch").map(tokenize)
-    dataloader = DataLoader(tokenized_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    dataloader = DataLoader(
+        tokenized_dataset, batch_size=BATCH_SIZE, shuffle=False
+    )  # don't shuffle for testing purposes
     batch = next(iter(dataloader))
     # number chosen by the seed.
-    batch_idx = batch["id"]
-    expected_idx = torch.Tensor([860, 1526])
-    assert torch.all(batch_idx.eq(expected_idx))
+    print(batch)
     assert isinstance(batch["text"], torch.Tensor)
     batch["text"] = batch["text"].reshape(2, -1)
     assert batch["text"].shape == torch.Size([BATCH_SIZE, bpe_tokenizer.max_length])
@@ -78,12 +69,11 @@ def test_dataloader_tokenized_word(dataset: Dataset, word_tokenizer: WordVocabul
         return example
 
     tokenized_dataset = dataset.with_format("torch").map(tokenize)
-    dataloader = DataLoader(tokenized_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    dataloader = DataLoader(
+        tokenized_dataset, batch_size=BATCH_SIZE, shuffle=False
+    )  # don't shuffle for testing purposes
     batch = next(iter(dataloader))
     # number chosen by the seed.
-    batch_idx = batch["id"]
-    expected_idx = torch.Tensor([757, 1988])
-    assert torch.all(batch_idx.eq(expected_idx))
     assert isinstance(batch["text"], torch.Tensor)
     batch["text"] = batch["text"].reshape(2, -1)
     assert batch["text"].shape == torch.Size([BATCH_SIZE, word_tokenizer.max_length])

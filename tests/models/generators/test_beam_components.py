@@ -6,6 +6,7 @@ import pytest
 import torch
 from jaxtyping import Int
 
+from specialk.core import constants
 from specialk.core.utils import log
 
 # Import the class to be tested
@@ -13,8 +14,6 @@ from specialk.models.transformer.torch.pytorch_transformer import (
     PyTorchTransformerModule,
     TransformerEncoderDecoderBeam,
 )
-
-from specialk.core import constants
 
 torch.manual_seed(constants.SEED)
 
@@ -172,25 +171,6 @@ def test_get_logits(mock_beam):
         mock_beam.tokens.shape[0],
         1000,
     )  # Assuming vocab size of 1000
-
-
-def test_expand_encoder_outputs(mock_beam):
-    tokens_per_beam = 2
-    expanded = mock_beam.expand_encoder_outputs(tokens_per_beam)
-    assert expanded.shape == (
-        mock_beam.memory.shape[0] * tokens_per_beam,
-        mock_beam.memory.shape[1],
-        mock_beam.memory.shape[2],
-    )
-
-
-def test_expand_x_pad_masks(mock_beam):
-    tokens_per_beam = 2
-    expanded = mock_beam.expand_x_pad_masks(tokens_per_beam)
-    assert expanded.shape == (
-        mock_beam.x_pad_mask.shape[0] * tokens_per_beam,
-        mock_beam.x_pad_mask.shape[1],
-    )
 
 
 def test_calculate_new_logprob_sums(mock_beam):

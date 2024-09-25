@@ -19,7 +19,9 @@ def token_accuracy(pred: Tensor, gold: Tensor, pad_token: int) -> float:
     return accuracy / total
 
 
-def n_tokens_correct(pred: Tensor, gold: Tensor, pad_token: int) -> int:
+def n_tokens_correct(
+    pred: Tensor, gold: Tensor, pad_token: Optional[int] = None
+) -> int:
     """
     Calculate the number of correct tokens.
     This ignores padding tokens; This is not differentible.
@@ -34,10 +36,14 @@ def n_tokens_correct(pred: Tensor, gold: Tensor, pad_token: int) -> int:
     Returns:
         int: The number of correct tokens, excluding padding tokens.
     """
-    pred_indices = pred.argmax(dim=-1)
-    gold_flat = gold.view(-1)
-    non_pad_mask = gold_flat.ne(pad_token)
-    return pred_indices.eq(gold_flat).masked_select(non_pad_mask).sum().item()
+    pred_indices: Int[Tensor, "n"] = pred.argmax(dim=-1).view(-1)
+    gold_flat: Int[Tensor, "n"] = gold.view(-1)
+
+    n_correct = pred_indices.eq(gold_flat)
+    if pad_token is not None:
+        non_pad_mask = gold_flat.ne(pad_token)
+        n_correct = n_correct.masked_select(non_pad_mask)
+    return int(n_correct.sum().item())
 
 
 def force_pair(v: IntOrPair) -> Pair:

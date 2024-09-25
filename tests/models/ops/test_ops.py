@@ -10,13 +10,13 @@ def test_n_tokens_correct_2d():
     pred1 = torch.tensor([[0.1, 0.9], [0.8, 0.2], [0.4, 0.6]])
     gold1 = torch.tensor([1, 0, 1])
     pad_token1 = -1
-    assert n_tokens_correct(pred1, gold1, pad_token1) == 2
+    assert n_tokens_correct(pred1, gold1, pad_token1) == 3
 
-    # Test Case 2: All predictions are correct
+    # Test Case 2: 2 predictions are correct.
     pred2 = torch.tensor([[0.1, 0.9], [0.8, 0.2], [0.4, 0.6]])
     gold2 = torch.tensor([1, 0, 0])
     pad_token2 = -1
-    assert n_tokens_correct(pred2, gold2, pad_token2) == 3
+    assert n_tokens_correct(pred2, gold2, pad_token2) == 2
 
     # Test Case 3: All predictions are wrong
     pred3 = torch.tensor([[0.9, 0.1], [0.2, 0.8], [0.6, 0.4]])
@@ -42,13 +42,13 @@ def test_n_tokens_correct_3d():
     pred1 = torch.tensor([[[0.1, 0.9], [0.8, 0.2], [0.4, 0.6]]])
     gold1 = torch.tensor([[1, 0, 1]])
     pad_token1 = -1
-    assert n_tokens_correct(pred1, gold1, pad_token1) == 2
+    assert n_tokens_correct(pred1, gold1, pad_token1) == 3
 
-    # Test Case 2: All predictions are correct
+    # Test Case 2: 2 predictions are correct
     pred2 = torch.tensor([[[0.1, 0.9], [0.8, 0.2], [0.4, 0.6]]])
     gold2 = torch.tensor([[1, 0, 0]])
     pad_token2 = -1
-    assert n_tokens_correct(pred2, gold2, pad_token2) == 3
+    assert n_tokens_correct(pred2, gold2, pad_token2) == 2
 
     # Test Case 3: All predictions are wrong
     pred3 = torch.tensor([[[0.9, 0.1], [0.2, 0.8], [0.6, 0.4]]])
@@ -70,14 +70,26 @@ def test_n_tokens_correct_3d():
 
     # Test Case 6: Batch processing with padding
     pred6 = torch.tensor(
-        [[[0.1, 0.9], [0.8, 0.2], [0.4, 0.6]], [[0.7, 0.3], [0.2, 0.8], [0.6, 0.4]]]
-    )
+        [
+            [
+                [0.1, 0.9],  # 1 (correct)
+                [0.8, 0.2],  # 0 (correct)
+                [0.4, 0.6],  # 1 skip because we'll pad
+            ],
+            [
+                [0.7, 0.3],  # 0 (we get this wrong)
+                [0.2, 0.8],  # 1 (we'll get this wrong)
+                [0.6, 0.4],  # 0 (we'll get this wrong)
+            ],
+        ]
+    )  # we should only get 2 correct items.
     gold6 = torch.tensor([[1, 0, -1], [1, 0, 1]])
     pad_token6 = -1
-    assert n_tokens_correct(pred6, gold6, pad_token6) == 3
+    assert n_tokens_correct(pred6, gold6, pad_token6) == 2
 
 
 def test_mask_out_special_tokens():
+    """Mostly for my sanity checking to see if masking is actually happening."""
     test_cases = [
         (
             LongTensor([[20, 44, 55, 245, 62626, EOS, 222, 222, 222]]),

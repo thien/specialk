@@ -1,17 +1,18 @@
 from pathlib import Path
 
 import pytest
+import torch
 from jaxtyping import Int
 from torch import Tensor
-import torch
+
 from specialk.core.constants import EOS, PAD, PROJECT_DIR, SEED, SOS
 from specialk.core.utils import log
-
-# from specialk.models.generators.sampling import EncoderDecoderSampler
 from specialk.models.transformer.torch.pytorch_transformer import (
     PyTorchTransformerModule,
 )
+
 torch.manual_seed(SEED)
+
 
 @pytest.fixture(scope="session", autouse=True)
 def module() -> PyTorchTransformerModule:
@@ -27,7 +28,7 @@ def module() -> PyTorchTransformerModule:
     return module
 
 
-def test_generator_model(module):
+def test_generator_sampling(module):
     test_src_text = "Eine Gruppe von Männern lädt Baumwolle auf einen Lastwagen"
     tokens = module.tokenizer.to_tensor(test_src_text).to("mps")
     log.info("Tokens:", tokens=tokens, shape=tokens.shape)
@@ -36,8 +37,28 @@ def test_generator_model(module):
     assert text[0].lower().startswith("a group of men")
 
 
+def test_generator_sampling_batch(module):
+    test_src = [
+        "Eine Gruppe von Männern lädt Baumwolle auf einen Lastwagen",
+        "Ein Mann schläft in einem grünen Raum auf einem Sofa.",
+    ]
+    test_tgt = [
+        "A group of men",
+        "A man is sleeping",
+    ]
+
+    tokens = module.tokenizer.to_tensor(test_src).to("mps")
+
+    log.info("Tokens:", tokens=tokens, shape=tokens.shape)
+
+    y_tokens = module.generate(tokens, top_p=0.2, seed=SEED)
+    generated_text = module.decoder_tokenizer.detokenize(y_tokens, specials=False)
+
+    for expected, actual in zip(generated_text, test_tgt):
+        assert expected.lower().startswith(actual.lower())
+
+
 def test_generator_beam(module):
-    # "A group of men load cotton onto a truck"
     test_src_text = "Eine Gruppe von Männern lädt Baumwolle auf einen Lastwagen"
     tokens: Int[Tensor, "batch seq_len"]
     tokens = module.tokenizer.to_tensor(test_src_text).to("mps")
@@ -92,33 +113,3 @@ def test_generator_beam_batch(module):
     log.info("output", y_hat=text)
     for pred, actual in zip(text, test_tgt_text):
         assert pred.lower().startswith(actual.lower())
-
-
-# @pytest.fixture(scope="session", autouse=True)
-# def sampler(module) -> LanguageModelSampler:
-#     sampler = LanguageModelSampler(
-#         module.model, module.tokenizer, module.decoder_tokenizer, module.device
-#     )
-#     return sampler
-
-# def test_generator(sampler):
-#     test_src_text = "Eine Gruppe von Männern lädt Baumwolle auf einen Lastwagen"
-#     generated_text = sampler.sample(test_src_text, top_p=0.1, seed=SEED)
-#     text = generated_text[0]
-#     # yes, the actual translation is "A group of men are loading cotton onto a truck"
-#     # but the model is only a dummy!
-#     assert text.lower().startswith("a group of men")
-#
-#
-# def test_generator_batch(sampler):
-#     test_src = [
-#         "Eine Gruppe von Männern lädt Baumwolle auf einen Lastwagen",
-#         "Ein Mann schläft in einem grünen Raum auf einem Sofa.",
-#     ]
-#     test_tgt = [
-#         "A group of men",
-#         "A man is sleeping",
-#     ]
-#     generated_text = sampler.sample(test_src, top_p=0.1, seed=SEED)
-#     for expected, actual in zip(generated_text, test_tgt):
-#         assert expected.lower().startswith(actual.lower())

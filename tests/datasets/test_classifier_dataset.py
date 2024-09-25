@@ -8,7 +8,6 @@ from datasets import Dataset, load_dataset
 from datasets.exceptions import DatasetGenerationError
 from specialk.core.utils import log
 from specialk.models.tokenizer import BPEVocabulary, WordVocabulary
-from tests.tokenizer.test_tokenizer import PCT_BPE, SEQUENCE_LENGTH, VOCABULARY_SIZE
 
 dirpath = "tests/tokenizer/test_files"
 dev_path = "/Users/t/Projects/datasets/political/political_data/*"
@@ -31,30 +30,14 @@ def dataset() -> Dataset:
 @pytest.fixture(scope="session")
 def bpe_tokenizer() -> BPEVocabulary:
     tokenizer_filepath = Path(dirpath) / "bpe_tokenizer"
-
-    bpe_tokenizer = BPEVocabulary(
-        "source",
-        filename=tokenizer_filepath,
-        vocab_size=VOCABULARY_SIZE,
-        max_length=60,
-        pct_bpe=PCT_BPE,
-    )
-    bpe_tokenizer.load()
-    return bpe_tokenizer
+    tokenizer = BPEVocabulary.from_file(tokenizer_filepath)
+    return tokenizer
 
 
 @pytest.fixture(scope="session")
 def word_tokenizer() -> WordVocabulary:
     tokenizer_filepath = Path(dirpath) / "word_tokenizer"
-
-    word_tokenizer = WordVocabulary(
-        name="source",
-        filename=tokenizer_filepath,
-        vocab_size=VOCABULARY_SIZE,
-        max_length=60,
-        lower=True,
-    )
-    word_tokenizer.load()
+    word_tokenizer = WordVocabulary.from_file(tokenizer_filepath)
     return word_tokenizer
 
 

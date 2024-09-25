@@ -42,3 +42,4 @@ tb_logs
 *.arrow
 *.ts
 *.ckpt
+specialk/notebooks/lightning_logs/*

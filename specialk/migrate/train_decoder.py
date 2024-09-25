@@ -14,10 +14,10 @@ from tqdm import tqdm
 import specialk.models.classifier.onmt as onmt
 import specialk.models.classifier.onmt.CNNModels as CNNModels
 from specialk.models.classifier.trainer import CNNClassifier, TextClassifier
-from specialk.models.mt_model import NMTModule
 
 # from specialk.lib.recurrent_model import RecurrentModel as recurrent
 from specialk.models.legacy.transformer_model import TransformerModel as transformer
+from specialk.models.mt_model import NMTModule
 
 description = """
 train_decoder.py

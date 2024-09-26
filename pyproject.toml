@@ -21,3 +21,16 @@ filterwarnings = ["ignore:.*U.*mode is deprecated:DeprecationWarning", "ignore::
 addopts = "-ra -q"
 markers = ["lightweight: marks tests as lightweight (deselect with '-m \"not lightweight\"')","heavyweight: marks tests that require large model downloads"]
 
+[tool.coverage.run]
+source = ["specialk"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "pass",
+    "except ImportError:",
+]

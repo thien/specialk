@@ -1,0 +1,21 @@
+name: Run Lightweight Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install uv (for package dependencies)
+      uses: astral-sh/setup-uv@v2
+      with:
+        enable-cache: true
+    - name: Set up Python
+      run: uv python install
+      with:
+        python-version: '3.9.7'
+    - name: Install the project
+      run: uv sync --all-extras --dev
+    - name: Run lightweight tests
+      run: uv run pytest -v -m "not heavyweight"

@@ -16,4 +16,4 @@ jobs:
     - name: Install the project
       run: uv venv && uv pip install -r requirements.txt 
     - name: Run lightweight tests
-      run: uv run pytest -v -m "not heavyweight"
+      run: pytest -v -m "not heavyweight"

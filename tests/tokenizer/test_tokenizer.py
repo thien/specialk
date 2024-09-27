@@ -91,9 +91,29 @@ def bpe_tokenizer():
     return tokenizer
 
 
+@pytest.fixture(scope="session")
+def bpe_premade() -> BPEVocabulary:
+    tokenizer_filepath = (
+        Path(PROJECT_DIR) / "tests" / "tokenizer" / "test_files" / "bpe_tokenizer"
+    )
+    return BPEVocabulary.from_file(tokenizer_filepath)
+
+
 def test_bpe_vocabulary(bpe_tokenizer):
-    print(bpe_tokenizer.tokenize("hello world"))
     assert bpe_tokenizer.tokenize("hello world") == [
+        "__sow",
+        "<unk>",
+        "<unk>",
+        "<unk>",
+        "<unk>",
+        "<unk>",
+        "__eow",
+        "world",
+    ]
+
+
+def test_bpe_vocabulary_from_load(bpe_premade):
+    assert bpe_premade.tokenize("hello world") == [
         "__sow",
         "he",
         "ll",
@@ -105,6 +125,7 @@ def test_bpe_vocabulary(bpe_tokenizer):
 
 def test_save_load_bpe_vocabulary(bpe_tokenizer):
     dirpath = tempfile.mkdtemp()
+    # dirpath = "/Users/t/Projects/specialk/tests/tokenizer/test_files"
 
     tokenizer_filepath = Path(dirpath) / "bpe_tokenizer"
     bpe_tokenizer.to_file(tokenizer_filepath)

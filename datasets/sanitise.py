@@ -1,16 +1,9 @@
 import argparse
-import re
-import sys
 import unicodedata
 
 from nltk.corpus import words
 from tqdm import tqdm
 
-cjk = re.compile("[\u4e00-\u9fff\u3000-\u303f]")
-
-sys.path.append("../base/core")
-
-from utils import get_len
 
 
 def load_args():
@@ -40,8 +33,7 @@ def sanitise(en_seq):
     """
     Replaces characters.
     """
-    return cjk.sub(
-        "",
+    return (
         en_seq.replace("“", '"')
         .replace("”", '"')
         .replace("’", "'")
@@ -49,7 +41,7 @@ def sanitise(en_seq):
         .replace("– ", " ")
         .replace("\xad", "")
         .replace("‘", "'")
-        .replace("…", "..."),
+        .replace("…", "...")
     )
 
 
@@ -73,9 +65,7 @@ if __name__ == "__main__":
     with open(opt.source_a) as a, open(opt.source_b) as b:
         before = [
             (sanitise(x.strip()), sanitise(y.strip()))
-            for (x, y) in tqdm(
-                zip(a, b), desc="Loading Files", total=get_len(opt.source_a)
-            )
+            for (x, y) in tqdm(zip(a, b), desc="Loading Files")
         ]
 
     # determine the index where the english sequence is

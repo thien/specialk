@@ -1,0 +1,1 @@
+git difftool --tool=vimdiff --word-diff --no-index -- src_article_dump.txt tgt_article_dump.txt > diff.text

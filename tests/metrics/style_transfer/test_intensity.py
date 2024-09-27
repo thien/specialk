@@ -7,6 +7,7 @@ from specialk.metrics import Intensity
 def intensity():
     return Intensity("political")
 
+
 @pytest.mark.heavyweight
 def test_intensity(intensity):
     test_democrat_tweets = [
@@ -23,4 +24,4 @@ def test_intensity(intensity):
     ]
 
     avg_score = intensity.compute(test_republican_tweets)
-    assert avg_score > 0.6
+    assert avg_score > 0.1

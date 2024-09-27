@@ -204,8 +204,10 @@ dependencies = [
     "xattr==1.1.0",
     "xxhash==3.4.1",
     "yarl==1.9.4",
-    "zipp==3.19.2"]
-readme = "README.md"
+    "zipp==3.19.2",
+    "pytest-xdist>=3.6.1",
+]
+readme = "readme.md"
 requires-python = ">= 3.9"
 
 [build-system]
@@ -214,27 +216,31 @@ build-backend = "hatchling.build"
 
 [tool.rye]
 managed = true
+universal = true
+virtual = true
 dev-dependencies = []
 
 [tool.rye.scripts]
 # These three options are equivalent:
+download-deps = 'python -m nltk.downloader cmudict averaged_perceptron_tagger'
 tests-light = 'pytest -v -m "not heavyweight"'
-tests-heavy = 'pytest -v -m "not heavyweight"'
-tests = 'pytest -v'
+tests-heavy = 'pytest -v -m "not lightweight" -n auto'
+tests = 'pytest -v -n auto'
 
 [tool.hatch.metadata]
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/specialk"]
+packages = ["specialk"]
 
 [tool.ruff.lint]
 ignore=["F722"]
 
 [tool.pytest.ini_options]
-testpaths = ["./tests"]
-filterwarnings = ["ignore:.*U.*mode is deprecated:DeprecationWarning", "ignore::DeprecationWarning"]
+testpaths = "./tests"
+pythonpath = "."
 addopts = "-ra -q"
+filterwarnings = ["ignore:.*U.*mode is deprecated:DeprecationWarning", "ignore::DeprecationWarning"]
 markers = ["lightweight: marks tests as lightweight (deselect with '-m \"not lightweight\"')","heavyweight: marks tests that require large model downloads"]
 
 [tool.coverage.run]

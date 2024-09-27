@@ -286,9 +286,9 @@ class Decoder(nn.Module):
         return False
 
 
-class NMTModel(nn.Module):
+class RNNEncoderDecoder(nn.Module):
     def __init__(self, encoder, decoder):
-        super(NMTModel, self).__init__()
+        super(RNNEncoderDecoder, self).__init__()
         self.encoder: Encoder = encoder
         self.decoder: Decoder = decoder
 

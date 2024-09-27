@@ -78,7 +78,7 @@ def pretrained_peft_distilbert() -> BERTClassifier:
     )
 
 
-@pytest.mark.lightweight
+@pytest.mark.heavyweight
 def test_model_inference(hf_bert_dataloader, pretrained_bert):  # noqa: F811
     model = pretrained_bert
     model.eval()
@@ -97,7 +97,7 @@ def test_model_inference(hf_bert_dataloader, pretrained_bert):  # noqa: F811
     output = y_hat.logits
 
 
-@pytest.mark.lightweight
+@pytest.mark.heavyweight
 def test_model_inference_peft(hf_bert_dataloader, pretrained_peft_bert):  # noqa: F811
     model = pretrained_peft_bert
     model.eval()

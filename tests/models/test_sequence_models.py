@@ -1,3 +1,4 @@
+import os
 import warnings
 from pathlib import Path
 
@@ -205,6 +206,7 @@ def test_rnn_inference_brnn(spm_dataloader):
     loss.backward()
 
 
+@pytest.mark.skipif(os.environ.get("CI") == "true", reason="Test skipped on GitHub CI")
 def test_rnn_inference_mps(spm_dataloader):
     dataloader, tokenizer = spm_dataloader
     model = RNNModule(

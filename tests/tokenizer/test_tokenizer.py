@@ -19,7 +19,7 @@ from specialk.models.tokenizer import (
 VOCABULARY_SIZE = 1000
 SEQUENCE_LENGTH = 100
 PCT_BPE = 0.2
-SRC_VOCAB = "./tests/test_files/datasets/political_dev.txt"
+SRC_VOCAB = "tests/test_files/datasets/political_dev.txt"
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -49,7 +49,6 @@ def test_word_vocabulary(word_tokenizer):
 
 def test_save_load_word_vocabulary(word_tokenizer):
     dirpath = tempfile.mkdtemp()
-    dirpath = "/Users/t/Projects/specialk/tests/tokenizer/test_files"
 
     tokenizer_filepath = Path(dirpath) / "word_tokenizer"
     word_tokenizer.to_file(tokenizer_filepath)
@@ -106,7 +105,6 @@ def test_bpe_vocabulary(bpe_tokenizer):
 
 def test_save_load_bpe_vocabulary(bpe_tokenizer):
     dirpath = tempfile.mkdtemp()
-    dirpath = "/Users/t/Projects/specialk/tests/tokenizer/test_files"
 
     tokenizer_filepath = Path(dirpath) / "bpe_tokenizer"
     bpe_tokenizer.to_file(tokenizer_filepath)

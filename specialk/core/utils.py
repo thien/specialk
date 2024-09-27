@@ -6,7 +6,7 @@ import warnings
 from argparse import Namespace
 from multiprocessing import Pool, cpu_count
 from pathlib import Path
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, Union
 
 import torch
 import yaml
@@ -95,22 +95,30 @@ def load_dataset(path: str) -> List[str]:
     return data
 
 
-def get_len(filepath):
+def get_len(filepath: Union[str, Path]) -> int:
     """
     Reads number of lines in the mose corpus without using python
     to deal with it. This is some order of magnitude faster!
     """
-    if isinstance(filepath, Path):
-        filepath = str(filepath)
+
+    # temporarily convert a string into a Path object
+    # so we can check whether the file exists.
+    if not isinstance(filepath, Path):
+        filepath = Path(filepath)
+    if not filepath.exists():
+        log.error(f"'{str(filepath)}' does not exist.")
+        raise FileNotFoundError
+
+    filepath = str(filepath)
 
     filepath = filepath.replace(" ", r"\ ").replace("(", r"\(").replace(")", r"\)")
 
-    process = subprocess.run(["wc", "-l", filepath], stdout=subprocess.PIPE)
-    _plt = platform.system()
-    if _plt == "Linux":
+    if platform.system() in {"Linux", "Darwin"}:
+        process = subprocess.run(["wc", "-l", filepath], stdout=subprocess.PIPE)
         value = process.stdout.decode("utf-8").strip().split().pop(0)
-    elif _plt == "Darwin":
-        value = process.stdout.decode("utf-8").strip().split().pop(0)
+    else:
+        raise NotImplementedError
+
     return int(value)
 
 

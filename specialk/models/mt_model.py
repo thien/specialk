@@ -35,9 +35,9 @@ from specialk.core.utils import log
 from specialk.metrics.metrics import SacreBLEU
 from specialk.models.generators.beam import Beam
 from specialk.models.ops.ops import mask_out_special_tokens
-from specialk.models.recurrent.models import Decoder as RNNDecoder
-from specialk.models.recurrent.models import Encoder as RNNEncoder
-from specialk.models.recurrent.models import NMTModel as Seq2Seq
+from specialk.models.recurrent.rnn import Decoder as RNNDecoder
+from specialk.models.recurrent.rnn import Encoder as RNNEncoder
+from specialk.models.recurrent.rnn import RNNEncoderDecoder as RNNEncoderDecoder
 from specialk.models.tokenizer import Vocabulary
 from specialk.models.transformer.legacy.Models import Transformer as TransformerModel
 from specialk.models.transformer.legacy.Models import (
@@ -102,7 +102,7 @@ class NMTModule(pl.LightningModule):
                     "but you have not set the decoder vocabulary size."
                 )
 
-        self.model: Union[TransformerModel, Seq2Seq]
+        self.model: Union[TransformerModel, RNNEncoderDecoder]
 
         # label smoothing isn't needed since the distribution is so wide.
         self.criterion = torch.nn.CrossEntropyLoss(ignore_index=PAD)
@@ -372,7 +372,7 @@ class RNNModule(NMTModule):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         args = self.patch_args(**kwargs)
-        self.model = Seq2Seq(
+        self.model = RNNEncoderDecoder(
             RNNEncoder(args, self.vocabulary_size),
             RNNDecoder(args, self.decoder_vocabulary_size),
         )

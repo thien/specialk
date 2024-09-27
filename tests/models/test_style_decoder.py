@@ -1,5 +1,6 @@
 import warnings
 from argparse import Namespace
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -28,7 +29,8 @@ from specialk.models.transformer.torch.pytorch_transformer import (
 )
 
 dirpath = "tests/tokenizer/test_files"
-dev_path = "/Users/t/Projects/datasets/political/political_data/democratic_only.dev.en_fr.parquet"
+dev_path = "tests/test_files/datasets/en_fr_labels.parquet"
+
 dir_tokenizer = Constants.PROJECT_DIR / "assets" / "tokenizer"
 
 torch.manual_seed(1337)

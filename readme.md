@@ -8,11 +8,20 @@ This repository contains the implementation of what used to be my summer thesis.
 
 ## Requirements
 
-Using `uv`, I've added a `requirements.txt` that'll allow you to install everything necessary (after installing `python3.9.7+`):
+Through several migrations from `pip`, to `poetry`, to `uv`, This project uses `rye` based on prior learnings. So, after installing `rye` (hint: I like it better than `poetry` and vanilla `pip`) and cloning this repo, `cd` into it and then run the following:
 
-   uv pip install -e .  
+    rye sync
+    rye run download-deps
+
+That's it!
 
 This has been tested to run on both Linux and macOS Sequoia and above, and has not been tested on Windows.
+
+## Running
+
+### Training
+
+To train different models, see `specialk/trainers/*.py` for the different training use cases.
 
 ## Datasets
 
@@ -48,3 +57,9 @@ Once the datasets are downloaded, `cd base/scripts` and run the following:
     ./train_pub_naturalness_models.sh
 
 It'll probably take quite a while to train the models.
+
+## Development
+
+### Testing
+
+This has been simplified with `rye`. Run `rye run tests`, or alternatively, you're also able to use `pytest-watch`.

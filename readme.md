@@ -2,7 +2,8 @@
 
 ![Style Transfer from Popular Press to Quality](doc/images/preview.png)
 
-[![wakatime](https://wakatime.com/badge/user/4251d8c6-f363-4bc2-92de-31e3923c596a/project/41ffd15c-a534-4e52-9250-6e308379d529.svg)](https://wakatime.com/badge/user/4251d8c6-f363-4bc2-92de-31e3923c596a/project/41ffd15c-a534-4e52-9250-6e308379d529) [![Run Lightweight Tests](https://github.com/thien/specialk/actions/workflows/tests.yml/badge.svg)](https://github.com/thien/specialk/actions/workflows/tests.yml) 
+[![wakatime](https://wakatime.com/badge/user/4251d8c6-f363-4bc2-92de-31e3923c596a/project/41ffd15c-a534-4e52-9250-6e308379d529.svg)](https://wakatime.com/badge/user/4251d8c6-f363-4bc2-92de-31e3923c596a/project/41ffd15c-a534-4e52-9250-6e308379d529) [![Run Lightweight Tests](https://github.com/thien/specialk/actions/workflows/tests.yml/badge.svg)](https://github.com/thien/specialk/actions/workflows/tests.yml)
+
 This repository contains the implementation of what used to be my summer thesis. This has evolved over time. 
 
 ## Requirements

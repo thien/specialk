@@ -1,21 +1,21 @@
+import math
+import os
+import time
+
+import core.constants as Constants
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data
-from torch.autograd import Variable
-
-from tqdm import tqdm
-import time
-import math
-import os
-
-import core.constants as Constants
 from lib.nmtModel import NMTModel
-from lib.recurrent.Models import Encoder, Decoder
+from lib.recurrent.Models import Decoder, Encoder
 from lib.recurrent.Models import NMTModel as Seq2Seq
 from lib.recurrent.Optim import Optim
 from lib.recurrent.Translator import Translator
+from torch.autograd import Variable
+from tqdm import tqdm
+
 
 class RecurrentModel(NMTModel):
     def __init__(self, opt):
@@ -29,7 +29,7 @@ class RecurrentModel(NMTModel):
         super().__init__(opt)
         # variable is tripped once a model is requested to save.
         self.save_trip = False
-    
+
     def load(self, encoder_path, decoder_path=None):
         """
         Loads models from file.
@@ -37,7 +37,7 @@ class RecurrentModel(NMTModel):
         if encoder_path:
             enc = torch.load(encoder_path)
             # copy encoder weights
-            opts_e = enc['settings']
+            opts_e = enc["settings"]
             # replace parameters in opts.
             blacklist = {
                 "checkpoint_encoder",
@@ -51,7 +51,7 @@ class RecurrentModel(NMTModel):
                 "telegram_key",
                 "save_model",
                 "train_from_state_dict",
-                "batch_size"
+                "batch_size",
             }
             for arg in dir(opts_e):
                 if arg[0] == "_":
@@ -61,16 +61,16 @@ class RecurrentModel(NMTModel):
                 setattr(self.opt, arg, getattr(opts_e, arg))
             # initiate a new model
             self.initiate()
-            self.model.encoder.load_state_dict(enc['model'])
+            self.model.encoder.load_state_dict(enc["model"])
 
         if decoder_path:
             dec = torch.load(decoder_path)
-            opts_d = enc['settings']
+            opts_d = enc["settings"]
             # Note that the decoder file contains both the decoder
             # and the target_word_projection.
-            self.model.decoder.load_state_dict(dec['model'])
+            self.model.decoder.load_state_dict(dec["model"])
             # self.model.generator.load_state_dict(dec['generator'])
-        self.model.to(self.device) 
+        self.model.to(self.device)
 
         return self
 
@@ -78,7 +78,7 @@ class RecurrentModel(NMTModel):
         """
         Setups seq2seq model and stores it into memory.
         """
-    
+
         encoder = Encoder(self.opt, self.opt.src_vocab_size).to(self.device)
         decoder = Decoder(self.opt, self.opt.tgt_vocab_size).to(self.device)
 
@@ -96,7 +96,7 @@ class RecurrentModel(NMTModel):
             opt.learning_rate,
             opt.max_grad_norm,
             lr_decay=opt.learning_rate_decay,
-            start_decay_at=opt.start_decay_at
+            start_decay_at=opt.start_decay_at,
         )
         self.optimiser.set_parameters(self.model.parameters())
         print("[Info] optimiser configured.")
@@ -114,7 +114,7 @@ class RecurrentModel(NMTModel):
         evaluate: boolean flag to determine whether to run model on
                   validation data.
         """
-        
+
         # training data
         start = time.time()
         train_stats = self.compute_epoch(self.training_data, False)
@@ -123,10 +123,14 @@ class RecurrentModel(NMTModel):
         self.train_losses.append(train_loss)
         self.train_accs.append(train_acc)
 
-        print('  - (Training)   perplexity: {perplexity: 8.5f}, accuracy: {accu:3.3f} %, '\
-            'elapse: {elapse:3.3f} min'.format(
-                perplexity=math.exp(min(train_loss, 100)), accu=100*train_acc,
-                elapse=(time.time()-start)/60))
+        print(
+            "  - (Training)   perplexity: {perplexity: 8.5f}, accuracy: {accu:3.3f} %, "
+            "elapse: {elapse:3.3f} min".format(
+                perplexity=math.exp(min(train_loss, 100)),
+                accu=100 * train_acc,
+                elapse=(time.time() - start) / 60,
+            )
+        )
 
         if evaluate:
             # validation data
@@ -137,10 +141,14 @@ class RecurrentModel(NMTModel):
             self.valid_losses.append(valid_loss)
             self.valid_accs.append(valid_acc)
 
-            print('  - (Validation) perplexity: {perplexity: 8.5f}, accuracy: {accu:3.3f} %, '\
-                'elapse: {elapse:3.3f} min'.format(
-                    perplexity=math.exp(min(valid_loss, 100)), accu=100*valid_acc,
-                    elapse=(time.time()-start)/60))
+            print(
+                "  - (Validation) perplexity: {perplexity: 8.5f}, accuracy: {accu:3.3f} %, "
+                "elapse: {elapse:3.3f} min".format(
+                    perplexity=math.exp(min(valid_loss, 100)),
+                    accu=100 * valid_acc,
+                    elapse=(time.time() - start) / 60,
+                )
+            )
 
         return self
 
@@ -154,11 +162,14 @@ class RecurrentModel(NMTModel):
         translator.max_token_seq_len = max_token_seq_len
         idx2word = test_loader.dataset.tgt_idx2word
         # setup run
-        with open(self.opt.output, 'w') as f:
-            for batch in tqdm(test_loader, desc='  - (Test)', leave=False):
-                src_seq, src_pos, = map(lambda x: x.to(self.device), batch)
+        with open(self.opt.output, "w") as f:
+            for batch in tqdm(test_loader, desc="  - (Test)", leave=False):
+                (
+                    src_seq,
+                    src_pos,
+                ) = map(lambda x: x.to(self.device), batch)
                 src_pos = torch.sum(src_pos > 0, dim=1)
-                
+
                 # sort for pack_padded_sequences
                 sorted_lengths, sorted_idx = torch.sort(src_pos, descending=True)
                 src_seq = src_seq[sorted_idx]
@@ -182,7 +193,7 @@ class RecurrentModel(NMTModel):
                 #             self._fix_enc_hidden(enc_hidden[1]))
 
                 # for t in range(range_limit):
-                        
+
                 #     out, dec_hidden, _attn = self.decoder(y, enc_hidden, context, init_output)
 
                 #     # reverse tensor relationship order
@@ -190,43 +201,45 @@ class RecurrentModel(NMTModel):
 
                 #     # greedy
 
-                
                 _, reversed_idx = torch.sort(sorted_idx)
-                pred  = [pred[i]  for i in reversed_idx]
+                pred = [pred[i] for i in reversed_idx]
                 score = [score[i] for i in reversed_idx]
-                attn  = [attn[i]  for i in reversed_idx]
+                attn = [attn[i] for i in reversed_idx]
                 # gold  = [gold[i]  for i in reversed_idx]
-
 
                 for idx_seqs in pred:
                     for idx_seq in idx_seqs:
-                        tokens = [idx2word[idx.item()] for idx in idx_seq if idx != self.constants.EOS]
-                        pred_line = ' '.join(tokens)
+                        tokens = [
+                            idx2word[idx.item()]
+                            for idx in idx_seq
+                            if idx != self.constants.EOS
+                        ]
+                        pred_line = " ".join(tokens)
                         print(pred_line)
                 #         f.write(pred_line + '\n')
 
                 # print("COOL")
                 break
         return self
-    
+
     def save(self, epoch=None, note=None):
         """
         save model weights and parameters to file.
         """
 
         checkpoint_encoder = {
-            'type': "recurrent",
-            'model': self.model.encoder.state_dict(),
-            'epoch': epoch,
-            'optim': self.optimiser,
-            'settings': self.opt
+            "type": "recurrent",
+            "model": self.model.encoder.state_dict(),
+            "epoch": epoch,
+            "optim": self.optimiser,
+            "settings": self.opt,
         }
 
         checkpoint_decoder = {
-            'type': "recurrent",
-            'model': self.model.decoder.state_dict(),
-            'epoch': epoch,
-            'settings': self.opt
+            "type": "recurrent",
+            "model": self.model.decoder.state_dict(),
+            "epoch": epoch,
+            "settings": self.opt,
         }
 
         if not note:
@@ -236,14 +249,16 @@ class RecurrentModel(NMTModel):
         if self.opt.save_model:
             ready_to_save = False
             if self.opt.save_mode == "all":
-                model_name = note + '_accu_{accu:3.3f}.chkpt'.format(accu=100*self.valid_accs[-1])
+                model_name = note + "_accu_{accu:3.3f}.chkpt".format(
+                    accu=100 * self.valid_accs[-1]
+                )
                 ready_to_save = True
             else:
                 # assumes self.opt.save_mode = "best"
                 if self.valid_accs[-1] >= max(self.valid_accs):
                     model_name = note + ".chkpt"
                     ready_to_save = True
-                    print('    - [Info] The checkpoint file has been updated.')
+                    print("    - [Info] The checkpoint file has been updated.")
             if ready_to_save:
                 encoder_name = "encoder_" + model_name
                 decoder_name = "decoder_" + model_name
@@ -295,7 +310,9 @@ class RecurrentModel(NMTModel):
             # losses are averaged later
             loss = loss.masked_select(non_pad_mask).sum()
         else:
-            loss = F.cross_entropy(pred, gold, ignore_index=self.constants.PAD, reduction='sum')
+            loss = F.cross_entropy(
+                pred, gold, ignore_index=self.constants.PAD, reduction="sum"
+            )
         return loss
 
     def compute_epoch(self, dataset, validation=False):
@@ -311,7 +328,7 @@ class RecurrentModel(NMTModel):
         total_loss, n_word_total, n_word_correct = 0, 0, 0
 
         label = "Training" if not validation else "Validation"
-        for batch in tqdm(dataset, desc=' - '+label, leave=False):
+        for batch in tqdm(dataset, desc=" - " + label, leave=False):
             # prepare data
             src_seq, src_pos, tgt_seq, tgt_pos = map(lambda x: x.to(self.device), batch)
             src_pos = torch.sum(src_pos > 0, dim=1)
@@ -322,8 +339,10 @@ class RecurrentModel(NMTModel):
 
             pred = self.model((src_seq, src_pos), (tgt_seq, tgt_pos))
             pred = pred.view(-1, pred.size(2))
-   
-            loss, n_correct = self.performance(pred, tgt_seq, smoothing=self.opt.label_smoothing)
+
+            loss, n_correct = self.performance(
+                pred, tgt_seq, smoothing=self.opt.label_smoothing
+            )
 
             if not validation:
                 # backprop
@@ -335,8 +354,8 @@ class RecurrentModel(NMTModel):
             total_loss += loss.item()
             n_word_total += tgt_seq.ne(self.constants.PAD).sum().item()
             n_word_correct += n_correct
-    
-        loss_per_word = total_loss/n_word_total
-        accuracy = n_word_correct/n_word_total
+
+        loss_per_word = total_loss / n_word_total
+        accuracy = n_word_correct / n_word_total
 
         return loss_per_word, accuracy

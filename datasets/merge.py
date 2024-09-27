@@ -2,10 +2,12 @@
 Merge scripts to join multiple MOSE style corpus datasets together.
 """
 
-import os
 import argparse
-from tqdm import tqdm
+import os
 import subprocess
+
+from tqdm import tqdm
+
 
 def get_len(filepath):
     """
@@ -16,17 +18,18 @@ def get_len(filepath):
     process = subprocess.run(command.split(" "), stdout=subprocess.PIPE)
     return int(process.stdout.decode("utf-8").split(" ")[0])
 
+
 def load_args():
     parser = argparse.ArgumentParser(description="train.py")
     # data options
 
-    parser.add_argument('-left', nargs='+', required=True, action="append")
-    parser.add_argument('-right', nargs='+', required=True, action="append")
-    parser.add_argument('-left_out', required=True, type=str)
-    parser.add_argument('-right_out', required=True, type=str)
-    
+    parser.add_argument("-left", nargs="+", required=True, action="append")
+    parser.add_argument("-right", nargs="+", required=True, action="append")
+    parser.add_argument("-left_out", required=True, type=str)
+    parser.add_argument("-right_out", required=True, type=str)
 
     return parser.parse_args()
+
 
 args = load_args()
 # python3 merge.py -left machine_translation/europarl/europarl.en machine_translation/global_voices/globalvoices.en  machine_translation/hansards/hansards.en -right machine_translation/europarl/europarl.fr machine_translation/global_voices/globalvoices.fr machine_translation/hansards/hansards.fr -left_out machine_translation/corpus_enfr.en -right_out machine_translation/corpus_enfr.en
@@ -35,12 +38,12 @@ dataset = []
 
 for ent in zip(args.left[0], args.right[0]):
     fpl, fpr = ent
-    length = get_len(fpl)                                      
+    length = get_len(fpl)
     filename = os.path.split(fpl)[-1]
     with open(fpl) as l, open(fpr) as r:
-        for pair in tqdm(zip(l,r), total=length, desc=filename):
+        for pair in tqdm(zip(l, r), total=length, desc=filename):
             dataset.append(pair)
-            
+
 # check for bad pairs
 bads = []
 for i in tqdm(range(len(dataset)), desc="Checking for Bad Pairs"):
@@ -71,6 +74,4 @@ with open(args.left_out, "w") as lf, open(args.right_out, "w") as rf:
         pair = dataset[i]
         left, right = pair
         lf.write(left + "\n")
-        rf.write(right + "\n") 
-
-
+        rf.write(right + "\n")

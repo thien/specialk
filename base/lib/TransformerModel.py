@@ -1,20 +1,24 @@
+import math
+import os
+import time
+from collections import OrderedDict
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data
-
-from tqdm import tqdm
-import time
-import math
-import os
-from collections import OrderedDict
-
+from core.bpe import Encoder as BPE
 from lib.nmtModel import NMTModel
-from lib.transformer.Models import Transformer, Encoder, Decoder, get_sinusoid_encoding_table
+from lib.transformer.Models import (
+    Decoder,
+    Encoder,
+    Transformer,
+    get_sinusoid_encoding_table,
+)
 from lib.transformer.Optim import ScheduledOptim
 from lib.transformer.Translator import Translator
-from core.bpe import Encoder as BPE
+from tqdm import tqdm
 
 """
 Wrapper class for Transformer.
@@ -63,8 +67,9 @@ class TransformerModel(NMTModel):
             d_inner=self.opt.d_inner_hid,
             n_layers=self.opt.layers,
             n_head=self.opt.n_head,
-            dropout=self.opt.dropout).to(self.device)
-        
+            dropout=self.opt.dropout,
+        ).to(self.device)
+
         for p in self.model.parameters():
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
@@ -77,11 +82,13 @@ class TransformerModel(NMTModel):
             enc = torch.load(encoder_path, "cpu")
             # if the model was initialised in DataParallel
             # we'll have to revert that.
-            if list(enc['model'].keys())[0][:7] == "module.":
-                enc['model'] = OrderedDict([(k[7:], v) for k, v in enc['model'].items()])
+            if list(enc["model"].keys())[0][:7] == "module.":
+                enc["model"] = OrderedDict(
+                    [(k[7:], v) for k, v in enc["model"].items()]
+                )
 
             # copy encoder weights
-            opts_e = enc['settings']
+            opts_e = enc["settings"]
             # replace parameters in opts.
             blacklist = {
                 "checkpoint_encoder",
@@ -99,7 +106,7 @@ class TransformerModel(NMTModel):
                 "batch_size",
                 "epochs",
                 "epoch",
-                "device"
+                "device",
             }
             for arg in dir(opts_e):
                 if arg[0] == "_":
@@ -110,32 +117,36 @@ class TransformerModel(NMTModel):
             # initiate a new model
             self.initiate()
             # replace encoder weights
-            self.model.encoder.load_state_dict(enc['model'])
+            self.model.encoder.load_state_dict(enc["model"])
             if self.opt.verbose:
                 print("[Info] Loaded encoder model.")
         if decoder_path:
-
             dec = torch.load(decoder_path, "cpu")
 
-            if list(dec['model'].keys())[0][:7] == "module.":
-                dec['model'] = OrderedDict([(k[7:], v) for k, v in dec['model'].items()])
-                
+            if list(dec["model"].keys())[0][:7] == "module.":
+                dec["model"] = OrderedDict(
+                    [(k[7:], v) for k, v in dec["model"].items()]
+                )
+
             # Note that the decoder file contains both
             # the decoder and the target_word_projection.
-            opts_d = enc['settings']
-            self.model.decoder.load_state_dict(dec['model'])
-
+            opts_d = enc["settings"]
+            self.model.decoder.load_state_dict(dec["model"])
 
             try:
-                self.model.generator.load_state_dict(dec['generator'])
+                self.model.generator.load_state_dict(dec["generator"])
             except:
                 generator = nn.Sequential(
-                    nn.Linear(self.model.generator.in_features, self.model.generator.out_features),
-                    nn.LogSoftmax(dim=1)).cuda()
-                generator.load_state_dict(dec['generator'])
+                    nn.Linear(
+                        self.model.generator.in_features,
+                        self.model.generator.out_features,
+                    ),
+                    nn.LogSoftmax(dim=1),
+                ).cuda()
+                generator.load_state_dict(dec["generator"])
                 del self.model.generator
                 self.model.generator = generator
-          
+
             if self.opt.verbose:
                 print("[Info] Loaded decoder model.")
 
@@ -148,8 +159,13 @@ class TransformerModel(NMTModel):
         self.optimiser = ScheduledOptim(
             optim.Adam(
                 filter(lambda x: x.requires_grad, self.model.parameters()),
-                betas=(0.9, 0.98), eps=1e-09, lr=self.opt.learning_rate),
-            self.opt.d_model, self.opt.n_warmup_steps)
+                betas=(0.9, 0.98),
+                eps=1e-09,
+                lr=self.opt.learning_rate,
+            ),
+            self.opt.d_model,
+            self.opt.n_warmup_steps,
+        )
         if self.opt.verbose:
             print("[Info] optimiser configured.")
 
@@ -176,10 +192,14 @@ class TransformerModel(NMTModel):
         self.train_accs.append(train_acc)
 
         if self.opt.verbose:
-            print('  - (Training)   perplexity: {perplexity: 8.5f}, accuracy: {accu:3.3f} %, '
-                  'elapse: {elapse:3.3f} min'.format(
-                      perplexity=math.exp(min(train_loss, 100)), accu=100*train_acc,
-                      elapse=(time.time()-start)/60))
+            print(
+                "  - (Training)   perplexity: {perplexity: 8.5f}, accuracy: {accu:3.3f} %, "
+                "elapse: {elapse:3.3f} min".format(
+                    perplexity=math.exp(min(train_loss, 100)),
+                    accu=100 * train_acc,
+                    elapse=(time.time() - start) / 60,
+                )
+            )
 
         if evaluate:
             # validation data
@@ -191,10 +211,14 @@ class TransformerModel(NMTModel):
             self.valid_accs.append(valid_acc)
 
             if self.opt.verbose:
-                print('  - (Validation) perplexity: {perplexity: 8.5f}, accuracy: {accu:3.3f} %, '
-                      'elapse: {elapse:3.3f} min'.format(
-                          perplexity=math.exp(min(valid_loss, 100)), accu=100*valid_acc,
-                          elapse=(time.time()-start)/60))
+                print(
+                    "  - (Validation) perplexity: {perplexity: 8.5f}, accuracy: {accu:3.3f} %, "
+                    "elapse: {elapse:3.3f} min".format(
+                        perplexity=math.exp(min(valid_loss, 100)),
+                        accu=100 * valid_acc,
+                        elapse=(time.time() - start) / 60,
+                    )
+                )
 
         return self
 
@@ -206,7 +230,9 @@ class TransformerModel(NMTModel):
         """
 
         # load test data
-        test_loader, max_token_seq_len, is_bpe, decoder = self.load_testdata(self.opt.src, self.opt.vocab)
+        test_loader, max_token_seq_len, is_bpe, decoder = self.load_testdata(
+            self.opt.src, self.opt.vocab
+        )
 
         self.model.word_prob_prj = nn.LogSoftmax(dim=1)
         self.model.eval()
@@ -217,8 +243,10 @@ class TransformerModel(NMTModel):
 
         hypotheses = []
 
-        with open(self.opt.output, 'w') as f:
-            for batch in tqdm(test_loader, desc='Translating', leave=False, dynamic_ncols=True):
+        with open(self.opt.output, "w") as f:
+            for batch in tqdm(
+                test_loader, desc="Translating", leave=False, dynamic_ncols=True
+            ):
                 # get sequences through beam search.
                 all_hyp, _ = translator.translate_batch(*batch)
                 # write outputs as we get them so we can see progress.
@@ -228,9 +256,9 @@ class TransformerModel(NMTModel):
                     lines = self.translate_decode_dict(all_hyp, decoder)
                 for line in lines:
                     f.write(line + "\n")
-                
+
         if self.opt.verbose:
-            print('[Info] Finished.')
+            print("[Info] Finished.")
         return hypotheses
 
     def save(self, epoch=None, note=None):
@@ -239,25 +267,25 @@ class TransformerModel(NMTModel):
         """
 
         checkpoint_encoder = {
-            'type': "transformer",
-            'model': self.model.encoder.state_dict(),
-            'epoch': epoch,
-            'settings': self.opt
+            "type": "transformer",
+            "model": self.model.encoder.state_dict(),
+            "epoch": epoch,
+            "settings": self.opt,
         }
 
-        if checkpoint_encoder['settings'].telegram:
-            del checkpoint_encoder['settings'].telegram
+        if checkpoint_encoder["settings"].telegram:
+            del checkpoint_encoder["settings"].telegram
 
         checkpoint_decoder = {
-            'type': "transformer",
-            'model': self.model.decoder.state_dict(),
-            'generator': self.model.generator.state_dict(),
-            'epoch': epoch,
-            'settings': self.opt
+            "type": "transformer",
+            "model": self.model.decoder.state_dict(),
+            "generator": self.model.generator.state_dict(),
+            "epoch": epoch,
+            "settings": self.opt,
         }
 
-        if checkpoint_decoder['settings'].telegram:
-            del checkpoint_decoder['settings'].telegram
+        if checkpoint_decoder["settings"].telegram:
+            del checkpoint_decoder["settings"].telegram
 
         if not note:
             note = ""
@@ -274,23 +302,19 @@ class TransformerModel(NMTModel):
                     model_name = ""
                     ready_to_save = True
                     if self.opt.verbose:
-                        print(
-                            '    - [Info] The checkpoint file has been updated.')
+                        print("    - [Info] The checkpoint file has been updated.")
             if ready_to_save:
                 encoder_name = "encoder" + model_name + ".chkpt"
                 decoder_name = "decoder" + model_name + ".chkpt"
                 # setup directory to save this at.
-                encoder_filepath = os.path.join(
-                    self.opt.directory, encoder_name)
-                decoder_filepath = os.path.join(
-                    self.opt.directory, decoder_name)
+                encoder_filepath = os.path.join(self.opt.directory, encoder_name)
+                decoder_filepath = os.path.join(self.opt.directory, decoder_name)
                 torch.save(checkpoint_encoder, encoder_filepath)
                 torch.save(checkpoint_decoder, decoder_filepath)
         else:
             if not self.save_trip:
                 if self.opt.verbose:
-                    print(
-                        "    - [Warning]: the model is not specified to save.")
+                    print("    - [Warning]: the model is not specified to save.")
                 self.save_trip = True
 
     # ---------------------------
@@ -304,8 +328,14 @@ class TransformerModel(NMTModel):
         """
         enc_d_word_vec = self.model.encoder.src_word_emb.weight.shape[1]
         dec_d_word_vec = self.model.decoder.tgt_word_emb.weight.shape[1]
-        self.model.encoder.position_enc = nn.Embedding.from_pretrained(get_sinusoid_encoding_table(n_position, enc_d_word_vec, padding_idx=0), freeze=True).to(self.device)
-        self.model.decoder.position_enc = nn.Embedding.from_pretrained(get_sinusoid_encoding_table(n_position, dec_d_word_vec, padding_idx=0), freeze=True).to(self.device)
+        self.model.encoder.position_enc = nn.Embedding.from_pretrained(
+            get_sinusoid_encoding_table(n_position, enc_d_word_vec, padding_idx=0),
+            freeze=True,
+        ).to(self.device)
+        self.model.decoder.position_enc = nn.Embedding.from_pretrained(
+            get_sinusoid_encoding_table(n_position, dec_d_word_vec, padding_idx=0),
+            freeze=True,
+        ).to(self.device)
 
     def performance(self, pred, gold, smoothing=False):
         """
@@ -330,8 +360,7 @@ class TransformerModel(NMTModel):
             epsilon = 0.1
             n_class = pred.size(1)
             one_hot = torch.zeros_like(pred).scatter(1, gold.view(-1, 1), 1)
-            one_hot = one_hot * (1 - epsilon) + \
-                (1 - one_hot) * epsilon / (n_class - 1)
+            one_hot = one_hot * (1 - epsilon) + (1 - one_hot) * epsilon / (n_class - 1)
 
             log_prb = F.log_softmax(pred, dim=1)
             # create non-padding mask with torch.ne()
@@ -341,7 +370,8 @@ class TransformerModel(NMTModel):
             loss = loss.masked_select(non_pad_mask).sum()
         else:
             loss = F.cross_entropy(
-                pred, gold, ignore_index=self.constants.PAD, reduction='sum')
+                pred, gold, ignore_index=self.constants.PAD, reduction="sum"
+            )
         return loss
 
     def compute_epoch(self, dataset, validation=False):
@@ -367,27 +397,22 @@ class TransformerModel(NMTModel):
                 self.model.generator.train()
 
         total_loss, n_word_total, n_word_correct = 0, 0, 0
-        
 
         label = "Training" if not validation else "Validation"
-        for batch in tqdm(dataset, desc=' - '+label, leave=False, dynamic_ncols=True):
-    
+        for batch in tqdm(dataset, desc=" - " + label, leave=False, dynamic_ncols=True):
             # prepare data
-            src_seq, src_pos, tgt_seq, tgt_pos = map(
-                lambda x: x.to(self.device), batch)
+            src_seq, src_pos, tgt_seq, tgt_pos = map(lambda x: x.to(self.device), batch)
 
-    
             gold = tgt_seq[:, 1:]
             if not validation:
                 self.optimiser.zero_grad()
             # compute forward propagation
             pred = self.model(src_seq, src_pos, tgt_seq, tgt_pos)
-            
+
             # compute performance
             loss, n_correct = self.performance(
-                                pred.view(-1, pred.size(2)), 
-                                gold, 
-                                smoothing=self.opt.label_smoothing)
+                pred.view(-1, pred.size(2)), gold, smoothing=self.opt.label_smoothing
+            )
 
             if not validation:
                 # backwards propagation
@@ -404,21 +429,20 @@ class TransformerModel(NMTModel):
             n_word_total += gold.ne(self.constants.PAD).sum().detach().item()
             n_word_correct += n_correct
 
-        loss_per_word = total_loss/n_word_total
-        accuracy = n_word_correct/n_word_total
+        loss_per_word = total_loss / n_word_total
+        accuracy = n_word_correct / n_word_total
 
         return loss_per_word, accuracy
-
 
     def save_eval_outputs(self, pred, output_dir="eval_outputs"):
         outputs = torch.argmax(pred, dim=2).tolist()
         results = self.tgt_bpe.inverse_transform(outputs)
         # setup folder output if it doesn't exist.
-        directory = os.path.join(self.opt.directory,output_dir)
+        directory = os.path.join(self.opt.directory, output_dir)
         if not os.path.exists(directory):
             os.makedirs(directory)
 
-        filename ="eval_attempt_" + str(self.opt.current_epoch) + ".txt"
+        filename = "eval_attempt_" + str(self.opt.current_epoch) + ".txt"
         filepath = os.path.join(directory, filename)
         with open(filepath, "a") as output_file:
             for seq in results:

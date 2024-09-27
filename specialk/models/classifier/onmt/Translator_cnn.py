@@ -95,7 +95,6 @@ class Translator(object):
         #  (1) convert words to indexes
         dataset = self.buildData(srcBatch, goldBatch)
         src, tgt, indices = dataset[0]
-
         #  (2) translate
         num_correct, batchSize, outs, pred = self.translateBatch(src, tgt)
 

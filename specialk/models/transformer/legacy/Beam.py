@@ -17,14 +17,6 @@ class Beam:
     def __init__(self, size, device=False):
         self.size = size
         self._done = False
-
-        # The score for each translation on the beam.
-        self.scores = torch.zeros((size,), dtype=torch.float, device=device)
-        self.all_scores = []
-
-        # The backpointers at each time-step.
-        self.prev_ks = []
-
         # The outputs at each time-step.
         self.next_ys = [
             torch.full((size,), Constants.PAD, dtype=torch.long, device=device)

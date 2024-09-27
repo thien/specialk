@@ -4,6 +4,9 @@ from typing import List
 import torch
 
 
+import torch
+
+
 class Dict(object):
     def __init__(self, data=None, lower=False, seq_len=50):
         self.idxToLabel = {}

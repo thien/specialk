@@ -138,6 +138,7 @@ class TransformerModel(NMTModel):
                 self.model.generator.load_state_dict(dec["generator"])
             except:
                 generator = nn.Sequential(
+<<<<<<< HEAD:specialk/models/legacy/transformer_model.py
                     nn.Linear(
                         self.model.generator.in_features,
                         self.model.generator.out_features,
@@ -145,6 +146,19 @@ class TransformerModel(NMTModel):
                     nn.LogSoftmax(dim=1),
                 )
                 generator.load_state_dict(dec["generator"])
+||||||| 9856af7:base/lib/TransformerModel.py
+                    nn.Linear(self.model.generator.in_features, self.model.generator.out_features),
+                    nn.LogSoftmax(dim=1)).cuda()
+                generator.load_state_dict(dec['generator'])
+=======
+                    nn.Linear(
+                        self.model.generator.in_features,
+                        self.model.generator.out_features,
+                    ),
+                    nn.LogSoftmax(dim=1),
+                ).cuda()
+                generator.load_state_dict(dec["generator"])
+>>>>>>> master:base/lib/TransformerModel.py
                 del self.model.generator
                 self.model.generator = generator
 

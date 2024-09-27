@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import torch
 import torch.utils.data
@@ -6,6 +8,7 @@ import torch.utils.data
 import specialk.core.constants as Constants
 
 # THIS IS ONLY FOR WORD DATASETS
+
 
 
 def paired_collate_fn(insts):

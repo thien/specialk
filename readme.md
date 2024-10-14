@@ -25,6 +25,8 @@ To train different models, see `specialk/trainers/*.py` for the different traini
 
 ## Datasets
 
+Much of the datasets used in this are hosted on huggingface.
+
 To make life easier, I've set up a one-command auto running program that'll deal with downloading all the necessary machine-translation datasets needed to make your model. You'll need `wget` however.
 
     cd datasets

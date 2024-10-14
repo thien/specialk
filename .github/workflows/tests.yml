@@ -1,0 +1,24 @@
+name: Run Lightweight Tests
+
+on: [push, pull_request]
+
+jobs:
+  lightweight-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false 
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Rye 
+      uses: eifinger/setup-rye@v4
+      with:
+        version: 'latest'
+    - name: Install Project
+      run: rye sync 
+    - name: Download misc. Dependencies
+      run: rye run python -m nltk.downloader cmudict averaged_perceptron_tagger
+    - name: Run Lightweight Tests
+      run: |
+        export PYTHONPATH=$PYTHONPATH:$(pwd)
+        rye run tests-light

@@ -39,14 +39,13 @@ dataset = []
 for ent in zip(args.left[0], args.right[0]):
     fpl, fpr = ent
     length = get_len(fpl)
-    filename = os.path.split(fpl)[-1]
     with open(fpl) as l, open(fpr) as r:
-        for pair in tqdm(zip(l, r), total=length, desc=filename):
+        for pair in tqdm(zip(l, r), total=length):
             dataset.append(pair)
 
 # check for bad pairs
 bads = []
-for i in tqdm(range(len(dataset)), desc="Checking for Bad Pairs"):
+for i in tqdm(range(len(dataset))):
     pair = dataset[i]
     # check if the pair consists of content in both left and right
     left, right = [x.strip() for x in pair]

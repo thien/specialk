@@ -10,23 +10,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable, List, Optional, Tuple, Union
-from rich import print as rprint
-from rich.table import Table
+
 import einops
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from galore_torch import GaLoreAdamW
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
 from torch.nn import LayerNorm
-from torch.optim import AdamW
 
 import specialk.core.constants as Constants
 from specialk.core.utils import log
+from specialk.models.generators.beam import BeamBatch, EncoderDecoderBeam
 from specialk.models.generators.sampling import LanguageModelSampler
 from specialk.models.mt_model import NMTModule
-from specialk.models.generators.beam import BeamBatch, EncoderDecoderBeam
 from specialk.models.optimizers.schedulers import CosineWarmupScheduler
 from specialk.models.transformer.pos_encoders import PositionalEncoder
 from specialk.models.utils.activations import SwiGLU
@@ -502,9 +501,30 @@ class PyTorchTransformerModule(NMTModule):
         )
 
     def configure_optimizers(self):
-        optimizer = AdamW(
-            self.model.parameters(), lr=self.learning_rate, betas=(0.9, 0.98), eps=1e-9
+        # galore_params are essentially all attn and ff layers in the model.
+        galore_params, non_galore_params = [], []
+
+        # Iterate through named parameters
+        for name, param in self.model.named_parameters():
+            if "linear" in name or "self_attn" in name:
+                galore_params.append(param)
+            else:
+                non_galore_params.append(param)
+
+        param_groups = [
+            {"params": non_galore_params},
+            {
+                "params": galore_params,
+                "rank": 128,
+                "update_proj_gap": 200,
+                "scale": 0.25,
+                "proj_type": "std",
+            },
+        ]
+        optimizer = GaLoreAdamW(
+            param_groups, lr=self.learning_rate, betas=(0.9, 0.98), eps=1e-9
         )
+
         # lr scheduler is applied per step; not epoch.
         # so we're changing it.
         self.lr_scheduler = CosineWarmupScheduler(

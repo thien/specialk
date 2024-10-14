@@ -206,6 +206,8 @@ dependencies = [
     "yarl==1.9.4",
     "zipp==3.19.2",
     "pytest-xdist>=3.6.1",
+    "galore-torch>=1.0",
+    "bitsandbytes @ git+https://github.com/bitsandbytes-foundation/bitsandbytes",
 ]
 readme = "readme.md"
 requires-python = ">= 3.9"

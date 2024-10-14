@@ -23,6 +23,7 @@ bayesian-optimization==1.0.1
 beautifulsoup4==4.7.1
 better-exceptions==0.3.3
 bitarray==2.9.2
+bitsandbytes @ git+https://github.com/bitsandbytes-foundation/bitsandbytes@2da2f1945ce5567e27d45df43acd4f65108d5c25
 blis==0.7.11
 build==1.2.1
 cachecontrol==0.14.0
@@ -64,6 +65,7 @@ fonttools==4.53.1
 frozenlist==1.4.1
 fsspec==2024.2.0
 ftfy==6.2.3
+galore-torch==1.0
 gensim==4.3.2
 huggingface-hub==0.23.4
 hydra-core==1.0.7

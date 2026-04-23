@@ -7,18 +7,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
-      fail-fast: false 
+      fail-fast: false
     steps:
     - uses: actions/checkout@v4
-    - name: Install Rye 
-      uses: eifinger/setup-rye@v4
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
       with:
         version: 'latest'
     - name: Install Project
-      run: rye sync 
+      run: uv sync
     - name: Download misc. Dependencies
-      run: rye run python -m nltk.downloader cmudict averaged_perceptron_tagger
+      run: uv run python -m nltk.downloader cmudict averaged_perceptron_tagger
     - name: Run Lightweight Tests
       run: |
         export PYTHONPATH=$PYTHONPATH:$(pwd)
-        rye run tests-light
+        uv run pytest -v -m "not heavyweight"

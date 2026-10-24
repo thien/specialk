@@ -130,3 +130,39 @@ def test_local_text_dataset_and_sgd_schedule(tmp_path):
         config["optimizer"].step()
         scheduler.step()
     assert config["optimizer"].param_groups[0]["lr"] == pytest.approx(0.5)
+
+
+@pytest.mark.lightweight
+def test_legacy_tokenized_labels_are_flipped(monkeypatch):
+    import io
+
+    from specialk.models.tokenizers.dict import Dict
+
+    unpickler = train_classifier._LegacyDictUnpickler(io.BytesIO(b""))
+    assert unpickler.find_class("onmt", "Dict") is Dict
+
+    class FakeDict:
+        def size(self):
+            return VOCAB_SIZE
+
+    data = {
+        "dicts": {"src": FakeDict()},
+        "train": {
+            "src": [torch.arange(4), torch.arange(4) + 1],
+            "tgt": [torch.tensor([1]), torch.tensor([0])],
+        },
+        "valid": {"src": [torch.arange(4)], "tgt": [torch.tensor([0])]},
+    }
+    monkeypatch.setattr(
+        train_classifier, "load_legacy_tokenized_data", lambda path: data
+    )
+
+    train, valid, sequence_length, vocabulary_size = (
+        train_classifier.load_tokenized_classification_dataset(
+            "political.train.pt", batch_size=2, positive_label="democratic"
+        )
+    )
+    assert sequence_length == 4
+    assert vocabulary_size == VOCAB_SIZE
+    assert train.dataset.labels == [0, 1]
+    assert valid.dataset.labels == [1]

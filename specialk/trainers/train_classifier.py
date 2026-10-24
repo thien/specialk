@@ -12,16 +12,19 @@ TODO: Check this works on both BPE and word-separated tokenized datasets from th
 from __future__ import division
 
 import argparse
+import pickle
+import types
 from collections.abc import Sequence
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
 import lightning.pytorch as pl
+import torch
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.profilers import AdvancedProfiler
 from peft import LoraConfig, TaskType
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset as TorchDataset
 
 from datasets import Dataset, Value, load_dataset
 from specialk.core.constants import LOGGING_DIR, LOGGING_PERF_NAME, PROJECT_DIR
@@ -104,10 +107,11 @@ def get_tokenizer(tokenizer_option: str = "spm", max_length: int = 72) -> Vocabu
 
 def get_model(
     model_option: str,
-    tokenizer: Vocabulary,
+    tokenizer: Vocabulary | None,
     sequence_length: int | None = None,
     learning_rate: float = 0.001,
     name: str = "political",
+    vocabulary_size: int | None = None,
     optimizer: str = "adam",
     lr_decay: float = 1.0,
     decay_start: int = 0,
@@ -115,8 +119,9 @@ def get_model(
     if model_option == "cnn":
         task = CNNClassifier(
             name,
-            vocabulary_size=tokenizer.vocab_size,
-            sequence_length=sequence_length or tokenizer.max_length,
+            vocabulary_size=vocabulary_size or tokenizer.vocab_size,
+            sequence_length=sequence_length
+            or (tokenizer.max_length if tokenizer else None),
             tokenizer=tokenizer,
             learning_rate=learning_rate,
             optimizer=optimizer,
@@ -174,26 +179,109 @@ def load_text_classification_dataset(
     )
 
 
+class _LegacyDictUnpickler(pickle.Unpickler):
+    def find_class(self, module: str, name: str):
+        if module.startswith("onmt") and name == "Dict":
+            from specialk.models.tokenizers.dict import Dict
+
+            return Dict
+        return super().find_class(module, name)
+
+
+def load_legacy_tokenized_data(path: Path) -> dict:
+    """Load the old ``political.train.pt`` file with its ``onmt.Dict``."""
+    module = types.ModuleType("legacy_tokenized")
+    module.Unpickler = _LegacyDictUnpickler
+    module.load = pickle.load
+    return torch.load(
+        path, map_location="cpu", weights_only=False, pickle_module=module
+    )
+
+
+class _TokenizedDataset(TorchDataset):
+    def __init__(self, rows: list[torch.Tensor], labels: list[torch.Tensor]):
+        self.rows = rows
+        self.labels = labels
+
+    def __len__(self):
+        return len(self.rows)
+
+    def __getitem__(self, index):
+        return {"text": self.rows[index], "label": self.labels[index]}
+
+
+def load_tokenized_classification_dataset(
+    path: Path,
+    batch_size: int,
+    positive_label: str,
+    n_workers: int = 0,
+) -> tuple[DataLoader, DataLoader, int, int]:
+    """Load the old pre-tokenized political classifier data.
+
+    The labels are republican=1, so a democratic-positive run flips them.
+    """
+    data = load_legacy_tokenized_data(path)
+
+    def rows(split):
+        source = [row.long() for row in data[split]["src"]]
+        labels = [label.long().squeeze(0) for label in data[split]["tgt"]]
+        if positive_label == "democratic":
+            labels = [1 - label for label in labels]
+        return source, labels
+
+    train_rows, train_labels = rows("train")
+    val_rows, val_labels = rows("valid")
+    vocabulary_size = data["dicts"]["src"].size()
+    sequence_length = train_rows[0].size(0)
+
+    train_loader = DataLoader(
+        _TokenizedDataset(train_rows, train_labels),
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=n_workers,
+    )
+    val_loader = DataLoader(
+        _TokenizedDataset(val_rows, val_labels),
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=n_workers,
+    )
+    return train_loader, val_loader, sequence_length, vocabulary_size
+
+
 def main_new(args):
     batch_size = args.batch_size
 
     # tokenizer
-    if args.model_type == "bert":
-        tokenizer = HuggingFaceVocabulary(
-            name=BERT_BASE_NAME,
-            pretrained_model_name_or_path=BERT_BASE_NAME,
-            max_length=args.max_seq_len or 512,
+    vocabulary_size = None
+    if args.tokenized_path:
+        (
+            train_dataloader,
+            val_dataloader,
+            sequence_length,
+            vocabulary_size,
+        ) = load_tokenized_classification_dataset(
+            args.tokenized_path, batch_size, args.positive_label, args.n_workers
         )
-        sequence_length = tokenizer.max_length
-    elif args.tokenizer_path:
-        tokenizer = WordVocabulary.from_file(args.tokenizer_path)
-        sequence_length = tokenizer.max_length
-    elif args.mt_checkpoint:
-        mt_model = load_seq2seq(args.mt_checkpoint)
-        tokenizer, sequence_length = mt_model.tokenizer, mt_model.sequence_length
+        tokenizer = None
+        dataset_name = f"local/{args.tokenized_path.stem}"
     else:
-        tokenizer = get_tokenizer(args.tokenizer, args.max_seq_len or 72)
-        sequence_length = tokenizer.max_length
+        if args.model_type == "bert":
+            tokenizer = HuggingFaceVocabulary(
+                name=BERT_BASE_NAME,
+                pretrained_model_name_or_path=BERT_BASE_NAME,
+                max_length=args.max_seq_len or 512,
+            )
+            sequence_length = tokenizer.max_length
+        elif args.tokenizer_path:
+            tokenizer = WordVocabulary.from_file(args.tokenizer_path)
+            sequence_length = tokenizer.max_length
+        elif args.mt_checkpoint:
+            mt_model = load_seq2seq(args.mt_checkpoint)
+            tokenizer, sequence_length = mt_model.tokenizer, mt_model.sequence_length
+        else:
+            tokenizer = get_tokenizer(args.tokenizer, args.max_seq_len or 72)
+            sequence_length = tokenizer.max_length
 
     task = get_model(
         args.model_type,
@@ -201,6 +289,7 @@ def main_new(args):
         sequence_length=sequence_length,
         learning_rate=args.lr,
         name=args.model_name,
+        vocabulary_size=vocabulary_size,
         optimizer=args.optimizer,
         lr_decay=args.lr_decay,
         decay_start=args.decay_start,
@@ -208,36 +297,37 @@ def main_new(args):
 
     log.info("Loaded tokenizer", tokenizer=tokenizer)
 
-    if args.train_path:
-        if not args.val_path:
-            raise ValueError("--val-path is required with --train-path")
-        train_dataset, val_dataset = load_text_classification_dataset(
-            args.train_path, args.val_path, args.positive_label
-        )
-        dataset_name = f"local/{args.train_path.stem}"
-    else:
-        # publications uses the default config, political the ``classifier`` one.
-        dataset = load_dataset(args.dataset_name, args.config)
-        train_dataset = _encode_labels(_single_split(dataset, "train"))
-        val_dataset = _encode_labels(
-            _single_split(dataset, "eval", "validation", "valid", "test")
-        )
-        dataset_name = args.dataset_name
+    if not args.tokenized_path:
+        if args.train_path:
+            if not args.val_path:
+                raise ValueError("--val-path is required with --train-path")
+            train_dataset, val_dataset = load_text_classification_dataset(
+                args.train_path, args.val_path, args.positive_label
+            )
+            dataset_name = f"local/{args.train_path.stem}"
+        else:
+            # publications uses the default config, political the ``classifier`` one.
+            dataset = load_dataset(args.dataset_name, args.config)
+            train_dataset = _encode_labels(_single_split(dataset, "train"))
+            val_dataset = _encode_labels(
+                _single_split(dataset, "eval", "validation", "valid", "test")
+            )
+            dataset_name = args.dataset_name
 
-    train_dataloader = init_dataloader(
-        train_dataset,
-        tokenizer,
-        batch_size,
-        shuffle=True,
-        n_workers=args.n_workers,
-    )
-    val_dataloader = init_dataloader(
-        val_dataset,
-        tokenizer,
-        batch_size,
-        shuffle=False,
-        n_workers=args.n_workers,
-    )
+        train_dataloader = init_dataloader(
+            train_dataset,
+            tokenizer,
+            batch_size,
+            shuffle=True,
+            n_workers=args.n_workers,
+        )
+        val_dataloader = init_dataloader(
+            val_dataset,
+            tokenizer,
+            batch_size,
+            shuffle=False,
+            n_workers=args.n_workers,
+        )
 
     project_name = f"{dataset_name}/{task.name}"
 
@@ -245,12 +335,15 @@ def main_new(args):
     logger.log_hyperparams(
         params={
             "batch_size": batch_size,
-            "tokenizer": tokenizer.__class__.__name__,
+            "tokenizer": tokenizer.__class__.__name__ if tokenizer else "legacy",
             "dataset": dataset_name,
             "tokenizer_path": str(
                 args.tokenizer_path or args.mt_checkpoint
             )
             if args.tokenizer_path or args.mt_checkpoint
+            else None,
+            "tokenized_path": str(args.tokenized_path)
+            if args.tokenized_path
             else None,
             "optimizer": args.optimizer,
             "learning_rate": args.lr,
@@ -332,6 +425,12 @@ def get_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=Path,
         default=None,
         help="WordVocabulary JSON to load instead of building a tokenizer",
+    )
+    parser.add_argument(
+        "--tokenized-path",
+        type=Path,
+        default=None,
+        help="old pre-tokenized .train.pt file with an onmt.Dict",
     )
     parser.add_argument(
         "--train-path",

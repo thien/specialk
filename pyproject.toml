@@ -11,6 +11,7 @@ dependencies = [
     "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
     "evaluate==0.4.2",
     "fasttext @ git+https://github.com/facebookresearch/fastText.git@1142dc4c4ecbc19cc16eee5cdd28472e689267e6",
+    "filelock==4.2.4",
     "ftfy==6.2.3",
     "gensim==4.4.0",
     "huggingface-hub==0.36.2",

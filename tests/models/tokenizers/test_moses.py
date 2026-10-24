@@ -8,6 +8,5 @@ def test_moses_pretokeniser_matches_2019_settings():
     assert tokenize("This is a test.") == "this is a test ."
 
 
-def test_moses_pretokeniser_french_and_case():
+def test_moses_pretokeniser_french():
     assert MosesPreTokenizer("fr")("l'État français") == "l' état français"
-    assert MosesPreTokenizer("en", lower=False)("Hello!") == "Hello !"

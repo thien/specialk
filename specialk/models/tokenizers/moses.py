@@ -11,15 +11,13 @@ class MosesPreTokenizer:
     ``vocab.pt`` / ``tokenizer_*.json`` files.
     """
 
-    def __init__(self, lang: str, lower: bool = True):
+    def __init__(self, lang: str):
         self.tokenizer = MosesTokenizer(lang=lang)
-        self.lower = lower
 
     def __call__(self, text: str) -> str:
-        tokens = self.tokenizer.tokenize(
+        return self.tokenizer.tokenize(
             text,
             aggressive_dash_splits=True,
             escape=False,
             return_str=True,
-        )
-        return tokens.lower() if self.lower else tokens
+        ).lower()

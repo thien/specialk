@@ -17,16 +17,16 @@ def main() -> int:
     parser.add_argument("--src", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--lang", required=True, choices=["en", "fr"])
-    parser.add_argument("--no-lower", action="store_true")
     args = parser.parse_args()
 
-    tokenize = MosesPreTokenizer(args.lang, lower=not args.no_lower)
-    lines = args.src.read_text(encoding="utf-8").splitlines()
+    tokenize = MosesPreTokenizer(args.lang)
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    with args.out.open("w", encoding="utf-8") as out:
-        for line in lines:
-            out.write(tokenize(line) + "\n")
-    print(f"[info] wrote {len(lines)} lines to {args.out}", flush=True)
+    with args.src.open(encoding="utf-8") as src, args.out.open(
+        "w", encoding="utf-8"
+    ) as out:
+        for line in src:
+            out.write(tokenize(line.rstrip("\n")) + "\n")
+    print(f"[info] wrote {args.out}", flush=True)
     return 0
 
 

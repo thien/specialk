@@ -254,11 +254,18 @@ def init_logger(args: argparse.Namespace, project_name: str, params: dict):
     if args.logger == "wandb":
         from lightning.pytorch.loggers import WandbLogger
 
+        name = args.run_name
+        if name is None and not args.wandb_run_id:
+            name = project_name.replace("/", "-")
+        extra = {}
+        if args.wandb_run_id:
+            extra = {"id": args.wandb_run_id, "resume": "allow"}
         return WandbLogger(
             project=args.wandb_project,
-            name=args.run_name or project_name.replace("/", "-"),
+            name=name,
             save_dir=PROJECT_DIR,
             config=params,
+            **extra,
         )
     logger = TensorBoardLogger(LOGGING_DIR, name=project_name)
     logger.log_hyperparams(params=params)
@@ -559,6 +566,11 @@ def get_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--run-name",
         default=None,
         help="logger run name (default: dataset and model name)",
+    )
+    parser.add_argument(
+        "--wandb-run-id",
+        default=None,
+        help="continue an existing W&B run when resuming",
     )
     parser.add_argument(
         "--n-workers",

@@ -127,24 +127,34 @@ class Beam(Generic[T]):
         """Filter beams based on termination condition.
 
         Returns:
-            (Beam): filtered version of self, containing all best `num_beams`
-                which are also not terminated.
-            (Beam): filtered version of self, containing all best `num_beams`
-                which are also terminated.
-                i.e. the sum of lengths of these two should equal `num_beams`.
+            (Beam): up to `num_beams` best beams which have not terminated.
+            (Beam): up to `num_beams` best beams which have terminated.
+
+        The continuing beam is kept full even when some of the best candidates
+        terminate. Otherwise the beam width shrinks every time a candidate hits
+        EOS and can eventually reach zero, which makes the next top-k fail.
         """
         if num_beams is None:
             num_beams = self.num_beams
-        top_beam_indices = self.logprob_sums.topk(k=num_beams, dim=0).indices
+
         is_terminated = (self.tokens == self.tokenizer.EOS).any(dim=-1)
 
-        top_beam_mask = torch.zeros_like(is_terminated, dtype=torch.bool)
-        top_beam_mask[top_beam_indices] = True
+        def select_top(mask: Tensor, k: int) -> Beam:
+            if k == 0:
+                return self[torch.zeros_like(mask)]
 
-        best_continuing_mask = top_beam_mask & ~is_terminated
-        best_terminated_mask = top_beam_mask & is_terminated
+            scores = self.logprob_sums.masked_fill(~mask, float("-inf"))
+            indices = scores.topk(k=k, dim=0).indices
+            selection = torch.zeros_like(mask)
+            selection[indices] = True
+            return self[selection]
 
-        return self[best_continuing_mask], self[best_terminated_mask]
+        num_continuing = int((~is_terminated).sum())
+        num_terminated = int(is_terminated.sum())
+
+        continuing = select_top(~is_terminated, min(num_beams, num_continuing))
+        terminated = select_top(is_terminated, min(num_beams, num_terminated))
+        return continuing, terminated
 
     def get_topk_non_repeating(
         self,

@@ -75,15 +75,15 @@ def mock_beam():
 
 def test_filter(mock_beam):
     num_beams = 2
-    batch_size = mock_beam.logprob_sums.shape[0] // mock_beam.num_beams
     continuing, terminated = mock_beam.filter(num_beams)
 
     assert isinstance(continuing, TransformerEncoderDecoderBeam)
     assert isinstance(terminated, TransformerEncoderDecoderBeam)
-    assert (
-        continuing.logprob_sums.shape[0] + terminated.logprob_sums.shape[0]
-        == num_beams * batch_size
-    )
+    assert continuing.num_beams <= num_beams
+    assert terminated.num_beams <= num_beams
+    assert not (continuing.tokens == constants.EOS).any()
+    if terminated.num_beams:
+        assert (terminated.tokens == constants.EOS).any(dim=-1).all()
 
 
 @pytest.fixture
@@ -247,3 +247,43 @@ def test_beam_search(mock_pytorch_transformer_module):
     assert logits.shape == torch.Size(
         (batch_size, num_return_sequences, max_new_tokens + 1)
     )
+
+
+def _make_beam(tokens: Int[torch.Tensor, "rows seq"], scores: torch.Tensor):
+    rows = tokens.shape[0]
+    return TransformerEncoderDecoderBeam(
+        model=MockModel(),
+        tokenizer=MockTokenizer(),
+        logprob_sums=scores,
+        tokens=tokens,
+        memory=torch.randn(rows, 8, 512),
+        x_pad_mask=torch.zeros(rows, 8),
+    )
+
+
+def test_filter_refills_continuing_beams_when_top_beams_terminate():
+    """The best candidates can all terminate; continuing beams must be refilled.
+
+    Before the fix, the continuing beam shrank to zero and the next top-k
+    raised "selected index k out of range".
+    """
+    num_beams = 5
+    tokens = torch.randint(10, 100, (2 * num_beams, 6))
+    scores = torch.arange(2 * num_beams, 0, -1).float()
+    tokens[:num_beams, -1] = constants.EOS
+
+    beam = _make_beam(tokens, scores)
+    continuing, terminated = beam.filter(num_beams)
+
+    assert continuing.num_beams == num_beams
+    assert terminated.num_beams == num_beams
+    assert not (continuing.tokens == constants.EOS).any()
+    assert (terminated.tokens == constants.EOS).any(dim=-1).all()
+
+
+def test_filter_handles_empty_beam():
+    beam = _make_beam(torch.empty(0, 6, dtype=torch.long), torch.empty(0))
+    continuing, terminated = beam.filter(5)
+
+    assert continuing.num_beams == 0
+    assert terminated.num_beams == 0

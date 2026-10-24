@@ -138,7 +138,6 @@ train_st_model () {
         -label_target $PUBLICATION_CLASS \
         -classifier_model $CNN_MODEL_FILEPATH".pt"
 
-    python3 core/telegram.py -m "[Casper] Finished style-transfer training for $PUBLICATION_DATA"
 }
 
 #train_st_model $LABEL0

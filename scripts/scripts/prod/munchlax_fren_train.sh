@@ -61,7 +61,6 @@ BATCHSIZE=45
 #     -cuda \
 #     -multi_gpu
 
-# python3 core/telegram.py -m "[Snorlax] Finished training gold master en-fr models."
 
 FREN_DIRNAME="fren_bpe_gold_master_mk2"
 
@@ -80,7 +79,6 @@ python3 train.py \
     -checkpoint_encoder "models/"$FREN_DIRNAME"/encoder_epoch_1.chkpt" \
     -checkpoint_decoder "models/"$FREN_DIRNAME"/decoder_epoch_1.chkpt"
 
-python3 core/telegram.py -m "[Snorlax] Finished training gold master fr-en models."
 
 # # Back-Translate nmt models.
 
@@ -101,7 +99,6 @@ python3 core/telegram.py -m "[Snorlax] Finished training gold master fr-en model
 #     -output $ENFR_BASEDIR$OUTPUT \
 #     -cuda
 
-# python3 core/telegram.py -m "[Snorlax] Finished translating en-fr models."
 
 # # created fr->en
 # python3 translate.py \
@@ -113,7 +110,6 @@ python3 core/telegram.py -m "[Snorlax] Finished training gold master fr-en model
 #     -output $FREN_BASEDIR$OUTPUT \
 #     -cuda
 
-# python3 core/telegram.py -m "[Snorlax] Finished translating fr-en (backtranslation) models."
 
 # # baseline fr->en
 # python3 translate.py \
@@ -125,4 +121,3 @@ python3 core/telegram.py -m "[Snorlax] Finished training gold master fr-en model
 #     -output $FREN_BASEDIR$OUTPUT \
 #     -cuda
 
-# python3 core/telegram.py -m "[Snorlax] Finished translating fr-en (source) models."

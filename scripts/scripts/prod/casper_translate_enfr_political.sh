@@ -28,7 +28,6 @@ for p in democratic republican
            --checkpoint "$CHECKPOINT" \
            --src "$src" \
            --output "$src.ts"
-       python3 core/telegram.py -m "finished translating $src"
    done
 done
 
@@ -47,7 +46,6 @@ done
 #         -valid_tgt $POLDATA_DIR$p"_only.dev.en.b" \
 #         -save_name "models/nmt_fren_goldmaster_bpe_"$p 
 # done
-# python3 core/telegram.py -m "finished rebasing political datasets."
 
 
 # # translate newspaper dataset

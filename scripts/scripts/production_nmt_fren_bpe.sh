@@ -57,7 +57,6 @@ python3 train.py \
     -cuda \
     -cuda_device 1
 
-python3 core/telegram.py -m "[Snorlax] Finished training fr-en models."
 
 # # created fr->en
 # python3 translate.py \
@@ -69,7 +68,6 @@ python3 core/telegram.py -m "[Snorlax] Finished training fr-en models."
 #     -output $FREN_BASEDIR$OUTPUT \
 #     -cuda
 
-# python3 core/telegram.py -m "[Snorlax] Finished translating fr-en (backtranslation) models."
 
 # # baseline fr->en
 # python3 translate.py \
@@ -81,4 +79,3 @@ python3 core/telegram.py -m "[Snorlax] Finished training fr-en models."
 #     -output $FREN_BASEDIR$OUTPUT \
 #     -cuda
 
-# python3 core/telegram.py -m "[Snorlax] Finished translating fr-en (source) models."

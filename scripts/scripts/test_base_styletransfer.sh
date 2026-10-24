@@ -62,7 +62,6 @@ DECODER="decoder.chkpt"
 #     -new_directory \
 #     -cuda 
 
-# python3 core/telegram.py -m "Finished training democrat no freeze."
 
 # # democrat freeze
 # python3 train.py \
@@ -82,7 +81,6 @@ DECODER="decoder.chkpt"
 #     -new_directory \
 #     -cuda
 
-# python3 core/telegram.py -m "Finished training democrat freeze."
 
 # # republican no freeze
 # python3 train.py \
@@ -101,7 +99,6 @@ DECODER="decoder.chkpt"
 #     -new_directory \
 #     -cuda 
 
-# python3 core/telegram.py -m "Finished training republican no freeze."
 
 # # republican freeze
 # python3 train.py \
@@ -121,7 +118,6 @@ DECODER="decoder.chkpt"
 #     -new_directory \
 #     -cuda 
 
-# python3 core/telegram.py -m "Finished training republican freeze."
 
 # now we need to translate those sequences.
 DEM_TESTSET="../datasets/political_data/democratic_only.test.fr"
@@ -139,7 +135,6 @@ EVALTXT="eval.txt"
 #     -output "results/baseline/democrat_nofreeze.txt" \
 #     -cuda
 
-# python3 core/telegram.py -m "Finished translating democrat no freeze."
 
 # # democrat freeze
 # python3 translate.py \
@@ -151,7 +146,6 @@ EVALTXT="eval.txt"
 #     -output "results/baseline/democrat_freeze.txt" \
 #     -cuda
 
-# python3 core/telegram.py -m "Finished translating democrat freeze."
 
 # # republican no freeze
 # python3 translate.py \
@@ -163,7 +157,6 @@ EVALTXT="eval.txt"
 #     -output "results/baseline/republican_nofreeze.txt" \
 #     -cuda
 
-# python3 core/telegram.py -m "Finished translating republican no freeze."
 
 # # republican freeze
 # python3 translate.py \
@@ -175,7 +168,6 @@ EVALTXT="eval.txt"
 #     -output "results/baseline/republican_freeze.txt" \
 #     -cuda
 
-# python3 core/telegram.py -m "Finished translating republican freeze."
 
 # baseline democrat
 # python3 translate.py \
@@ -187,7 +179,6 @@ EVALTXT="eval.txt"
 #     -output "results/baseline/baseline_democrat.txt" \
 #     -cuda
 
-# python3 core/telegram.py -m "Finished translating democrat baseline."
 
 # # baseline republican
 # python3 translate.py \
@@ -199,7 +190,6 @@ EVALTXT="eval.txt"
 #     -output "results/baseline/baseline_republican.txt" \
 #     -cuda
 
-# python3 core/telegram.py -m "Finished translating republican baseline."
 
 # need to translate regular translation output using the style transfer models and see what's going on.
 
@@ -218,7 +208,6 @@ python3 translate.py \
     -cuda
 
 
-python3 core/telegram.py -m "Finished translating republican with nmt."
 
 
 python3 translate.py \
@@ -232,7 +221,6 @@ python3 translate.py \
 
 
 
-python3 core/telegram.py -m "Finished translating democrat with nmt."
 
 
 DEM_TESTSET_EN="../datasets/political_data/democratic_only.test.en"
@@ -246,29 +234,22 @@ nlg-eval --hypothesis=$RESDIR"democrat_freeze_using_base_out.txt" --references=$
 nlg-eval --hypothesis=$RESDIR"republican_freeze_using_base_out.txt" --references=$NMT_EN_TEST > $RESDIR"republican_freeze_nmt.stat.txt"
 
 
-python3 core/telegram.py -m "Finished calculating stats."
 
 
 # nlg-eval --hypothesis=$RESDIR"democrat_nofreeze.txt" --references=$DEM_TESTSET_EN > $RESDIR"democrat_nofreeze.stat.txt"
 
-# python3 core/telegram.py -m "Finished computing stats for democrat_nofreeze"
 
 # nlg-eval --hypothesis=$RESDIR"democrat_freeze.txt" --references=$DEM_TESTSET_EN > $RESDIR"democrat_freeze.stat.txt"
 
-# python3 core/telegram.py -m "Finished computing stats for democrat_freeze"
 #echo $RESDIR"republican_nofreeze.txt"
 #nlg-eval --hypothesis=$RESDIR"republican_nofreeze.txt" --references=$REP_TESTSET_EN > $RESDIR"republican_nofreeze.stat.txt"
 
-#python3 core/telegram.py -m "Finished computing stats for republican_nofreeze"
 
 # nlg-eval --hypothesis=$RESDIR"republican_freeze.txt" --references=$REP_TESTSET_EN > $RESDIR"republican_freeze.stat.txt"
 
-# python3 core/telegram.py -m "Finished computing stats for republican_freeze"
 
 # nlg-eval --hypothesis=$RESDIR"baseline_democrat.txt" --references=$DEM_TESTSET_EN > $RESDIR"baseline_democrat.stat.txt"
 
-# python3 core/telegram.py -m "Finished computing stats for baseline_democrat"
 
 # nlg-eval --hypothesis=$RESDIR"baseline_republican.txt" --references=$REP_TESTSET_EN > $RESDIR"baseline_republican.stat.txt"
 
-# python3 core/telegram.py -m "Finished computing stats for baseline_republican"

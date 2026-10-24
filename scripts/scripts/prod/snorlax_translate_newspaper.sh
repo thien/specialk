@@ -27,4 +27,3 @@ python3 -m specialk.translate \
     --batch-size 32 \
     --max-new-tokens 150 \
     --device $DEVICE
-python3 core/telegram.py -m "finished translating $PUB_DIR$p.fr"

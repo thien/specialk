@@ -57,7 +57,6 @@ python3 train.py \
     -cuda_device 0 \
     -cuda
 
-python3 core/telegram.py -m "[Snorlax] Finished training en-fr models."
 
 # ENFR_BASEDIR="models/"$ENFR_DIRNAME"/"
 # FREN_BASEDIR="models/"$ENFR_DIRNAME"/"
@@ -76,4 +75,3 @@ python3 core/telegram.py -m "[Snorlax] Finished training en-fr models."
 #     -output $ENFR_BASEDIR$OUTPUT \
 #     -cuda
 
-# python3 core/telegram.py -m "[Snorlax] Finished translating en-fr models."

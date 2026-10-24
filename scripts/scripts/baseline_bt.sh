@@ -96,11 +96,9 @@ EVALTXT=$METRICSDIR"eval_lg_lower_enfr.txt"
 
 # python3 translate.py -model $MODEL -checkpoint_encoder $ENFR_BASEDIR$ENCODER -checkpoint_decoder $ENFR_BASEDIR$DECODER -vocab $VOCAB -src $TESTINP_EN -output $ENFR_BASEDIR$ENFR_OUTPUT -batch_size $BATCHSIZE -beam_size $BEAMSIZE -cuda
 
-python3 core/telegram.py -m "Initiating measurements."
 
 nlg-eval --hypothesis=$ENFR_BASEDIR$ENFR_OUTPUT --references=$TESTINP_FR > $EVALTXT
 
-python3 core/telegram.py -m "Finished nlg-eval for lg en->fr"
 #fr->en
 
 VOCAB="models/nmt_fren_lg_lower_30k_v.pt"
@@ -116,4 +114,3 @@ EVALTXT=$METRICSDIR"eval_lg_lower_fren.txt"
 nlg-eval --hypothesis=$FREN_BASEDIR$FREN_OUTPUT --references=$TESTINP_EN > $EVALTXT
 
 
-python3 core/telegram.py -m "finished stats."

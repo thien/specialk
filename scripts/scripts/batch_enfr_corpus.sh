@@ -109,7 +109,6 @@ then
     #     -save_model \
     #     -save_mode best 
 
-    # python3 core/telegram.py -m "Finished training en-fr small models."
     
     # python3 train.py \
     #     -log $true \
@@ -124,7 +123,6 @@ then
     #     -save_model \
     #     -save_mode best 
 
-    # python3 core/telegram.py -m "Finished training fr-en small models."
 
     # medium
 
@@ -143,7 +141,6 @@ then
         -save_model \
         -save_mode all
 
-    python3 core/telegram.py -m "Finished training en-fr medium models."
     
     python3 train.py \
         -log $true \
@@ -158,7 +155,6 @@ then
         -save_model \
         -save_mode all
 
-    python3 core/telegram.py -m "Finished training fr-en medium models."
 
     # large
 
@@ -175,7 +171,6 @@ then
         -save_model \
         -save_mode all
 
-    python3 core/telegram.py -m "Finished training en-fr large models."
     
     python3 train.py \
         -log $true \
@@ -190,29 +185,23 @@ then
         -save_model \
         -save_mode all
 
-    python3 core/telegram.py -m "Finished training fr-en large models."
 
     # python3 train.py -log $true -batch_size $BSIZE -save_model -model $MODEL -epoch $EP -d_word_vec $MODELDIM -d_model $MODELDIM -cuda -data $SAVENAME_FR_ENFR$PTF -directory_name $FR_ENFR$B
 
-    # python3 core/telegram.py -m "Finished transferring XL en-fr"
 
     # python3 train.py -log $true -batch_size $BSIZE -save_model -model $MODEL -epoch $EP -d_word_vec $MODELDIM -d_model $MODELDIM -cuda -data $SAVENAME_LG_ENFR$PTF -directory_name $LG_ENFR$B
 
-    # python3 core/telegram.py -m "Finished transferring L en-fr"
 
     # python3 train.py -log $true -batch_size $BSIZE -save_model -model $MODEL -epoch $EP -d_word_vec $MODELDIM -d_model $MODELDIM -cuda -data $SAVENAME_MD_ENFR$PTF -directory_name $MD_ENFR$B
 
-    # python3 core/telegram.py -m "Finished transferring M en-fr"
 
     # python3 train.py -log $true -batch_size $BSIZE -save_model -model $MODEL -epoch $EP -d_word_vec $MODELDIM -d_model $MODELDIM -cuda -data $SAVENAME_SM_ENFR$PTF -directory_name $SM_ENFR$B
 
-    # python3 core/telegram.py -m "Finished transferring S en-fr"
 
     # # FR-EN
 
     # python3 train.py -log $true -batch_size $BSIZE -save_model -model $MODEL -epoch $EP -d_word_vec $MODELDIM -d_model $MODELDIM -cuda -data $SAVENAME_SM_FREN$PTF -directory_name $SM_FREN$B
 
-    # python3 core/telegram.py -m "Finished transferring S fr-en"
 
 
 else

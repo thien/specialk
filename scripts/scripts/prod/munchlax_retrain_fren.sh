@@ -36,4 +36,3 @@ python3 train.py \
     -multi_gpu
 
 
-python3 core/telegram.py -m "[Munchlax] Finished second epoch of fr-en models."

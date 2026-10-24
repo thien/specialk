@@ -18,7 +18,6 @@ from torch.utils.data import DataLoader
 
 from datasets import Dataset
 from specialk.core.constants import PROJECT_DIR
-from specialk.core.utils import check_torch_device
 from specialk.models.classifier.models import CNNClassifier
 from specialk.models.style_decoder import StyleBackTranslationModelWithCNN
 from specialk.models.tokenizer import SentencePieceVocabulary
@@ -122,7 +121,9 @@ def test_overfits_one_batch(fixed_batch, tokenizer):
     recorder = LossRecorder()
     trainer = pl.Trainer(
         max_epochs=STEPS,
-        accelerator=check_torch_device(),
+        # MPS can flip argmax ties between runs, which moves the hard-token
+        # accuracy a lot. CPU keeps the check reproducible.
+        accelerator="cpu",
         logger=False,
         enable_checkpointing=False,
         enable_progress_bar=False,

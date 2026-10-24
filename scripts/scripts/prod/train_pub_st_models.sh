@@ -149,25 +149,20 @@ style_transfer () {
     pol_input=$1
     pol_output=$2
     model_num=$3
+    checkpoint=$4
 
-    decoder=$MODELDIR"/decoder_"$pol_output"_epoch_"$model_num".chkpt"
-    vocab=$MODELDIR$DATASET_TAG$pol_output".pt"
     source=$DATASET_SRC"/sacrebleu_"$pol_input"_filt.test.fr"
     target=$MODELDIR"/st_results/"$pol_input"_only.test.to."$pol_output"."$model_num
 
     cd $BASEDIR
     
 #     back translate
-    python3 translate.py \
-        -model transformer \
-        -checkpoint_encoder $BASE_FREN_ENCODER \
-        -checkpoint_decoder $decoder \
-        -vocab $vocab \
-        -src $source \
-        -output $target \
-        -beam_size 5 \
-        -batch_size 10 \
-        -cuda
+    python3 -m specialk.translate \
+        --checkpoint "$checkpoint" \
+        --src "$source" \
+        --output "$target" \
+        --beam-size 5 \
+        --batch-size 10
     
     # classify output
 
@@ -188,8 +183,13 @@ style_transfer () {
 
 textout=$MODELDIR"/st_results/stat/"
 
-for x in 1 2 3 4 5 
+# Style-transfer checkpoints written by
+# `python3 -m specialk.trainers.train --dataset publications`.
+STYLE_CHECKPOINTS=${STYLE_CHECKPOINTS:?set STYLE_CHECKPOINTS to one or more .ckpt paths}
+
+for checkpoint in $STYLE_CHECKPOINTS
 do 
-#    style_transfer $LABEL0 $LABEL1 $x > $textout"01."$x".txt"
-    style_transfer $LABEL1 $LABEL0 $x > $textout"10."$x".txt"
+    label=$(basename "$checkpoint" .ckpt)
+#    style_transfer $LABEL0 $LABEL1 "$label" "$checkpoint" > $textout"01."$label".txt"
+    style_transfer $LABEL1 $LABEL0 "$label" "$checkpoint" > $textout"10."$label".txt"
 done

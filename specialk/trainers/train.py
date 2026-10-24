@@ -203,8 +203,8 @@ def train(
     accelerator: str = "auto",
     devices: Union[str, int] = "auto",
     limit_train_batches: Union[int, float] = 1.0,
-    limit_val_batches: Optional[Union[int, float]] = None,
-    val_check_interval: Optional[Union[int, float]] = None,
+    limit_val_batches: Union[int, float] = 1.0,
+    val_check_interval: Union[int, float] = 1.0,
     log_every_n_steps: int = 20,
     n_workers: int = 7,
     seed: int = SEED,
@@ -311,23 +311,6 @@ def train(
         # profiling will slow prod down.
         profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
 
-    divisor = 70 if prod else 4
-    if val_check_interval is None:
-        # Lightning treats ints as batch counts and floats as epoch fractions,
-        # so a truncated epoch needs validation at the end of that epoch.
-        if isinstance(limit_train_batches, int) or limit_train_batches < 1.0:
-            val_check_interval = 1.0
-        else:
-            val_check_interval = max(1, len(train_dataloader) // divisor)
-
-    if limit_val_batches is None:
-        limit_val_batches = default_limit_val_batches(
-            len(train_dataloader),
-            len(val_dataloader),
-            divisor,
-            limit_train_batches,
-        )
-
     trainer = pl.Trainer(
         accelerator=accelerator,
         devices=devices,
@@ -362,23 +345,6 @@ def _int_or_float(value: str) -> Union[int, float]:
     """
     value = value.strip()
     return int(value) if value.isdigit() else float(value)
-
-
-def default_limit_val_batches(
-    n_train_batches: int,
-    n_val_batches: int,
-    divisor: int,
-    limit_train_batches: Union[int, float] = 1.0,
-) -> int:
-    """Cap validation so its total cost stays within one training epoch.
-
-    The old trainers validated the whole WMT15 set, which is tiny. The
-    publications eval split is ~5.5k batches, so a full validation at every
-    check would cost far more than training.
-    """
-    if isinstance(limit_train_batches, int):
-        return max(1, min(n_val_batches, limit_train_batches))
-    return max(1, min(n_val_batches, n_train_batches // divisor))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -427,14 +393,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--limit-val-batches",
         type=_int_or_float,
-        default=None,
+        default=1.0,
         help="batches (int) or fraction of the validation set (float)",
     )
     parser.add_argument(
         "--val-check-interval",
         type=_int_or_float,
-        default=None,
-        help="steps (int) or fraction of an epoch (float)",
+        default=1.0,
+        help="steps (int) or fraction of an epoch (float); default: once per epoch",
     )
     parser.add_argument("--log-every-n-steps", type=int, default=20)
     parser.add_argument("--n-workers", type=int, default=7)

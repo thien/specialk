@@ -262,6 +262,7 @@ def init_logger(args: argparse.Namespace, project_name: str, params: dict):
             extra = {"id": args.wandb_run_id, "resume": "allow"}
         return WandbLogger(
             project=args.wandb_project,
+            group=args.wandb_group,
             name=name,
             save_dir=PROJECT_DIR,
             config=params,
@@ -561,6 +562,11 @@ def get_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--wandb-project",
         default="specialk",
         help="W&B project to log to",
+    )
+    parser.add_argument(
+        "--wandb-group",
+        default="classifiers",
+        help="W&B group for the run",
     )
     parser.add_argument(
         "--run-name",

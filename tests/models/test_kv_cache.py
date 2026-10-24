@@ -10,8 +10,6 @@ from specialk.core.constants import EOS, PAD, SEED, SOS
 from specialk.models.transformer.torch.pytorch_transformer import (
     PyTorchTransformerModel,
     PyTorchTransformerModule,
-    TransformerBeamBatch,
-    TransformerEncoderDecoderBeam,
 )
 
 DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"
@@ -132,37 +130,6 @@ def test_decode_step_matches_decode(norm_first):
     assert kv_cache.shape == (3, 3, 2, 4, 6, 8)
 
 
-@torch.inference_mode()
-def test_beam_batch_cache_matches_uncached_beam():
-    """Cached batch logits must survive the repeat/filter reshuffles of beams."""
-    model, num_beams = _model(), 3
-    memory, x_pad_mask = model.encode(_src())
-    memory_kv = model.cross_kv(memory)
-    batch = TransformerBeamBatch.create(
-        [
-            TransformerEncoderDecoderBeam(
-                model=model,
-                tokenizer=TOKENIZER,
-                logprob_sums=torch.zeros(num_beams, device=DEVICE),
-                tokens=torch.full((num_beams, 1), SOS, device=DEVICE),
-                memory=memory[i : i + 1].expand(num_beams, -1, -1),
-                x_pad_mask=x_pad_mask[i : i + 1].expand(num_beams, -1),
-                memory_kv=memory_kv[i : i + 1].expand(num_beams, *memory_kv.shape[1:]),
-            )
-            for i in range(memory.size(0))
-        ]
-    )
-    for _ in range(4):
-        log_probs = batch.get_logits()
-        for beam, lp in zip(batch.beams, log_probs):
-            # TransformerEncoderDecoderBeam.get_logits re-runs the full prefix.
-            torch.testing.assert_close(lp, beam.get_logits(), atol=1e-4, rtol=1e-4)
-        batch = TransformerBeamBatch.create(
-            [b.generate(num_beams, log_logits=lp) for b, lp in zip(batch.beams, log_probs)]
-        )
-        batch, _ = batch.filter(num_beams)
-
-
 def test_generate_matches_uncached():
     module, x = _module(**SMALL), _src()
     with uncached(module.model):
@@ -210,3 +177,14 @@ def test_kv_cache_speedup(search, n_tokens):
         _assert_same_beams(module.model, x, out, expected)
     else:
         torch.testing.assert_close(out, expected)
+
+
+def test_beam_search_returns_distinct_beams():
+    """All beams start as the same SOS-only sequence; expanding each of them
+    used to fill the beam with copies of one hypothesis."""
+    module, x = _module(**SMALL), _src()
+    _, tokens = module.beam_search(
+        x, num_return_sequences=3, num_beams=3, max_new_tokens=10
+    )
+    for item in tokens.tolist():
+        assert len({tuple(seq) for seq in item}) == len(item)

@@ -376,7 +376,9 @@ def main_new(args):
         val_check_interval=1.0,
         gradient_clip_val=args.gradient_clip_val,
         gradient_clip_algorithm="norm",
-        callbacks=[ModelCheckpoint(dirpath=checkpoint_dir, save_last=True)],
+        callbacks=[
+            ModelCheckpoint(dirpath=checkpoint_dir, save_last=True, save_top_k=-1)
+        ],
     )
 
     trainer.fit(

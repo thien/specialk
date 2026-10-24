@@ -43,6 +43,7 @@ from specialk.trainers.common import (
     CACHE_DIR,
     DATASET_DIR,
     TOKENIZER_OPTIONS,
+    cache_filename,
     init_dataloader,
     invert_df_columns,
     load_mono_tokenizer,
@@ -202,10 +203,10 @@ def train(
     accelerator: str = "auto",
     devices: Union[str, int] = "auto",
     limit_train_batches: Union[int, float] = 1.0,
-    limit_val_batches: Union[int, float] = 1.0,
+    limit_val_batches: Optional[Union[int, float]] = None,
     val_check_interval: Optional[Union[int, float]] = None,
     log_every_n_steps: int = 20,
-    n_workers: int = 8,
+    n_workers: int = 7,
     seed: int = SEED,
     train_path: Optional[Union[str, Path]] = None,
     valid_path: Optional[Union[str, Path]] = None,
@@ -253,13 +254,18 @@ def train(
         model_config["name"] += "_legacy"
 
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_settings = {
+        "tokenizer": tokenizer,
+        "max_seq_len": hyperparameters["max_seq_len"],
+        "back_translation": back_translation,
+    }
     train_dataloader, _ = init_dataloader(
         bundle.train,
         src_tokenizer,
         hyperparameters["batch_size"],
         decoder_tokenizer=tgt_tokenizer,
         shuffle=True,
-        cache_path=CACHE_DIR / Path(str(bundle.train_path)).name,
+        cache_path=CACHE_DIR / cache_filename(bundle.train_path, **cache_settings),
         n_workers=n_workers,
     )
     val_dataloader, _ = init_dataloader(
@@ -268,7 +274,7 @@ def train(
         hyperparameters["batch_size"],
         decoder_tokenizer=tgt_tokenizer,
         shuffle=False,
-        cache_path=CACHE_DIR / Path(str(bundle.valid_path)).name,
+        cache_path=CACHE_DIR / cache_filename(bundle.valid_path, **cache_settings),
         n_workers=n_workers,
     )
     log.info("Created dataset dataloaders.")
@@ -305,14 +311,22 @@ def train(
         # profiling will slow prod down.
         profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
 
+    divisor = 70 if prod else 4
     if val_check_interval is None:
         # Lightning treats ints as batch counts and floats as epoch fractions,
         # so a truncated epoch needs validation at the end of that epoch.
         if isinstance(limit_train_batches, int) or limit_train_batches < 1.0:
             val_check_interval = 1.0
         else:
-            divisor = 70 if prod else 4
             val_check_interval = max(1, len(train_dataloader) // divisor)
+
+    if limit_val_batches is None:
+        limit_val_batches = default_limit_val_batches(
+            len(train_dataloader),
+            len(val_dataloader),
+            divisor,
+            limit_train_batches,
+        )
 
     trainer = pl.Trainer(
         accelerator=accelerator,
@@ -341,9 +355,30 @@ def train(
 
 
 def _int_or_float(value: str) -> Union[int, float]:
-    """Parse ``1`` as one batch and ``0.5`` as half an epoch."""
-    number = float(value)
-    return int(number) if number.is_integer() else number
+    """Keep the literal type: ``1`` is one batch, ``1.0`` is a full epoch.
+
+    Lightning treats ints as batch counts and floats as epoch fractions, so
+    parsing must not collapse ``1.0`` into ``1``.
+    """
+    value = value.strip()
+    return int(value) if value.isdigit() else float(value)
+
+
+def default_limit_val_batches(
+    n_train_batches: int,
+    n_val_batches: int,
+    divisor: int,
+    limit_train_batches: Union[int, float] = 1.0,
+) -> int:
+    """Cap validation so its total cost stays within one training epoch.
+
+    The old trainers validated the whole WMT15 set, which is tiny. The
+    publications eval split is ~5.5k batches, so a full validation at every
+    check would cost far more than training.
+    """
+    if isinstance(limit_train_batches, int):
+        return max(1, min(n_val_batches, limit_train_batches))
+    return max(1, min(n_val_batches, n_train_batches // divisor))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -352,10 +387,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--model", choices=[RNN, TRANSFORMER], default=TRANSFORMER)
     parser.add_argument("--dataset", choices=DATASETS, default="dummy")
-    parser.add_argument("--tokenizer", choices=TOKENIZER_OPTIONS, default="spm")
+    parser.add_argument(
+        "--tokenizer",
+        choices=TOKENIZER_OPTIONS,
+        default="spm",
+        help="bilingual tokenizer (ignored for --dataset dummy)",
+    )
     parser.add_argument(
         "--prod",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help="use the full-size model configuration (independent of the device)",
     )
     parser.add_argument("--legacy-transformer", action="store_true")
@@ -377,11 +418,26 @@ def build_parser() -> argparse.ArgumentParser:
         default="auto",
         help='number of devices or "auto"',
     )
-    parser.add_argument("--limit-train-batches", type=_int_or_float, default=1.0)
-    parser.add_argument("--limit-val-batches", type=_int_or_float, default=1.0)
-    parser.add_argument("--val-check-interval", type=_int_or_float, default=None)
+    parser.add_argument(
+        "--limit-train-batches",
+        type=_int_or_float,
+        default=1.0,
+        help="batches (int, e.g. 1) or fraction of an epoch (float, e.g. 0.5)",
+    )
+    parser.add_argument(
+        "--limit-val-batches",
+        type=_int_or_float,
+        default=None,
+        help="batches (int) or fraction of the validation set (float)",
+    )
+    parser.add_argument(
+        "--val-check-interval",
+        type=_int_or_float,
+        default=None,
+        help="steps (int) or fraction of an epoch (float)",
+    )
     parser.add_argument("--log-every-n-steps", type=int, default=20)
-    parser.add_argument("--n-workers", type=int, default=8)
+    parser.add_argument("--n-workers", type=int, default=7)
     parser.add_argument("--seed", type=int, default=SEED)
     parser.add_argument("--train-path", type=Path, default=None)
     parser.add_argument("--valid-path", type=Path, default=None)

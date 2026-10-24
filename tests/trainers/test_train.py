@@ -6,6 +6,7 @@ from specialk.core.constants import RNN, SOURCE, TARGET, TRANSFORMER
 from specialk.trainers import train as train_module
 from specialk.trainers.train import (
     build_parser,
+    default_limit_val_batches,
     load_datasets,
     resolve_hyperparameters,
 )
@@ -64,6 +65,49 @@ def test_limit_args_parse_as_batch_counts():
     assert args.limit_val_batches == 2
     assert isinstance(args.limit_val_batches, int)
     assert args.val_check_interval == 0.5
+
+
+@pytest.mark.lightweight
+def test_whole_floats_keep_fraction_semantics():
+    args = build_parser().parse_args(
+        [
+            "--limit-train-batches",
+            "1.0",
+            "--limit-val-batches",
+            "1.0",
+            "--val-check-interval",
+            "1.0",
+        ]
+    )
+
+    # 1.0 means "the whole epoch", not "one batch".
+    assert isinstance(args.limit_train_batches, float)
+    assert args.limit_train_batches == 1.0
+    assert isinstance(args.limit_val_batches, float)
+    assert isinstance(args.val_check_interval, float)
+
+
+@pytest.mark.lightweight
+def test_prod_can_be_disabled_for_shims():
+    args = build_parser().parse_args(["--prod", "--no-prod"])
+
+    assert args.prod is False
+
+
+@pytest.mark.lightweight
+def test_default_limit_val_batches_caps_large_validation():
+    # 31k train batches / 70 = 442 checks, not the full 5.5k val batches.
+    assert default_limit_val_batches(31_000, 5_500, 70) == 442
+
+
+@pytest.mark.lightweight
+def test_default_limit_val_batches_keeps_small_validation():
+    assert default_limit_val_batches(31_000, 23, 70) == 23
+
+
+@pytest.mark.lightweight
+def test_default_limit_val_batches_follows_int_train_limit():
+    assert default_limit_val_batches(31_000, 5_500, 70, limit_train_batches=1) == 1
 
 
 @pytest.mark.lightweight

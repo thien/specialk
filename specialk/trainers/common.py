@@ -7,6 +7,7 @@ once.
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import Optional, Tuple, Union
 
@@ -115,6 +116,24 @@ def load_publications_datasets(num_proc: int = 8) -> Tuple[Dataset, Dataset]:
         restructure(_single_split(ds, "train")),
         restructure(_single_split(ds, "eval", "validation", "valid", "test")),
     )
+
+
+def cache_filename(
+    dataset_path: Union[str, Path],
+    tokenizer: str,
+    max_seq_len: int,
+    back_translation: bool = False,
+) -> str:
+    """Name the token cache after every setting that changes the tokens.
+
+    ``Dataset.map`` reuses a cache file without checking what produced it, so a
+    stale key silently trains on the wrong tokens.
+    """
+    path = str(dataset_path)
+    suffix = "_bt" if back_translation else ""
+    # The digest keeps same-named files from different --train-path values apart.
+    digest = hashlib.md5(path.encode()).hexdigest()[:8]
+    return f"{Path(path).stem}_{digest}_{tokenizer}_{max_seq_len}{suffix}"
 
 
 def init_dataloader(

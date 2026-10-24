@@ -7,6 +7,7 @@ from specialk.trainers import common
 from specialk.trainers.common import (
     _single_split,
     _strip_index_column,
+    cache_filename,
     invert_df_columns,
 )
 
@@ -65,6 +66,25 @@ def test_invert_df_columns_swaps_source_and_target():
     assert inverted[TARGET].tolist() == ["de"]
     assert inverted["source_lang"].tolist() == ["en"]
     assert inverted["target_lang"].tolist() == ["de"]
+
+
+@pytest.mark.lightweight
+def test_cache_filename_changes_with_tokenization_settings():
+    base = cache_filename("train.parquet", tokenizer="spm", max_seq_len=100)
+
+    assert base != cache_filename("train.parquet", tokenizer="bpe", max_seq_len=100)
+    assert base != cache_filename("train.parquet", tokenizer="spm", max_seq_len=75)
+    assert base != cache_filename(
+        "train.parquet", tokenizer="spm", max_seq_len=100, back_translation=True
+    )
+
+
+@pytest.mark.lightweight
+def test_cache_filename_distinguishes_same_named_paths():
+    first = cache_filename("/data/v1/train.parquet", tokenizer="spm", max_seq_len=100)
+    second = cache_filename("/data/v2/train.parquet", tokenizer="spm", max_seq_len=100)
+
+    assert first != second
 
 
 @pytest.mark.lightweight

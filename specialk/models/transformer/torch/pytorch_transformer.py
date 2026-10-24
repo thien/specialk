@@ -29,6 +29,7 @@ from specialk.models.mt_model import NMTModule
 from specialk.models.generators.beam import BeamBatch, EncoderDecoderBeam
 from specialk.models.optimizers.schedulers import CosineWarmupScheduler
 from specialk.models.transformer.pos_encoders import PositionalEncoder
+from specialk.models.transformer.torch.modules import KVCache, cross_kv, decoder_step
 from specialk.models.utils.activations import SwiGLU
 
 
@@ -485,6 +486,28 @@ class PyTorchTransformerModel(nn.Transformer):
             tgt_is_causal=True,
         )
 
+    def cross_kv(self, memory: Float[Tensor, "batch seq_len d_model"]) -> KVCache:
+        """Precompute cross-attention K/V of the encoder output for decode_step."""
+        return cross_kv(self.decoder, memory)
+
+    def decode_step(
+        self,
+        y: Int[Tensor, "batch 1"],
+        memory_kv: KVCache,
+        x_pad_mask: Optional[Bool[Tensor, "batch seq_len"]] = None,
+        kv_cache: Optional[KVCache] = None,
+    ) -> Tuple[Float[Tensor, "batch 1 d_model"], KVCache]:
+        """Incremental decode: feed only the newest token, reusing cached K/V.
+
+        Equivalent to decode(y_full)[:, -1:] but O(n) per step instead of O(n^2).
+        """
+        pos = 0 if kv_cache is None else kv_cache.size(-2)
+        y_emb = (
+            self.output_emb(y) * np.sqrt(self.dim_model)
+            + self.pos_encoder.pos_enc[:, pos : pos + 1]
+        )
+        return decoder_step(self.decoder, y_emb, memory_kv, x_pad_mask, kv_cache)
+
 
 class PyTorchTransformerModule(NMTModule):
     def __init__(
@@ -670,14 +693,13 @@ class PyTorchTransformerModule(NMTModule):
         y_completed = torch.zeros(batch_size, dtype=torch.bool, device=self.device)
 
         memory, x_pad_mask = self.model.encode(input_tokens)
+        memory_kv = self.model.cross_kv(memory)
+        kv_cache = None
 
         for i in range(1, max_len):
-            # prepare decoder output to feed into the model.
-            out = self.model.decode(
-                y_hat[:, :i],
-                tgt_mask=None,
-                memory=memory,
-                x_pad_mask=x_pad_mask,
+            # feed only the newest token; earlier positions live in kv_cache.
+            out, kv_cache = self.model.decode_step(
+                y_hat[:, i - 1 : i], memory_kv, x_pad_mask, kv_cache
             )
 
             logits = torch.nn.functional.log_softmax(

@@ -1,10 +1,19 @@
 import pytest
 
+from specialk.core.constants import PROJECT_DIR
 from specialk.metrics import Intensity
+
+CKPT_PATH = (
+    PROJECT_DIR
+    / "assets/classifiers/legacy/cnn_classifier/adversarial_political/"
+    "adversarial_political.ckpt"
+)
 
 
 @pytest.fixture
 def intensity():
+    if not CKPT_PATH.exists():
+        pytest.skip(f"missing classifier checkpoint: {CKPT_PATH}")
     return Intensity("political")
 
 

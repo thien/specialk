@@ -5,38 +5,37 @@ description = "text based style transfer with sequence models"
 authors = [{ name = "@thien", email = "thien@users.noreply.github.com" }]
 dependencies = [
     "absl-py==2.4.0",
-    "datasets==2.20.0",
-    "de-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/de_core_news_sm-3.7.0/de_core_news_sm-3.7.0-py3-none-any.whl",
+    "datasets==4.8.5",
+    "de-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/de_core_news_sm-3.8.0/de_core_news_sm-3.8.0-py3-none-any.whl",
     "einops==0.8.0",
-    "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl",
+    "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
     "evaluate==0.4.2",
     "fasttext @ git+https://github.com/facebookresearch/fastText.git@1142dc4c4ecbc19cc16eee5cdd28472e689267e6",
     "ftfy==6.2.3",
-    "gensim==4.3.2",
+    "gensim==4.4.0",
     "huggingface-hub==0.36.2",
     "jaxtyping==0.2.31",
     "joblib==1.4.2",
     "lightning==2.6.6",
     "matplotlib==3.9.2",
     "nltk==3.10.4",
-    "numpy==1.26.4",
-    "pandas==2.2.2",
+    "numpy==2.2.6",
+    "pandas==2.2.3",
     "peft==0.21.2",
-    "pot==0.9.3",
-    "pyemd==1.0.0",
+    "pot==0.9.7.post1",
     "pytelegrambotapi==4.20.0",
-    "pyyaml==6.0.1",
+    "pyyaml==6.0.2",
     "rich==13.7.1",
     "rouge-score==0.1.2",
     "sacrebleu==2.4.2",
     "sacremoses==0.1.1",
     "safetensors==0.8.0",
     "schedulefree==1.2.7",
-    "scikit-learn==1.5.0",
-    "scipy==1.12.0",
+    "scikit-learn==1.6.1",
+    "scipy==1.15.3",
     "sentencepiece==0.2.2",
     "setuptools<81",
-    "spacy==3.7.5",
+    "spacy==3.8.16",
     "structlog==24.2.0",
     "tensorboardx==2.6.2.2",
     "termcolor==3.3.0",
@@ -47,7 +46,7 @@ dependencies = [
     "transformers==4.57.6",
 ]
 readme = "readme.md"
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.11,<3.14"
 
 [build-system]
 requires = ["hatchling"]
@@ -63,7 +62,7 @@ dev = [
 
 [tool.uv]
 managed = true
-constraint-dependencies = ["pyarrow==17.0.0"]
+constraint-dependencies = ["pyarrow==26.0.0"]
 
 [tool.hatch.metadata]
 allow-direct-references = true

@@ -1,9 +1,5 @@
 # Generating translations
 
-> **Draft.** The Python API below works today. The `specialk.translate` CLI is
-> planned: `specialk/translate.py` still targets the removed legacy models and
-> will be rewritten to match this page.
-
 ## 1. Train a model
 
     uv run python -m specialk.trainers.train --dataset mt --prod
@@ -48,7 +44,10 @@ print(module.decoder_tokenizer.detokenize(out[:, 0, :], specials=False))
 one log-probability per returned sequence. For sampling instead of beam
 search, use `module.generate(tokens, top_p=..., top_k=..., temperature=...)`.
 
-## 3. Generate from the command line (planned)
+The same API works for recurrent checkpoints (`RNNModule`); the architecture is
+read from the checkpoint, so the call is identical.
+
+## 3. Generate from the command line
 
     uv run python -m specialk.translate \
         --checkpoint path/to/model.ckpt \
@@ -66,7 +65,12 @@ search, use `module.generate(tokens, top_p=..., top_k=..., temperature=...)`.
 | `--batch-size` | sentences per forward pass | 128 |
 | `--max-new-tokens` | generation length cap | 100 |
 | `--no-repeat-ngram-size` | block repeated n-grams | off |
-| `--device` | `mps`, `cuda` or `cpu` | auto-detected |
+| `--device` | `mps`, `cuda` or `cpu` | MPS, then CUDA, then CPU |
+
+Both transformer and recurrent checkpoints are supported, including
+`n-best` output: hypotheses are written best first, `n-best` lines per input
+line. The architecture comes from the checkpoint, so there is no `--model`
+flag.
 
 Changes from the old `translate.py` flags:
 
@@ -74,6 +78,11 @@ Changes from the old `translate.py` flags:
 - `-model transformer|recurrent` → read from the checkpoint.
 - `-cuda` / `-cuda_device` → `--device`.
 - `-telegram`, `-copysrc` and `-override_max_token_seq_len` are dropped.
+
+Style-transfer decoding uses the same entry point: the style-specific decoder
+is fine-tuned from an NMT checkpoint and saved as an ordinary checkpoint, so a
+single `--checkpoint` is enough. Split encoder/decoder checkpoints are a legacy
+artifact and are not supported.
 
 ## 4. Where this fits in the pipeline
 
@@ -85,11 +94,6 @@ Translation is the back-translation step of style transfer:
 3. Train the style-specific decoders on the result (`train_pol_st_models.sh`,
    `train_pub_st_models.sh`).
 
-The scripts under `scripts/scripts/` still use the old flags. They will be
+The scripts under `scripts/scripts/` still use the old flags. They are being
 moved to the new CLI one by one, starting with the scripts in `prod/`.
 
-## Open questions
-
-- Should style-transfer decoding (encoder from the NMT model plus a
-  style-specific decoder) go through the same CLI, or get its own entry point?
-- Should we keep RNN checkpoints working, or only transformers?

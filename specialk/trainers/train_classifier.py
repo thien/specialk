@@ -38,11 +38,9 @@ from specialk.models.tokenizer import (
     Vocabulary,
     WordVocabulary,
 )
-from specialk.models.transformer.torch.pytorch_transformer import (
-    PyTorchTransformerModule,
-)
 from specialk.trainers.common import _single_split
 from specialk.trainers.train import _int_or_float
+from specialk.trainers.train_style_decoder import load_seq2seq
 
 DEVICE: str = check_torch_device()
 BERT_BASE_NAME = "distilbert/distilbert-base-cased"
@@ -160,10 +158,7 @@ def main_new(args):
         )
         sequence_length = tokenizer.max_length
     elif args.mt_checkpoint:
-        # The checkpoint holds a Vocabulary, which torch.load refuses by default.
-        mt_model = PyTorchTransformerModule.load_from_checkpoint(
-            args.mt_checkpoint, map_location="cpu", weights_only=False
-        )
+        mt_model = load_seq2seq(args.mt_checkpoint)
         tokenizer, sequence_length = mt_model.tokenizer, mt_model.sequence_length
     else:
         tokenizer = get_tokenizer(args.tokenizer, args.max_seq_len or 72)

@@ -25,10 +25,10 @@ class Beam:
         # The backpointers at each time-step.
         self.prev_ks = []
 
-        # The outputs at each time-step.
-        self.next_ys = [
-            torch.full((size,), Constants.PAD, dtype=torch.long, device=device)
-        ]
+        # The outputs at each time-step.  Bookkeeping lives on the CPU: beam
+        # search reads it token by token, and doing that on an accelerator
+        # means one device synchronisation per token per hypothesis.
+        self.next_ys = [torch.full((size,), Constants.PAD, dtype=torch.long)]
         self.next_ys[0][0] = Constants.SOS
 
     def get_current_state(self):
@@ -67,9 +67,11 @@ class Beam:
 
         # bestScoresId is flattened as a (beam x word) array,
         # so we need to calculate which word and beam each score came from
-        prev_k = best_scores_id / num_words
-        self.prev_ks.append(prev_k)
-        self.next_ys.append(best_scores_id - prev_k * num_words)
+        # Integer division: since PyTorch 1.5 `/` on integer tensors returns
+        # floats, which cannot be used as indices further down the line.
+        prev_k = torch.div(best_scores_id, num_words, rounding_mode="floor")
+        self.prev_ks.append(prev_k.cpu())
+        self.next_ys.append((best_scores_id - prev_k * num_words).cpu())
 
         # End condition is when top-of-beam is EOS.
         if self.next_ys[-1][0].item() == Constants.EOS:
@@ -94,7 +96,7 @@ class Beam:
             dec_seq = self.next_ys[0].unsqueeze(1)
         else:
             _, keys = self.sort_scores()
-            hyps = [self.get_hypothesis(k) for k in keys]
+            hyps = [self.get_hypothesis(k) for k in keys.tolist()]
             hyps = [[Constants.SOS] + h for h in hyps]
             dec_seq = torch.LongTensor(hyps)
 

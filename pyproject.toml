@@ -24,6 +24,7 @@ dependencies = [
     "pandas==2.2.3",
     "peft==0.21.2",
     "pot==0.9.7.post1",
+    "pycocoevalcap==1.2",
     "pytelegrambotapi==4.20.0",
     "pyyaml==6.0.2",
     "rich==13.7.1",

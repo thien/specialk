@@ -37,8 +37,9 @@ TITLES = [
     r"Dr\.",
     r"Prof\.",
 ]
-# Ensure case insensitivity
-RE_TITLES = r"|".join([r"(?i)" + t for t in TITLES])
+# Ensure case insensitivity. Scoped inline flags keep this valid when the
+# pattern is embedded into the larger alternation (required on Python 3.11+).
+RE_TITLES = r"|".join([r"(?i:" + t + r")" for t in TITLES])
 
 # Symbols have to be created as separate patterns in order to match consecutive
 # identical symbols.

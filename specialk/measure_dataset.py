@@ -22,17 +22,17 @@ from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from nltk.translate.bleu_score import sentence_bleu
 
 # for emd
-from pyemd import emd
-from rouge import Rouge
+from ot import emd2
 from tqdm import tqdm
 
 from specialk.core.sentenciser import *
 from specialk.core.utils import batch_compute, get_len
+from specialk.metrics import ROUGE, Meteor
 
 warnings.filterwarnings("ignore")
 
-# load rouge
-rouge_comp = Rouge()
+# load rouge and meteor
+rouge_comp = ROUGE()
 meteor = Meteor()
 
 
@@ -139,8 +139,7 @@ class Metrics:
         Uses spacy tokenisers input.
         """
         # based on https://github.com/RaRe-Technologies/gensim/blob/18bcd113fd5ed31294a24c7274fcb95df001f88a/gensim/models/keyedvectors.py
-        # If pyemd C extension is available, import it.
-        # If pyemd is attempted to be used, but isn't installed, ImportError will be raised in wmdistance
+        # The EMD is solved with POT (`ot.emd2`).
 
         ref_tokens, hyp_tokens = self.prep(sequences, tokenise=True)
 
@@ -198,7 +197,7 @@ class Metrics:
         d1, d2 = nbow(document1), nbow(document2)
 
         # Compute WMD.
-        return {"value": emd(d1, d2, distance_matrix)}
+        return {"value": emd2(d1, d2, distance_matrix)}
 
     def bleu(self, sequences):
         """
@@ -215,17 +214,14 @@ class Metrics:
 
     def rouge(self, sequences):
         """
-        Calculates ROUGE scores (uses an independent library.)
+        Calculates ROUGE-Lsum.
         """
         reference, hypothesis = self.prep(sequences, tokenise=False)
-        return rouge_comp.get_scores(hypothesis, reference)[-1]
+        return rouge_comp.compute(predictions=[hypothesis], references=[reference])
 
     def meteor(self, sequences):
         reference, hypothesis = self.prep(sequences, tokenise=False)
-        # could try NLTK
-        score = meteor.compute_score(hypothesis, reference)
-        print(score)
-        return None
+        return meteor.compute(predictions=[hypothesis], references=[reference])
 
     # style transfer intensity
     # content preservation

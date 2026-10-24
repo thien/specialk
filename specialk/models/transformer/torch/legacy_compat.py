@@ -201,7 +201,7 @@ class LegacyTransformerModel(PyTorchTransformerModel):
     def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         logits = self.forward_logits(x, y)
         sos = F.one_hot(y[:, 0], num_classes=self.generator.out_features).unsqueeze(1)
-        return torch.cat([sos, F.log_softmax(logits, dim=-1)], dim=1)
+        return torch.cat([sos.to(logits.dtype), F.log_softmax(logits, dim=-1)], dim=1)
 
 
 def load_legacy_module(

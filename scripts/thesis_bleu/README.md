@@ -1,6 +1,6 @@
 # Thesis BLEU re-evaluation
 
-The logged thesis scores came from teacher-forced argmax validation outputs, not decoded translations. These scripts decode the held-out test set with the legacy beam search and score the output with the COCO BLEU implementation that `nlg-eval` uses, plus sacreBLEU.
+The logged thesis scores came from teacher-forced argmax validation outputs. They contain repeated spans and overstate translation quality. These scripts decode the held-out test set with the legacy beam search and score the output with the COCO BLEU implementation that `nlg-eval` uses, plus sacreBLEU.
 
 ## Requirements
 
@@ -36,7 +36,7 @@ Models:
 Notes:
 
 - Use `vocab_need_to_rebase.pt` for final EN→FR. `vocab.pt` is a 227K-pair rebased vocabulary. Teacher-forced validation loss is 2.18 with the former and 3.90 with the latter.
-- The surviving attempt-2 EN→FR checkpoint is the full-data 11.4M-pair gold master, not the 3.5M-pair XL model. No XL checkpoint survives.
+- The surviving attempt-2 EN→FR checkpoint is the full-data 11.4M-pair gold master. The 3.5M-pair XL checkpoint is gone.
 - The surviving attempt-2 FR→EN pair emits `t`, `a`, or `i` for almost every line and is not usable. Its original teacher-forced eval output is degenerate too.
 
 ## Score

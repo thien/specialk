@@ -362,3 +362,38 @@ class RNNEncoderDecoder(nn.Module):
 
         # resulting tensor may not be contiguous because of all the cats.
         return out.contiguous()
+
+    def decode_step(
+        self,
+        input_tokens: Tensor,
+        hidden: Tuple[
+            Float[Tensor, "num_layers batch hidden"],
+            Float[Tensor, "num_layers batch hidden"],
+        ],
+        output: Float[Tensor, "batch hidden"],
+        context: Float[Tensor, "length batch hidden"],
+    ) -> Tuple[
+        Float[Tensor, "batch vocab"],
+        Tuple[
+            Float[Tensor, "num_layers batch hidden"],
+            Float[Tensor, "num_layers batch hidden"],
+        ],
+        Float[Tensor, "batch hidden"],
+    ]:
+        """Decode one token for inference.
+
+        Mirrors the per-token body of ``Decoder.forward`` without teacher
+        forcing, so generation and training share the decoder path.
+
+        Returns:
+            (log-probabilities, hidden state, attended output).
+        """
+        emb: Float[Tensor, "batch d_emb"] = self.decoder.word_lut(input_tokens)
+        if self.decoder.input_feed:
+            emb = torch.cat([emb, output], dim=1)
+
+        output, hidden = self.decoder.rnn(emb, hidden)
+        output, _ = self.decoder.attention(output, context)
+        output = self.decoder.dropout(output)
+        logprobs = self.decoder.generator(output)
+        return logprobs, hidden, output

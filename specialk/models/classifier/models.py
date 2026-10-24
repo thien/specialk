@@ -113,6 +113,9 @@ class CNNClassifier(TextClassifier):
         sequence_length: int,
         tokenizer: Optional[Vocabulary] = None,
         learning_rate: float = 0.001,
+        optimizer: str = "adam",
+        lr_decay: float = 1.0,
+        decay_start: int = 0,
     ):
         super().__init__(
             name=name,
@@ -121,6 +124,9 @@ class CNNClassifier(TextClassifier):
             tokenizer=tokenizer,
         )
         self.learning_rate = learning_rate
+        self.optimizer = optimizer
+        self.lr_decay = lr_decay
+        self.decay_start = decay_start
         # min_batch_size is used because the convolution
         # operations depend on a minimum size.
         self.min_batch_size = 50
@@ -217,8 +223,26 @@ class CNNClassifier(TextClassifier):
             results.append(result)
         return torch.cat(results).cpu()
 
-    def configure_optimizers(self) -> torch.optim.Optimizer:
-        return torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
+    def configure_optimizers(self):
+        if self.optimizer == "sgd":
+            optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate)
+        elif self.optimizer == "adam":
+            optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        else:
+            raise ValueError(f"Unknown optimizer {self.optimizer!r}")
+
+        if self.lr_decay == 1.0:
+            return optimizer
+
+        scheduler = torch.optim.lr_scheduler.LambdaLR(
+            optimizer,
+            lr_lambda=lambda epoch: self.lr_decay
+            ** max(0, epoch - self.decay_start + 1),
+        )
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {"scheduler": scheduler, "interval": "epoch"},
+        }
 
 
 class BERTClassifier(TextClassifier):

@@ -108,6 +108,9 @@ def get_model(
     sequence_length: int | None = None,
     learning_rate: float = 0.001,
     name: str = "political",
+    optimizer: str = "adam",
+    lr_decay: float = 1.0,
+    decay_start: int = 0,
 ) -> TextClassifier:
     if model_option == "cnn":
         task = CNNClassifier(
@@ -116,6 +119,9 @@ def get_model(
             sequence_length=sequence_length or tokenizer.max_length,
             tokenizer=tokenizer,
             learning_rate=learning_rate,
+            optimizer=optimizer,
+            lr_decay=lr_decay,
+            decay_start=decay_start,
         )
     elif model_option == "bert":
         peft_config = LoraConfig(
@@ -146,6 +152,28 @@ def _encode_labels(dataset: Dataset) -> Dataset:
     return dataset
 
 
+def _read_labeled_text(path: Path, positive_label: str) -> Dataset:
+    texts: list[str] = []
+    labels: list[int] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        label, text = line.split(" ", 1)
+        texts.append(text)
+        labels.append(1 if label == positive_label else 0)
+    return Dataset.from_dict({"text": texts, "label": labels})
+
+
+def load_text_classification_dataset(
+    train_path: Path, val_path: Path, positive_label: str
+) -> tuple[Dataset, Dataset]:
+    """Load the old ``label text`` files used by the 2019 classifiers."""
+    return (
+        _read_labeled_text(train_path, positive_label),
+        _read_labeled_text(val_path, positive_label),
+    )
+
+
 def main_new(args):
     batch_size = args.batch_size
 
@@ -156,6 +184,9 @@ def main_new(args):
             pretrained_model_name_or_path=BERT_BASE_NAME,
             max_length=args.max_seq_len or 512,
         )
+        sequence_length = tokenizer.max_length
+    elif args.tokenizer_path:
+        tokenizer = WordVocabulary.from_file(args.tokenizer_path)
         sequence_length = tokenizer.max_length
     elif args.mt_checkpoint:
         mt_model = load_seq2seq(args.mt_checkpoint)
@@ -170,39 +201,64 @@ def main_new(args):
         sequence_length=sequence_length,
         learning_rate=args.lr,
         name=args.model_name,
+        optimizer=args.optimizer,
+        lr_decay=args.lr_decay,
+        decay_start=args.decay_start,
     )
 
     log.info("Loaded tokenizer", tokenizer=tokenizer)
 
-    # publications uses the default config, political the ``classifier`` one.
-    dataset = load_dataset(args.dataset_name, args.config)
-    train_dataset = _encode_labels(_single_split(dataset, "train"))
-    val_dataset = _encode_labels(
-        _single_split(dataset, "eval", "validation", "valid", "test")
-    )
+    if args.train_path:
+        if not args.val_path:
+            raise ValueError("--val-path is required with --train-path")
+        train_dataset, val_dataset = load_text_classification_dataset(
+            args.train_path, args.val_path, args.positive_label
+        )
+        dataset_name = f"local/{args.train_path.stem}"
+    else:
+        # publications uses the default config, political the ``classifier`` one.
+        dataset = load_dataset(args.dataset_name, args.config)
+        train_dataset = _encode_labels(_single_split(dataset, "train"))
+        val_dataset = _encode_labels(
+            _single_split(dataset, "eval", "validation", "valid", "test")
+        )
+        dataset_name = args.dataset_name
 
     train_dataloader = init_dataloader(
-        train_dataset, tokenizer, batch_size, shuffle=True
+        train_dataset,
+        tokenizer,
+        batch_size,
+        shuffle=True,
+        n_workers=args.n_workers,
     )
     val_dataloader = init_dataloader(
-        val_dataset, tokenizer, batch_size, shuffle=False
+        val_dataset,
+        tokenizer,
+        batch_size,
+        shuffle=False,
+        n_workers=args.n_workers,
     )
 
-    project_name = f"{args.dataset_name}/{task.name}"
+    project_name = f"{dataset_name}/{task.name}"
 
     logger = TensorBoardLogger(LOGGING_DIR, name=project_name)
     logger.log_hyperparams(
         params={
             "batch_size": batch_size,
             "tokenizer": tokenizer.__class__.__name__,
-            "dataset": args.dataset_name,
-            "tokenizer_path": str(args.mt_checkpoint) if args.mt_checkpoint else None,
+            "dataset": dataset_name,
+            "tokenizer_path": str(
+                args.tokenizer_path or args.mt_checkpoint
+            )
+            if args.tokenizer_path or args.mt_checkpoint
+            else None,
+            "optimizer": args.optimizer,
             "learning_rate": args.lr,
+            "lr_decay": args.lr_decay,
+            "decay_start": args.decay_start,
             "max_epochs": args.epochs,
         }
     )
-    REVIEW_RATE = len(train_dataloader) // 32  # for debugging purposes.
-
     checkpoint_dir = (
         Path(args.checkpoint_dir)
         if args.checkpoint_dir
@@ -224,8 +280,8 @@ def main_new(args):
         precision=precision,
         limit_train_batches=args.limit_train_batches,
         limit_val_batches=args.limit_val_batches,
-        val_check_interval=REVIEW_RATE if REVIEW_RATE >= 1 else 1.0,
-        gradient_clip_val=0.5,
+        val_check_interval=1.0,
+        gradient_clip_val=args.gradient_clip_val,
         gradient_clip_algorithm="norm",
         callbacks=[ModelCheckpoint(dirpath=checkpoint_dir, save_last=True)],
     )
@@ -272,6 +328,54 @@ def get_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="seq2seq checkpoint whose tokenizer and sequence length the CNN shares",
     )
     parser.add_argument(
+        "--tokenizer-path",
+        type=Path,
+        default=None,
+        help="WordVocabulary JSON to load instead of building a tokenizer",
+    )
+    parser.add_argument(
+        "--train-path",
+        type=Path,
+        default=None,
+        help="labelled text file with 'label text' lines",
+    )
+    parser.add_argument(
+        "--val-path",
+        type=Path,
+        default=None,
+        help="validation file for --train-path",
+    )
+    parser.add_argument(
+        "--positive-label",
+        choices=["democratic", "republican"],
+        default="democratic",
+        help="label that the sigmoid output should predict",
+    )
+    parser.add_argument(
+        "--optimizer",
+        choices=["adam", "sgd"],
+        default="adam",
+        help="optimizer for the CNN",
+    )
+    parser.add_argument(
+        "--lr-decay",
+        type=float,
+        default=1.0,
+        help="learning-rate decay factor after --decay-start",
+    )
+    parser.add_argument(
+        "--decay-start",
+        type=int,
+        default=0,
+        help="epoch after which the learning rate starts decaying",
+    )
+    parser.add_argument(
+        "--gradient-clip-val",
+        type=float,
+        default=0.5,
+        help="gradient clipping value",
+    )
+    parser.add_argument(
         "--batch_size", type=int, default=128, help="Batch size for training"
     )
     parser.add_argument(
@@ -306,6 +410,12 @@ def get_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=Path,
         default=None,
         help="where to write checkpoints (default: ./checkpoints)",
+    )
+    parser.add_argument(
+        "--n-workers",
+        type=int,
+        default=0,
+        help="dataloader workers",
     )
 
     args = parser.parse_args(argv)

@@ -99,3 +99,34 @@ def test_cli_smoke_and_checkpoint_reload(monkeypatch, tmp_path):
     with torch.inference_mode():
         output = module(torch.zeros(SEQUENCE_LENGTH, 2, VOCAB_SIZE))
     assert output.shape == (2, 1)
+
+
+@pytest.mark.lightweight
+def test_local_text_dataset_and_sgd_schedule(tmp_path):
+    train = tmp_path / "train.txt"
+    valid = tmp_path / "valid.txt"
+    train.write_text("democratic one\nrepublican two\n")
+    valid.write_text("democratic three\n")
+
+    train_dataset, valid_dataset = train_classifier.load_text_classification_dataset(
+        train, valid, "republican"
+    )
+    assert train_dataset["label"] == [0, 1]
+    assert valid_dataset["label"] == [0]
+
+    module = CNNClassifier(
+        "parity",
+        vocabulary_size=VOCAB_SIZE,
+        sequence_length=SEQUENCE_LENGTH,
+        learning_rate=1.0,
+        optimizer="sgd",
+        lr_decay=0.5,
+        decay_start=8,
+    )
+    config = module.configure_optimizers()
+    assert isinstance(config["optimizer"], torch.optim.SGD)
+    scheduler = config["lr_scheduler"]["scheduler"]
+    for _ in range(8):
+        config["optimizer"].step()
+        scheduler.step()
+    assert config["optimizer"].param_groups[0]["lr"] == pytest.approx(0.5)

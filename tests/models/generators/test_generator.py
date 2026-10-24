@@ -25,6 +25,9 @@ def module() -> PyTorchTransformerModule:
     module = PyTorchTransformerModule.load_from_checkpoint(
         checkpoint_path=checkpoint_path, weights_only=False
     )
+    # Generation is inference; in train mode torch >= 2.13 rejects nonzero
+    # dropout in MPS scaled_dot_product_attention.
+    module.eval()
     return module
 
 

@@ -23,7 +23,7 @@ def module() -> PyTorchTransformerModule:
     )
 
     module = PyTorchTransformerModule.load_from_checkpoint(
-        checkpoint_path=checkpoint_path
+        checkpoint_path=checkpoint_path, weights_only=False
     )
     return module
 

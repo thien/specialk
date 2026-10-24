@@ -190,8 +190,15 @@ class MarianMTModule(NMTModule):
                 param.requires_grad = False
 
     @classmethod
-    def load_from_checkpoint(cls, checkpoint_path: Path, map_location=None):
-        checkpoint = torch.load(checkpoint_path, map_location=map_location)
+    def load_from_checkpoint(
+        cls, checkpoint_path: Path, map_location=None, weights_only: bool = False
+    ):
+        # Checkpoints contain PEFT config objects, which are rejected by the
+        # weights_only=True default introduced in torch 2.6. These are trusted
+        # local checkpoint files, so retain the pre-2.6 behaviour.
+        checkpoint = torch.load(
+            checkpoint_path, map_location=map_location, weights_only=weights_only
+        )
 
         model = cls(
             name=checkpoint["hyper_parameters"]["name"],

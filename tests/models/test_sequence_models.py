@@ -290,7 +290,9 @@ def test_save_load_transformer_checkpoint(spm_dataloader, tmp_path):
 
         # generate temporary path to save checkpoint and load from.
         trainer.save_checkpoint(checkpoint_path)
-        ckpt_module = PyTorchTransformerModule.load_from_checkpoint(checkpoint_path)
+        ckpt_module = PyTorchTransformerModule.load_from_checkpoint(
+            checkpoint_path, weights_only=False
+        )
 
         m = module.model
         m2 = ckpt_module.model

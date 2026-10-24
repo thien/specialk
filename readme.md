@@ -8,10 +8,10 @@ This repository contains the implementation of what used to be my summer thesis.
 
 ## Requirements
 
-Through several migrations from `pip`, to `poetry`, to `uv`, This project uses `rye` based on prior learnings. So, after installing `rye` (hint: I like it better than `poetry` and vanilla `pip`) and cloning this repo, `cd` into it and then run the following:
+This project uses [`uv`](https://docs.astral.sh/uv/). After installing `uv` and cloning this repo, `cd` into it and run:
 
-    rye sync
-    rye run download-deps
+    uv sync
+    make download-deps
 
 That's it!
 
@@ -47,9 +47,8 @@ After running the notebook run `convert_express.sh` and it'll move it to the bas
 
 ## Running
 
-Once the datasets are downloaded, `cd base/scripts` and run the following:
+Once the datasets are downloaded, `cd scripts/scripts/prod` and run the following:
 
-    cd prod
     ./train_nmt_models.sh
     ./train_pol_st_models.sh
     ./build_pub_corpus.sh
@@ -62,4 +61,12 @@ It'll probably take quite a while to train the models.
 
 ### Testing
 
-This has been simplified with `rye`. Run `rye run tests`, or alternatively, you're also able to use `pytest-watch`.
+Run the lightweight suite with:
+
+    make tests-light
+
+Run everything with:
+
+    make tests
+
+You can also call `uv run pytest` directly. `pytest-watch` works as well.

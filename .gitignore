@@ -43,3 +43,11 @@ tb_logs
 *.ts
 *.ckpt
 specialk/notebooks/lightning_logs/*
+
+# downloaded / generated datasets
+datasets/machine_translation/huggingface/
+datasets/machine_translation/un/
+datasets/political_data/
+datasets/headlines/filtered/
+datasets/headlines/*.atok2
+*.txt_

@@ -1,19 +1,28 @@
 """
 Style Decoder Model.
+
+Fine-tunes a sequence-to-sequence model so that its translations are
+classified as the target style. The classifier and the encoder are frozen;
+only the decoder and the vocabulary mapping are trained.
 """
 
-from typing import Dict, Optional, Tuple
+import math
 
 import lightning.pytorch as pl
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from jaxtyping import Float, Int
-from torch import Tensor
-from torch.utils.data import DataLoader
+from peft import PeftModel
+from torch import Tensor, nn
 
-from specialk.core import log
-from specialk.core.constants import PAD, SOURCE, TARGET
+from specialk.core.constants import (
+    PAD,
+    SOURCE,
+    TARGET,
+    TEST_LOSS,
+    TRAIN_LOSS,
+    VAL_LOSS,
+)
 from specialk.models.classifier.models import (
     BERTClassifier,
     CNNClassifier,
@@ -22,6 +31,25 @@ from specialk.models.classifier.models import (
 from specialk.models.mt_model import NMTModule
 from specialk.models.ops.ops import token_accuracy
 
+# key used for the style accuracy metric at validation time.
+STYLE_ACC = "style_acc"
+
+
+def _pad_or_truncate(x: Tensor, length: int) -> Tensor:
+    """Pad (with zeros) or truncate the first dimension of ``x`` to ``length``.
+
+    The CNN's pooling window is fixed to the classifier's sequence length, so
+    its input has to have exactly that many time steps.
+    """
+    current = x.size(0)
+    if current == length:
+        return x
+    if current > length:
+        return x[:length]
+
+    padding = x.new_zeros((length - current, *x.shape[1:]))
+    return torch.cat([x, padding], dim=0)
+
 
 class StyleBackTranslationModel(pl.LightningModule):
     def __init__(
@@ -29,175 +57,280 @@ class StyleBackTranslationModel(pl.LightningModule):
         mt_model: NMTModule,
         classifier: TextClassifier,
         target_label: int = 1,
-        use_mapping=True,
+        use_mapping: bool = True,
         mapping_dim: int = 256,
+        lambda_class: float = 1.0,
+        tau_start: float = 1.0,
+        tau_end: float = 0.1,
+        learning_rate: float = 1e-3,
     ):
         """
         Args:
-            mt_model (NMTModel):
-                Machine Translation model (with target language to english).
-            classifier (CNNModels):
+            mt_model (NMTModule):
+                Machine translation model (with target language to english).
+            classifier (TextClassifier):
                 Style classifier model.
+            target_label (int):
+                Label the decoder is trained to produce.
+            use_mapping (bool):
+                Learn a mapping between the sequence model's vocabulary and
+                the classifier's vocabulary.
             mapping_dim (int):
-                Dimension to learn the mapping between vocabularies
-                from the sequence model to the classifier model.
+                Dimension of the learned mapping between vocabularies.
+            lambda_class (float):
+                Weight of the classification loss (thesis lambda_c).
+            tau_start (float):
+                Initial softmax temperature.
+            tau_end (float):
+                Final softmax temperature.
+            learning_rate (float):
+                Learning rate for the trainable parameters.
         """
         super().__init__()
+        self.save_hyperparameters(ignore=["mt_model", "classifier"])
+
         self.sequence_model: NMTModule = mt_model
         self.classifier: TextClassifier = classifier
-        # the mapping matrix is learnt as we fine-tune the decoder model.
-        self.use_mapping = use_mapping
+        self.use_mapping: bool = use_mapping
 
-        # having one tensor is an unreaonable size; (marianMT is 50k, BERT 30k)...
+        self.target_label: int = target_label
+        self.tau: float = tau_start
+
+        # Marian's padding token is not 0, so it can't be a constant.
+        self.seq_pad: int = self._sequence_pad()
+
+        # having one tensor is an unreasonable size; (marianMT is 50k, BERT 30k)...
         self.seq_projection = (
             nn.Linear(self.sequence_model.vocabulary_size, mapping_dim)
-            if self.use_mapping
+            if use_mapping
             else None
         )
         self.clf_projection = (
-            nn.Linear(mapping_dim, self.classifier.vocabulary_size)
-            if self.use_mapping
+            nn.Linear(mapping_dim, self._classifier_vocabulary_size())
+            if use_mapping
             else None
         )
 
-        self.target_label: int = target_label
+        self._freeze_frozen_parts()
 
-        # encoder will always be in eval mode.
+    # ------------------------------------------------------------------
+    # Frozen parts
+    # ------------------------------------------------------------------
+    def _sequence_pad(self) -> int:
+        """Padding index of the sequence model's tokenizer."""
+        tokenizer = getattr(self.sequence_model, "tokenizer", None)
+        if tokenizer is None:
+            return PAD
+
+        pad_token_id = getattr(tokenizer, "pad_token_id", None)
+        if pad_token_id is not None:
+            return int(pad_token_id)
+        return int(getattr(tokenizer, "PAD", PAD))
+
+    def _classifier_vocabulary_size(self) -> int:
+        size = self.classifier.vocabulary_size
+        if size is not None:
+            return int(size)
+        # BERT classifiers loaded from a checkpoint don't record it, but the
+        # embedding matrix gives the same number.
+        return int(self.classifier.model.get_input_embeddings().weight.size(0))
+
+    def _encoder(self) -> nn.Module:
+        """The seq2seq encoder.
+
+        ``mt_model.model.encoder`` for our transformer,
+        ``mt_model.model.model.encoder`` for Marian.
+        """
+        model = self.sequence_model.model
+        # PEFT's attribute forwarding is unreliable across task types, so
+        # unwrap it explicitly.
+        if isinstance(model, PeftModel):
+            model = model.get_base_model()
+
+        encoder = getattr(model, "encoder", None)
+        if encoder is not None:
+            return encoder
+        return model.model.encoder
+
+    def _uses_peft(self) -> bool:
+        return isinstance(self.sequence_model.model, PeftModel)
+
+    def _freeze_frozen_parts(self) -> None:
+        for param in self.classifier.parameters():
+            param.requires_grad = False
+
+        # PEFT has already frozen the non-LoRA weights; re-freezing would
+        # disable the adapters too.
+        if not self._uses_peft():
+            for param in self._encoder().parameters():
+                param.requires_grad = False
+
         self.classifier.eval()
+        self._encoder().eval()
 
-    def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
+    def train(self, mode: bool = True):
+        """Keep the frozen classifier and encoder in eval mode.
+
+        Lightning calls ``.train()`` on the whole module during ``fit``, which
+        would otherwise turn the classifier's dropout back on.
         """
-        Forward pass of the transformer.
-        The output from the model is then sent to the classifier.
+        super().train(mode)
+        self.classifier.eval()
+        self._encoder().eval()
+        return self
 
-        Returns:
-            Loss value to run gradients against.
-        """
-
-        x: Int[Tensor, "batch seq_len"] = batch[SOURCE].squeeze(1)
-        y: Int[Tensor, "batch seq_len"] = batch[TARGET].squeeze(1)
-        y_label: Int[Tensor, "batch"] = batch["label"]
-
-        log.info("x.shape", xhape=x.shape)
-
-        y_hat_text, y_hat_label = self._forward(x, y, y_label)
-
-        # Calculate losses.
-        y_hat_text = y_hat_text.view(-1, y_hat_text.size(-1))
-        y = y.view(-1)
-        loss_reconstruction = self.reconstruction_loss(y_hat_text, y)
-        loss_class = y_hat_label.loss
-        joint_loss = loss_class + loss_reconstruction
-
-        # report metrics.
-        self.log_dict(
-            {
-                "train_acc": token_accuracy(y_hat_text, y, PAD),
-                "batch_id": batch_idx,
-                "train_joint_loss": joint_loss,
-                "train_recon_loss": loss_reconstruction,
-                "train_class_loss": loss_class,
-            }
-        )
-        return joint_loss
+    # ------------------------------------------------------------------
+    # Forward / losses
+    # ------------------------------------------------------------------
+    def _map(self, soft: Tensor) -> Tensor:
+        """Map a distribution over the seq2seq vocabulary into the classifier's."""
+        if not self.use_mapping:
+            return soft
+        return F.softmax(self.clf_projection(self.seq_projection(soft)), dim=-1)
 
     def _forward(
         self,
         x: Int[Tensor, "batch seq_len"],
         y: Int[Tensor, "batch seq_len"],
-        y_label: Optional[Int[Tensor, "batch"]] = None,
-    ) -> Tuple[Tensor, Optional[Tensor]]:
-        """Performs forward pass on the mt model and the discriminator model."""
-        y_hat_text: Float[Tensor, "batch length vocab"]
-        y_hat_text = self.sequence_model(x, y)
+    ) -> tuple[Float[Tensor, "batch length vocab_seq"], Tensor]:
+        """One seq2seq pass, returning seq-vocab logits and the classifier output.
 
-        if self.use_mapping:
-            # tokenizers for the models are different so
-            # we need to project that over.
-            y_hat_text: Float[Tensor, "batch length vocab_classifier"]
-            y_hat_text = self.seq_projection(y_hat_text)
-            y_hat_text = self.clf_projection(y_hat_text)
-
-        y_hat_label: Float[Tensor, "batch"]
-        y_hat_label = self.classifier(y_hat_text)
-        return y_hat_text, y_hat_label
-
-    def _shared_eval_step(self, batch: dict, batch_idx: int):
-        """Evaluation step used for both eval/test runs on a given dataset.
-
-        Args:
-            batch (DataLoader): _description_
-            batch_idx (int): _description_
-
-        Returns:
-            _type_: _description_
+        ``seq_logits`` is the only input to the reconstruction loss; it always
+        stays in the seq2seq vocabulary.
         """
-        x: Int[Tensor, "batch seq_len"] = batch[SOURCE].squeeze(1)
-        y: Int[Tensor, "batch seq_len"] = batch[TARGET].squeeze(1)
-        y_label: Int[Tensor, "batch"] = batch["class"]
+        seq_logits: Float[Tensor, "batch length vocab_seq"]
+        seq_logits = self.sequence_model(x, y)
 
-        y_hat_text, y_hat_label = self._forward(x, y, y_label)
+        soft: Float[Tensor, "batch length vocab_seq"] = F.softmax(
+            seq_logits / self.tau, dim=-1
+        )
+        clf_out = self._classify(self._map(soft), y)
+        return seq_logits, clf_out
 
-        # Calculate losses.
-        y_hat_text = y_hat_text.view(-1, y_hat_text.size(-1))
-        y = y.view(-1)
-        loss_reconstruction = self.reconstruction_loss(y_hat_text, y)
-        loss_class = y_hat_label.loss
-        joint_loss = loss_class + loss_reconstruction
-        accuracy = token_accuracy(y_hat_text, y, self.constants.PAD)
+    def _classify(
+        self,
+        soft: Float[Tensor, "batch length vocab_classifier"],
+        y: Int[Tensor, "batch seq_len"],
+    ) -> Tensor:
+        """Run the classifier on the (mapped) distribution. Implemented per subclass."""
+        raise NotImplementedError
 
-        return loss_reconstruction, loss_class, joint_loss, accuracy
+    def classifier_loss(self, clf_out: Tensor, target: Int[Tensor, " n"]) -> Tensor:
+        """Classification loss. Implemented per subclass."""
+        raise NotImplementedError
 
-    def validation_step(self, batch: dict, batch_idx: int) -> Dict[str, torch.Tensor]:
-        """
-        Validation run.
-        """
-        l_recon, l_class, l_joint, accuracy = self._shared_eval_step(batch, batch_idx)
-        metrics: Dict[str, torch.Tensor] = {
-            "valid_accuracy": accuracy,
-            "valid_joint_loss": l_joint,
-            "valid_class_loss": l_class,
-            "valid_recon_loss": l_recon,
+    def reconstruction_loss(self, seq_logits: Tensor, y: Tensor) -> Tensor:
+        # NMTModule.criterion ignores index 0, which is Marian's </s>.
+        return F.cross_entropy(seq_logits, y, ignore_index=self.seq_pad)
+
+    def _batch_tensors(self, batch: dict[str, Tensor]) -> tuple[Tensor, Tensor, Tensor]:
+        x: Tensor = batch[SOURCE]
+        y: Tensor = batch[TARGET]
+        label: Tensor = batch["label"]
+        # the dataset sometimes adds an extra dimension.
+        if x.dim() == 3:
+            x = x.squeeze(1)
+        if y.dim() == 3:
+            y = y.squeeze(1)
+        return x, y, label
+
+    @torch.no_grad()
+    def _style_accuracy(
+        self, seq_logits: Float[Tensor, "batch length vocab_seq"], y: Tensor
+    ) -> Tensor:
+        """Share of the batch the classifier predicts as ``target_label``."""
+        tokens = seq_logits.argmax(dim=-1)
+        one_hot = F.one_hot(tokens, num_classes=seq_logits.size(-1)).to(
+            seq_logits.dtype
+        )
+        clf_out = self._classify(self._map(one_hot), y)
+
+        if isinstance(self.classifier, CNNClassifier):
+            predictions = (clf_out > 0.5).long()
+        else:
+            predictions = clf_out.argmax(dim=-1)
+
+        return (predictions == self.target_label).float().mean()
+
+    # ------------------------------------------------------------------
+    # Steps
+    # ------------------------------------------------------------------
+    def _step(self, batch: dict[str, Tensor], stage: str) -> Tensor:
+        """Shared train/eval step: sequence loss plus classification loss."""
+        x, y, label = self._batch_tensors(batch)
+
+        seq_logits, clf_out = self._forward(x, y)
+
+        recon_loss = self.reconstruction_loss(seq_logits.flatten(0, 1), y.flatten())
+        target = torch.full_like(label, self.target_label)
+        class_loss = self.classifier_loss(clf_out, target)
+        loss = recon_loss + self.hparams.lambda_class * class_loss
+
+        self._log_metrics(stage, x, y, seq_logits, loss, recon_loss, class_loss)
+        return loss
+
+    def _log_metrics(
+        self,
+        stage: str,
+        x: Tensor,
+        y: Tensor,
+        seq_logits: Tensor,
+        loss: Tensor,
+        recon_loss: Tensor,
+        class_loss: Tensor,
+    ) -> None:
+        prefix, loss_name = {
+            "train": ("train", TRAIN_LOSS),
+            "val": ("eval", VAL_LOSS),
+            "test": ("test", TEST_LOSS),
+        }[stage]
+
+        metrics: dict[str, Tensor] = {
+            loss_name: loss,
+            f"{prefix}_recon_loss": recon_loss,
+            f"{prefix}_class_loss": class_loss,
+            f"{prefix}_acc": token_accuracy(
+                seq_logits.flatten(0, 1), y.flatten(), self.seq_pad
+            ),
         }
-        self.log_dict(metrics)
-        return metrics
 
-    def test_step(self, batch: dict, batch_idx: int) -> Dict[str, torch.Tensor]:
-        """Test run."""
-        l_recon, l_class, l_joint, accuracy = self._shared_eval_step(batch, batch_idx)
-        metrics: Dict[str, torch.Tensor] = {
-            "test_accuracy": accuracy,
-            "test_joint_loss": l_joint,
-            "test_class_loss": l_class,
-            "test_recon_loss": l_recon,
-        }
-        self.log_dict(metrics)
-        return metrics
+        if stage == "train":
+            metrics["tau"] = torch.as_tensor(
+                self.tau, dtype=torch.float32, device=x.device
+            )
+        else:
+            metrics[f"{prefix}_{STYLE_ACC}"] = self._style_accuracy(seq_logits, y)
 
-    def reconstruction_loss(self, y_hat, y) -> Tensor:
-        return self.sequence_model.criterion(y_hat, y)
+        self.log_dict(
+            metrics,
+            batch_size=x.size(0),
+            on_step=stage == "train",
+            on_epoch=True,
+        )
 
-    def classifier_loss(self, y_hat, y) -> Tensor:
-        return self.classifier.criterion(y_hat, y)
+    def training_step(self, batch: dict[str, Tensor], batch_idx: int) -> Tensor:
+        return self._step(batch, "train")
 
-    def _get_lora_params(self):
-        """Filter and return only the LoRA parameters."""
-        lora_params = []
-        for name, param in self.sequence_model.model.named_parameters():
-            # Assuming LoRA parameters have 'lora_' in their name
-            if "lora_" in name:
-                lora_params.append(param)
-        return lora_params
+    def validation_step(self, batch: dict[str, Tensor], batch_idx: int) -> Tensor:
+        return self._step(batch, "val")
 
-    def configure_optimizers(self):
-        params = self._get_lora_params()
-        if len(params) == 0:
-            params = list(self.sequence_model.model.parameters())
+    def test_step(self, batch: dict[str, Tensor], batch_idx: int) -> Tensor:
+        return self._step(batch, "test")
 
-        if self.use_mapping:
-            params += list(self.clf_projection.parameters())
-            params += list(self.seq_projection.parameters())
-        return torch.optim.AdamW(params, lr=0.002)
+    def on_train_batch_start(self, batch: dict[str, Tensor], batch_idx: int) -> None:
+        """Decay tau linearly from ``tau_start`` to ``tau_end`` over training."""
+        total_steps = self.trainer.estimated_stepping_batches
+        progress = 0.0
+        if math.isfinite(total_steps) and total_steps > 1:
+            progress = min(self.global_step / (total_steps - 1), 1.0)
+        self.tau = (
+            self.hparams.tau_start
+            + (self.hparams.tau_end - self.hparams.tau_start) * progress
+        )
+
+    def configure_optimizers(self) -> torch.optim.Optimizer:
+        params = [p for p in self.parameters() if p.requires_grad]
+        return torch.optim.AdamW(params, lr=self.hparams.learning_rate)
 
 
 class StyleBackTranslationModelWithCNN(StyleBackTranslationModel):
@@ -207,66 +340,65 @@ class StyleBackTranslationModelWithCNN(StyleBackTranslationModel):
         classifier: CNNClassifier,
         **kwargs,
     ):
-        assert isinstance(
-            classifier, CNNClassifier
-        ), f"Classifier is not a CNNClassifier (found {type(classifier).__name__})"
+        assert isinstance(classifier, CNNClassifier), (
+            f"Classifier is not a CNNClassifier (found {type(classifier).__name__})"
+        )
+        # A CNN trained on the seq2seq vocabulary needs no mapping, and a
+        # trainable one could satisfy the classifier without the decoder.
+        kwargs.setdefault(
+            "use_mapping", classifier.vocabulary_size != mt_model.vocabulary_size
+        )
         super().__init__(mt_model=mt_model, classifier=classifier, **kwargs)
 
-    def _forward(
+    def _classify(
         self,
-        x: Int[Tensor, "batch seq_len"],
+        soft: Float[Tensor, "batch length vocab_classifier"],
         y: Int[Tensor, "batch seq_len"],
-        y_label: Optional[Int[Tensor, "batch"]] = None,
-    ) -> Tuple[Tensor, Optional[Tensor]]:
-        y_hat_text: Float[Tensor, "batch length vocab_seq2seq"]
-        y_hat_text = self.sequence_model(x, y)
+    ) -> Float[Tensor, " n"]:
+        # ConvNet wants [seq_len, batch, vocab].
+        classifier_text = soft.transpose(0, 1)
+        classifier_text = _pad_or_truncate(
+            classifier_text, self.classifier.sequence_length
+        )
+        return self.classifier.model(classifier_text).squeeze(-1)
 
-        classifier_text: Float[Tensor, "seq_len batch d_vocab_classifier"]
-        classifier_text = y_hat_text.transpose(0, 1)
-        if self.use_mapping:
-            classifier_text = self.seq_projection(classifier_text)
-            classifier_text = self.clf_projection(classifier_text)
-
-        # classifer pass
-        y_hat_label: Float[Tensor, "batch length vocab"]
-        y_hat_label = self.classifier.model(classifier_text).squeeze(-1)
-        return y_hat_text, y_hat_label
+    def classifier_loss(self, clf_out: Tensor, target: Tensor) -> Tensor:
+        return self.classifier.criterion(clf_out, target)
 
 
 class StyleBackTranslationModelWithBERT(StyleBackTranslationModel):
-    def __init__(self, mt_model: NMTModule, classifier: BERTClassifier, **kwargs):
-        assert isinstance(
-            classifier, BERTClassifier
-        ), f"Classifier is not a BERTClassifier (found {type(classifier).__name__})"
-        super().__init__(
-            mt_model=mt_model, classifier=classifier, use_mapping=True, **kwargs
-        )
-
-    def _forward(
+    def __init__(
         self,
-        x: Int[Tensor, "batch seq_len"],
+        mt_model: NMTModule,
+        classifier: BERTClassifier,
+        **kwargs,
+    ):
+        assert isinstance(classifier, BERTClassifier), (
+            f"Classifier is not a BERTClassifier (found {type(classifier).__name__})"
+        )
+        # BERT needs a distribution over its own vocabulary.
+        # shortcut: the mapping trains too, so it can raise style accuracy
+        # without the decoder; freeze it or build a fixed token map if BERT runs matter.
+        kwargs["use_mapping"] = True
+        super().__init__(mt_model=mt_model, classifier=classifier, **kwargs)
+
+    def _sequence_mask(
+        self, y: Int[Tensor, "batch seq_len"]
+    ) -> Int[Tensor, "batch seq_len"]:
+        """1 on non-padding tokens, 0 on padding."""
+        return (y != self.seq_pad).long()
+
+    def _classify(
+        self,
+        soft: Float[Tensor, "batch length vocab_classifier"],
         y: Int[Tensor, "batch seq_len"],
-        y_label: Optional[Int[Tensor, "batch"]] = None,
-    ) -> Tuple[Tensor, Optional[Tensor]]:
-        y_hat_text: Float[Tensor, "batch length vocab"]
-        y_hat_text = self.sequence_model(x, y)
+    ) -> Float[Tensor, "batch 2"]:
+        # soft is a distribution over the classifier's vocabulary, so its
+        # matrix product with the embedding table is the expected embedding.
+        embeddings = soft @ self.classifier.model.get_input_embeddings().weight
+        return self.classifier.model(
+            inputs_embeds=embeddings, attention_mask=self._sequence_mask(y)
+        ).logits
 
-        # tokenizers for the models are going to be different. We're going to
-        # learn the mapping as we go.
-
-        # tokenizers for the models are different so
-        # we need to project that over.
-        y_hat_text: Float[Tensor, "batch length vocab_classifier"]
-        y_hat_text = self.seq_projection(y_hat_text)
-        y_hat_text = self.clf_projection(y_hat_text)
-        y_hat_embs = (
-            y_hat_text @ self.classifier.model.bert.embeddings.word_embeddings.weight
-        )
-
-        y_hat_mask = torch.argmax(y_hat_text, dim=-1) == PAD
-
-        y_hat_label: Float[Tensor, "batch"]
-        y_hat_label = self.classifier.model(
-            inputs_embeds=y_hat_embs, attention_mask=y_hat_mask, labels=y_label
-        )
-        return y_hat_text, y_hat_label
+    def classifier_loss(self, clf_out: Tensor, target: Tensor) -> Tensor:
+        return self.classifier.criterion(clf_out, target.long())

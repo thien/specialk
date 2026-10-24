@@ -20,4 +20,6 @@ class CosineWarmupScheduler(_LRScheduler):
         lr_factor = 0.5 * (1 + np.cos(np.pi * epoch / self.max_num_iters))
         if epoch <= self.warmup:
             lr_factor *= epoch * 1.0 / self.warmup
-        return lr_factor
+        # Keep this a Python float: numpy scalars become float64 tensors in the
+        # Lightning LR monitor, which MPS cannot represent.
+        return float(lr_factor)

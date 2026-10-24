@@ -80,7 +80,7 @@ testpaths = "./tests"
 pythonpath = "."
 addopts = "-ra -q"
 filterwarnings = ["ignore:.*U.*mode is deprecated:DeprecationWarning", "ignore::DeprecationWarning"]
-markers = ["lightweight: marks tests as lightweight (deselect with '-m \"not lightweight\"')","heavyweight: marks tests that require large model downloads"]
+markers = ["lightweight: marks tests as lightweight (deselect with '-m \"not lightweight\"')","heavyweight: marks tests that require large model downloads","benchmark: timing tests, run with -m benchmark -s"]
 
 [tool.coverage.run]
 source = ["specialk"]

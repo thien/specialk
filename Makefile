@@ -12,7 +12,7 @@ format:
 	$(UV) run ruff format .
 
 tests-light:
-	$(UV) run pytest -v -m "not heavyweight"
+	$(UV) run pytest -v -m "not heavyweight and not benchmark"
 
 tests-heavy:
 	$(UV) run pytest -v -m "not lightweight" -n auto

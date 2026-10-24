@@ -30,6 +30,12 @@ class MockModel:
     def decode(self, tokens, tgt_mask, memory, x_pad_mask):
         return torch.randn(tokens.shape[0], tokens.shape[1], 512)
 
+    def cross_kv(self, memory):
+        return memory
+
+    def decode_step(self, y, memory_kv, x_pad_mask, kv_cache):
+        return torch.randn(y.shape[0], 1, 512), torch.zeros(y.shape[0], 1)
+
     def generator(self, input_tensor):
         return torch.randn(input_tensor.shape[0], 1000)  # Assuming vocab size of 1000
 

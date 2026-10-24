@@ -29,6 +29,7 @@ from specialk.models.mt_model import NMTModule
 from specialk.models.generators.beam import BeamBatch, EncoderDecoderBeam
 from specialk.models.optimizers.schedulers import CosineWarmupScheduler
 from specialk.models.transformer.pos_encoders import PositionalEncoder
+from specialk.models.transformer.torch.modules import KVCache, cross_kv, decoder_step
 from specialk.models.utils.activations import SwiGLU
 
 
@@ -43,10 +44,14 @@ class TransformerEncoderDecoderBeam(EncoderDecoderBeam):
         tokens (type): Description of field2.
         memory (Tensor): encoder output.
         x_pad_mask (Tensor): mask tensor for input tokens.
+        memory_kv (KVCache): cross-attention K/V of memory (for decode_step).
+        kv_cache (KVCache): self-attention K/V of tokens[:, :-1].
     """
 
     memory: Tensor
     x_pad_mask: Tensor
+    memory_kv: Optional[KVCache] = None
+    kv_cache: Optional[KVCache] = None
 
     def new(
         self,
@@ -54,6 +59,8 @@ class TransformerEncoderDecoderBeam(EncoderDecoderBeam):
         tokens: Int[Tensor, "batch seq"],
         memory: Tensor,
         x_pad_mask: Tensor,
+        memory_kv: Optional[KVCache] = None,
+        kv_cache: Optional[KVCache] = None,
     ) -> TransformerEncoderDecoderBeam:
         """Creates a new EncoderDecoderBeam object with the
         same model, tokenizer, and encoder_output. Includes an x_pad_mask."""
@@ -64,6 +71,8 @@ class TransformerEncoderDecoderBeam(EncoderDecoderBeam):
             tokens=tokens,
             memory=memory,
             x_pad_mask=x_pad_mask,
+            memory_kv=memory_kv,
+            kv_cache=kv_cache,
         )
 
     @torch.inference_mode()
@@ -84,6 +93,8 @@ class TransformerEncoderDecoderBeam(EncoderDecoderBeam):
             self.tokens[idx],
             self.memory[idx],
             self.x_pad_mask[idx],
+            None if self.memory_kv is None else self.memory_kv[idx],
+            None if self.kv_cache is None else self.kv_cache[idx],
         )
 
     def generate(
@@ -105,8 +116,19 @@ class TransformerEncoderDecoderBeam(EncoderDecoderBeam):
         new_x_pad_mask = einops.repeat(
             self.x_pad_mask, "b s -> (b beam) s", beam=tokens_per_beam
         )
+
+        def repeat(t: Optional[Tensor]) -> Optional[Tensor]:
+            if t is None:
+                return None
+            return einops.repeat(t, "b ... -> (b beam) ...", beam=tokens_per_beam)
+
         return self.new(
-            new_logprob_sums, new_tokens, new_encoder_outputs, new_x_pad_mask
+            new_logprob_sums,
+            new_tokens,
+            new_encoder_outputs,
+            new_x_pad_mask,
+            repeat(self.memory_kv),
+            repeat(self.kv_cache),
         )
 
 
@@ -116,25 +138,28 @@ class TransformerBeamBatch(BeamBatch):
 
     @torch.inference_mode()
     def get_logits(self) -> List[Float[torch.Tensor, "beam*beam vocab"]]:
-        # Aggregate inputs from all beams
-        all_tokens = torch.cat([beam.tokens for beam in self.beams])
-        all_memory = torch.cat([beam.memory for beam in self.beams])
+        # Aggregate inputs from all beams; only the newest token is fed in,
+        # earlier positions come from each beam's kv_cache.
+        all_tokens = torch.cat([beam.tokens[:, -1:] for beam in self.beams])
+        all_memory_kv = torch.cat([beam.memory_kv for beam in self.beams])
         all_x_pad_mask = torch.cat([beam.x_pad_mask for beam in self.beams])
-        decode = self.beams[0].model.decode
-        generator = self.beams[0].model.generator
+        caches = [beam.kv_cache for beam in self.beams]
+        all_kv_cache = None if caches[0] is None else torch.cat(caches)
+        model = self.beams[0].model
 
         # Perform the logits computation in one go
-        logits: Float[Tensor, "batch*beam vocab"] = decode(
-            all_tokens,
-            tgt_mask=None,
-            memory=all_memory,
-            x_pad_mask=all_x_pad_mask,
-        )[:, -1]
+        out, all_kv_cache = model.decode_step(
+            all_tokens, all_memory_kv, all_x_pad_mask, all_kv_cache
+        )
         log_probs: Float[Tensor, "batch*beam vocab"]
-        log_probs = torch.nn.functional.log_softmax(generator(logits), dim=-1)
+        log_probs = torch.nn.functional.log_softmax(model.generator(out[:, -1]), dim=-1)
 
-        # Disperse the results back to individual beams
-        return list(log_probs.split([beam.num_beams for beam in self.beams]))
+        # Disperse the results back to individual beams. The extended cache is
+        # stored on each beam so generate() repeats it alongside the tokens.
+        sizes = [beam.num_beams for beam in self.beams]
+        for beam, kv_cache in zip(self.beams, all_kv_cache.split(sizes)):
+            beam.kv_cache = kv_cache
+        return list(log_probs.split(sizes))
 
 
 class TransformerEncoderLayer(nn.TransformerEncoderLayer):
@@ -485,6 +510,28 @@ class PyTorchTransformerModel(nn.Transformer):
             tgt_is_causal=True,
         )
 
+    def cross_kv(self, memory: Float[Tensor, "batch seq_len d_model"]) -> KVCache:
+        """Precompute cross-attention K/V of the encoder output for decode_step."""
+        return cross_kv(self.decoder, memory)
+
+    def decode_step(
+        self,
+        y: Int[Tensor, "batch 1"],
+        memory_kv: KVCache,
+        x_pad_mask: Optional[Bool[Tensor, "batch seq_len"]] = None,
+        kv_cache: Optional[KVCache] = None,
+    ) -> Tuple[Float[Tensor, "batch 1 d_model"], KVCache]:
+        """Incremental decode: feed only the newest token, reusing cached K/V.
+
+        Equivalent to decode(y_full)[:, -1:] but O(n) per step instead of O(n^2).
+        """
+        pos = 0 if kv_cache is None else kv_cache.size(-2)
+        y_emb = (
+            self.output_emb(y) * np.sqrt(self.dim_model)
+            + self.pos_encoder.pos_enc[:, pos : pos + 1]
+        )
+        return decoder_step(self.decoder, y_emb, memory_kv, x_pad_mask, kv_cache)
+
 
 class PyTorchTransformerModule(NMTModule):
     def __init__(
@@ -548,6 +595,7 @@ class PyTorchTransformerModule(NMTModule):
 
         # encode input sequences
         memory, x_pad_mask = self.model.encode(input_tokens)
+        memory_kv = self.model.cross_kv(memory)
 
         # initialize beams
         beams = []
@@ -561,6 +609,7 @@ class PyTorchTransformerModule(NMTModule):
             # (for batch operation).
             item_memory = memory[i].unsqueeze(0).expand(num_beams, -1, -1)
             item_x_pad_mask = x_pad_mask[i].unsqueeze(0).expand(num_beams, -1)
+            item_memory_kv = memory_kv[i : i + 1].expand(num_beams, *memory_kv.shape[1:])
 
             beams.append(
                 TransformerEncoderDecoderBeam(
@@ -570,6 +619,7 @@ class PyTorchTransformerModule(NMTModule):
                     tokens=y_hat,
                     memory=item_memory,
                     x_pad_mask=item_x_pad_mask,
+                    memory_kv=item_memory_kv,
                 )
             )
         batch_of_beams = TransformerBeamBatch.create(beams)
@@ -670,14 +720,13 @@ class PyTorchTransformerModule(NMTModule):
         y_completed = torch.zeros(batch_size, dtype=torch.bool, device=self.device)
 
         memory, x_pad_mask = self.model.encode(input_tokens)
+        memory_kv = self.model.cross_kv(memory)
+        kv_cache = None
 
         for i in range(1, max_len):
-            # prepare decoder output to feed into the model.
-            out = self.model.decode(
-                y_hat[:, :i],
-                tgt_mask=None,
-                memory=memory,
-                x_pad_mask=x_pad_mask,
+            # feed only the newest token; earlier positions live in kv_cache.
+            out, kv_cache = self.model.decode_step(
+                y_hat[:, i - 1 : i], memory_kv, x_pad_mask, kv_cache
             )
 
             logits = torch.nn.functional.log_softmax(

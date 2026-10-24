@@ -1,23 +1,17 @@
-# assumes you transferred the GM models from ./snorlax_to_casper.sh
+# Translate a newspaper corpus into French with a trained EN-FR model.
+#
+# CHECKPOINT must be a Lightning .ckpt produced by
+# `python3 -m specialk.trainers.train` (see doc/generation.md).
 
 p="popular"
-CUDA_DEVICE=1
+DEVICE="cuda:1"
 # p="quality"
-# CUDA_DEVICE=0
+# DEVICE="cuda:0"
 
 BASEDIR="/home/t/specialk/base/"
-MODELDIR=$BASEDIR"models/"
+CHECKPOINT=${CHECKPOINT:?set CHECKPOINT to a trained EN-FR checkpoint}
 
 cd $BASEDIR
-
-ENFR_DIRNAME="enfr_bpe_gold_master"
-FREN_DIRNAME="fren_bpe_gold_master"
-VOCAB=$MODELDIR"nmt_enfr_goldmaster_bpe.pt"
-# translate political dataset
-ENFR_BASEDIR="models/"$ENFR_DIRNAME"/"
-ENCODER='encoder_epoch_1.chkpt'
-DECODER='decoder_epoch_1.chkpt'
-OUTPUT="outputs.txt"
 
 # sed "s/^[A-Za-z0-9_]*\ //" $src > $src.b
 
@@ -25,16 +19,12 @@ OUTPUT="outputs.txt"
 PUB_DIR="../datasets/newspapers/"
 BEAMSIZE=2
 
-python3 translate.py \
-    -model transformer \
-    -checkpoint_encoder $ENFR_BASEDIR$ENCODER \
-    -checkpoint_decoder $ENFR_BASEDIR$DECODER \
-    -vocab $VOCAB \
-    -src $PUB_DIR$p".en.atok.b" \
-    -output $PUB_DIR$p".fr" \
-    -beam_size $BEAMSIZE \
-    -batch_size 32 \
-    -override_max_token_seq_len 150 \
-    -cuda_device $CUDA_DEVICE \
-    -cuda
-python3 core/telegram.py -m "finished translating $src"
+python3 -m specialk.translate \
+    --checkpoint "$CHECKPOINT" \
+    --src $PUB_DIR$p".en.atok.b" \
+    --output $PUB_DIR$p".fr" \
+    --beam-size $BEAMSIZE \
+    --batch-size 32 \
+    --max-new-tokens 150 \
+    --device $DEVICE
+python3 core/telegram.py -m "finished translating $PUB_DIR$p.fr"

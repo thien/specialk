@@ -8,11 +8,9 @@ will be calling the relevant classes and modified afterwards.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, Optional, Tuple, Union
 from rich import print as rprint
 from rich.table import Table
-import einops
 import numpy as np
 import torch
 import torch.nn as nn
@@ -26,115 +24,11 @@ import specialk.core.constants as Constants
 from specialk.core.utils import log
 from specialk.models.generators.sampling import LanguageModelSampler
 from specialk.models.mt_model import NMTModule
-from specialk.models.generators.beam import BeamBatch, EncoderDecoderBeam
+from specialk.models.generators.beam import Beam
 from specialk.models.optimizers.schedulers import CosineWarmupScheduler
 from specialk.models.transformer.pos_encoders import PositionalEncoder
+from specialk.models.transformer.torch.modules import KVCache, cross_kv, decoder_step
 from specialk.models.utils.activations import SwiGLU
-
-
-@dataclass
-class TransformerEncoderDecoderBeam(EncoderDecoderBeam):
-    """Beam Class to be used with PyTorchTransformerModel.
-
-    Attributes:
-        model (type): Description of field1.
-        tokenizer (type): Description of field2.
-        logprob_sums (type): Description of field2.
-        tokens (type): Description of field2.
-        memory (Tensor): encoder output.
-        x_pad_mask (Tensor): mask tensor for input tokens.
-    """
-
-    memory: Tensor
-    x_pad_mask: Tensor
-
-    def new(
-        self,
-        logprob_sums: Float[Tensor, "batch"],
-        tokens: Int[Tensor, "batch seq"],
-        memory: Tensor,
-        x_pad_mask: Tensor,
-    ) -> TransformerEncoderDecoderBeam:
-        """Creates a new EncoderDecoderBeam object with the
-        same model, tokenizer, and encoder_output. Includes an x_pad_mask."""
-        return TransformerEncoderDecoderBeam(
-            model=self.model,
-            tokenizer=self.tokenizer,
-            logprob_sums=logprob_sums,
-            tokens=tokens,
-            memory=memory,
-            x_pad_mask=x_pad_mask,
-        )
-
-    @torch.inference_mode()
-    def get_logits(self) -> Float[Tensor, "batch vocab"]:
-        logits = self.model.decode(
-            self.tokens,
-            tgt_mask=None,
-            memory=self.memory,
-            x_pad_mask=self.x_pad_mask,
-        )
-        return torch.nn.functional.log_softmax(
-            self.model.generator(logits[:, -1]), dim=-1
-        )
-
-    def __getitem__(self, idx) -> TransformerEncoderDecoderBeam:
-        return self.new(
-            self.logprob_sums[idx],
-            self.tokens[idx],
-            self.memory[idx],
-            self.x_pad_mask[idx],
-        )
-
-    def generate(
-        self,
-        tokens_per_beam: int,
-        no_repeat_ngram_size: Optional[int] = None,
-        log_logits: Optional[Float[Tensor, "batch vocab"]] = None,
-    ) -> TransformerEncoderDecoderBeam:
-        if log_logits is None:
-            log_logits = self.get_logits()
-
-        log_probs, tok_idx = self.get_topk_non_repeating(
-            log_logits, no_repeat_ngram_size, k=tokens_per_beam
-        )
-
-        new_logprob_sums = self._calculate_new_logprob_sums(log_probs, tokens_per_beam)
-        new_tokens = self._generate_new_tokens(tok_idx, tokens_per_beam)
-        new_encoder_outputs = self._repeat_memory(k=tokens_per_beam)
-        new_x_pad_mask = einops.repeat(
-            self.x_pad_mask, "b s -> (b beam) s", beam=tokens_per_beam
-        )
-        return self.new(
-            new_logprob_sums, new_tokens, new_encoder_outputs, new_x_pad_mask
-        )
-
-
-@dataclass
-class TransformerBeamBatch(BeamBatch):
-    beams: List[TransformerEncoderDecoderBeam]
-
-    @torch.inference_mode()
-    def get_logits(self) -> List[Float[torch.Tensor, "beam*beam vocab"]]:
-        # Aggregate inputs from all beams
-        all_tokens = torch.cat([beam.tokens for beam in self.beams])
-        all_memory = torch.cat([beam.memory for beam in self.beams])
-        all_x_pad_mask = torch.cat([beam.x_pad_mask for beam in self.beams])
-        decode = self.beams[0].model.decode
-        generator = self.beams[0].model.generator
-
-        # Perform the logits computation in one go
-        logits: Float[Tensor, "batch*beam vocab"] = decode(
-            all_tokens,
-            tgt_mask=None,
-            memory=all_memory,
-            x_pad_mask=all_x_pad_mask,
-        )[:, -1]
-        log_probs: Float[Tensor, "batch*beam vocab"]
-        log_probs = torch.nn.functional.log_softmax(generator(logits), dim=-1)
-
-        # Disperse the results back to individual beams
-        return list(log_probs.split([beam.num_beams for beam in self.beams]))
 
 
 class TransformerEncoderLayer(nn.TransformerEncoderLayer):
@@ -485,6 +379,28 @@ class PyTorchTransformerModel(nn.Transformer):
             tgt_is_causal=True,
         )
 
+    def cross_kv(self, memory: Float[Tensor, "batch seq_len d_model"]) -> KVCache:
+        """Precompute cross-attention K/V of the encoder output for decode_step."""
+        return cross_kv(self.decoder, memory)
+
+    def decode_step(
+        self,
+        y: Int[Tensor, "batch 1"],
+        memory_kv: KVCache,
+        x_pad_mask: Optional[Bool[Tensor, "batch seq_len"]] = None,
+        kv_cache: Optional[KVCache] = None,
+    ) -> Tuple[Float[Tensor, "batch 1 d_model"], KVCache]:
+        """Incremental decode: feed only the newest token, reusing cached K/V.
+
+        Equivalent to decode(y_full)[:, -1:] but O(n) per step instead of O(n^2).
+        """
+        pos = 0 if kv_cache is None else kv_cache.size(-2)
+        y_emb = (
+            self.output_emb(y) * np.sqrt(self.dim_model)
+            + self.pos_encoder.pos_enc[:, pos : pos + 1]
+        )
+        return decoder_step(self.decoder, y_emb, memory_kv, x_pad_mask, kv_cache)
+
 
 class PyTorchTransformerModule(NMTModule):
     def __init__(
@@ -535,96 +451,100 @@ class PyTorchTransformerModule(NMTModule):
         Float[Tensor, "batch n_return_seq"], Int[Tensor, "batch n_return_seq seq_len"]
     ]:
         """
-        Implements a beam search.
-        """
-        batch_size = input_tokens.size(0)
-        device = input_tokens.device
+        Implements a beam search, batched across all inputs.
 
+        Each step scores every (beam, next token) candidate, keeps the top
+        2 * num_beams per input, and only then gathers the survivors' tokens and
+        kv cache. A beam yields at most one EOS candidate, so the top 2K always
+        holds K live ones; EOS candidates ranking in the top K are finished.
+        """
         if num_return_sequences > num_beams:
             raise ValueError(
                 f"num_return_sequences (currently {num_return_sequences} "
                 f"must be <= num_beams (currently {num_beams})"
             )
 
-        # encode input sequences
+        B, K, N = input_tokens.size(0), num_beams, num_return_sequences
+        device = input_tokens.device
+        pad, max_len = self.tokenizer.PAD, max_new_tokens + 1
+        neg_inf = float("-inf")
+
         memory, x_pad_mask = self.model.encode(input_tokens)
+        # beams of an input share its encoder output, so this is never re-gathered.
+        memory_kv = self.model.cross_kv(memory).repeat_interleave(K, dim=0)
+        x_pad_mask = x_pad_mask.repeat_interleave(K, dim=0)
+        kv_cache = None
 
-        # initialize beams
-        beams = []
-        for i in range(batch_size):
-            y_hat = torch.full(
-                (num_beams, 1), Constants.SOS, dtype=torch.long, device=device
-            )
-            logprob_sums = torch.zeros(num_beams, device=device)
+        tokens = torch.full((B * K, 1), Constants.SOS, dtype=torch.long, device=device)
+        scores = torch.zeros(B, K, device=device)
+        scores[:, 1:] = neg_inf  # beams start identical; only expand one of them.
+        row_offset = torch.arange(B, device=device)[:, None] * K
 
-            # expands memory and x_pad_mask multiple times to the length of beams
-            # (for batch operation).
-            item_memory = memory[i].unsqueeze(0).expand(num_beams, -1, -1)
-            item_x_pad_mask = x_pad_mask[i].unsqueeze(0).expand(num_beams, -1)
-
-            beams.append(
-                TransformerEncoderDecoderBeam(
-                    model=self.model,
-                    tokenizer=self.decoder_tokenizer,
-                    logprob_sums=logprob_sums,
-                    tokens=y_hat,
-                    memory=item_memory,
-                    x_pad_mask=item_x_pad_mask,
-                )
-            )
-        batch_of_beams = TransformerBeamBatch.create(beams)
-
-        # List for final beams to return (and early terminations)
-        finished_beams: List[List[Tuple[float, Tensor]]]
-        finished_beams = [[] for _ in range(batch_size)]
+        # best finished hypotheses per input, by length-normalised score.
+        fin_scores = torch.full((B, N), neg_inf, device=device)
+        fin_tokens = torch.full((B, N, max_len), pad, dtype=torch.long, device=device)
+        fin_count = torch.zeros(B, dtype=torch.long, device=device)
 
         for n in range(max_new_tokens):
-            # Generation step
-            batch_of_beams = batch_of_beams.generate(num_beams, no_repeat_ngram_size)
-            batch_of_beams, terminated_beams = batch_of_beams.filter(num_beams)
+            out, kv_cache = self.model.decode_step(
+                tokens[:, -1:], memory_kv, x_pad_mask, kv_cache
+            )
+            logprobs = F.log_softmax(self.model.generator(out[:, -1]), dim=-1)
+            Beam(
+                self.model, self.decoder_tokenizer, scores.flatten(), tokens
+            ).mask_repeated_ngrams(logprobs, no_repeat_ngram_size)
 
-            # Process terminated beams
-            for i, beam in enumerate(terminated_beams.beams):
-                if beam.logprob_sums.size(0) > 0:
-                    scores = beam.logprob_sums / (beam.tokens.size(1) ** length_penalty)
-                    finished_beams[i].extend(list(zip(scores.tolist(), beam.tokens)))
+            vocab = logprobs.size(-1)
+            candidates = (scores[..., None] + logprobs.view(B, K, vocab)).view(B, -1)
+            top_scores, top_idx = candidates.topk(2 * K, dim=-1)
+            parent = top_idx // vocab + row_offset  # row into the B * K beams
+            next_token = top_idx % vocab
+            is_eos = next_token == self.decoder_tokenizer.EOS
+            length = tokens.size(1) + 1
 
-            # Check if all beams are finished
-            if all(len(beams) >= num_return_sequences for beams in finished_beams):
+            # finished: EOS candidates in the top K, merged into fin_*.
+            is_finished = is_eos[:, :K]
+            fin_count += is_finished.sum(-1)
+            new_fin_tokens = F.pad(
+                torch.cat([tokens[parent[:, :K]], next_token[:, :K, None]], dim=-1),
+                (0, max_len - length),
+                value=pad,
+            )
+            new_fin_scores = top_scores[:, :K] / length**length_penalty
+            fin_scores, best = torch.cat(
+                [fin_scores, new_fin_scores.masked_fill(~is_finished, neg_inf)], dim=1
+            ).topk(N, dim=-1)
+            fin_tokens = torch.cat([fin_tokens, new_fin_tokens], dim=1).gather(
+                1, best[..., None].expand(-1, -1, max_len)
+            )
+
+            # continuing: the K best non-EOS candidates.
+            live = top_scores.masked_fill(is_eos, neg_inf).topk(K, dim=-1).indices
+            scores = top_scores.gather(1, live)
+            rows = parent.gather(1, live).flatten()
+            tokens = torch.cat(
+                [tokens[rows], next_token.gather(1, live).view(-1, 1)], -1
+            )
+            kv_cache = kv_cache[rows]
+
+            if (fin_count >= N).all():
                 break
 
-        # Print output
         if verbose:
-            batch_of_beams.print(title=f"Best completions @ n={n+1}")
+            Beam(self.model, self.decoder_tokenizer, scores.flatten(), tokens).print(
+                title=f"Best completions @ n={n+1}"
+            )
 
-        # Add remaining beams
-        for i, beam in enumerate(batch_of_beams.beams):
-            scores = beam.logprob_sums / (beam.tokens.size(1) ** length_penalty)
-            finished_beams[i].extend(list(zip(scores.tolist(), beam.tokens)))
-
-        # Sort and truncate results
-        for i in range(batch_size):
-            finished_beams[i].sort(key=lambda x: x[0], reverse=True)
-            finished_beams[i] = finished_beams[i][:num_return_sequences]
-
-        # Prepare the output tensors
-        max_seq_len = max(max(len(seq) for _, seq in beams) for beams in finished_beams)
-        scores_tensor = torch.zeros((batch_size, num_return_sequences), device=device)
-        tokens_tensor = torch.full(
-            (batch_size, num_return_sequences, max_seq_len),
-            self.tokenizer.PAD,
-            dtype=torch.long,
-            device=device,
-        )
-
-        for i, batch_beams in enumerate(finished_beams):
-            # Sort and truncate results
-            batch_beams.sort(key=lambda x: x[0], reverse=True)
-            batch_beams = batch_beams[:num_return_sequences]
-
-            for j, (score, seq) in enumerate(batch_beams):
-                scores_tensor[i, j] = score
-                tokens_tensor[i, j, : len(seq)] = seq
+        # pick the best of finished and still-running beams.
+        live_tokens = F.pad(tokens, (0, max_len - tokens.size(1)), value=pad)
+        scores_tensor, best = torch.cat(
+            [fin_scores, scores / tokens.size(1) ** length_penalty], dim=1
+        ).topk(N, dim=-1)
+        tokens_tensor = torch.cat(
+            [fin_tokens, live_tokens.view(B, K, max_len)], dim=1
+        ).gather(1, best[..., None].expand(-1, -1, max_len))
+        seq_len = int((tokens_tensor != pad).any(0).any(0).nonzero().max()) + 1
+        tokens_tensor = tokens_tensor[..., :seq_len]
 
         log.info("scores", sc=scores_tensor.shape, tok=tokens_tensor.shape)
         return scores_tensor, tokens_tensor
@@ -670,14 +590,13 @@ class PyTorchTransformerModule(NMTModule):
         y_completed = torch.zeros(batch_size, dtype=torch.bool, device=self.device)
 
         memory, x_pad_mask = self.model.encode(input_tokens)
+        memory_kv = self.model.cross_kv(memory)
+        kv_cache = None
 
         for i in range(1, max_len):
-            # prepare decoder output to feed into the model.
-            out = self.model.decode(
-                y_hat[:, :i],
-                tgt_mask=None,
-                memory=memory,
-                x_pad_mask=x_pad_mask,
+            # feed only the newest token; earlier positions live in kv_cache.
+            out, kv_cache = self.model.decode_step(
+                y_hat[:, i - 1 : i], memory_kv, x_pad_mask, kv_cache
             )
 
             logits = torch.nn.functional.log_softmax(

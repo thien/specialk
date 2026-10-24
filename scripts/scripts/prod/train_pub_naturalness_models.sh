@@ -39,9 +39,7 @@ mkdir -p $NATURALNESSDIR
 # make a directory for your real and fake data
 gen_fake_seq () {
     pol_input=$1
-
-    decoder=$MODELDIR"/decoder_"$pol_input"_epoch_3.chkpt"
-    vocab=$MODELDIR$DATASET_TAG$pol_input".pt"
+    checkpoint=$2
 
     DATASET_EN_TRAIN=$DATASET_SRC"/sacrebleu_"$pol_input"_filt.train.en"
     DATASET_EN_VALID=$DATASET_SRC"/sacrebleu_"$pol_input"_filt.val.en"
@@ -49,34 +47,27 @@ gen_fake_seq () {
     DATASET_FR_TRAIN=$DATASET_SRC"/sacrebleu_"$pol_input"_filt.train.fr"
     DATASET_FR_VALID=$DATASET_SRC"/sacrebleu_"$pol_input"_filt.val.fr"
 
-    # python3 translate.py \
-    #     -model transformer \
-    #     -checkpoint_encoder $BASE_FREN_ENCODER \
-    #     -checkpoint_decoder $decoder \
-    #     -vocab $vocab \
-    #     -src $DATASET_FR_TRAIN \
-    #     -output $NATURALNESSDIR"/"$pol_input+".train.en.fake" \
-    #     -beam_size 5 \
-    #     -batch_size 10 \
-    #     -cuda
+    # python3 -m specialk.translate \
+    #     --checkpoint "$checkpoint" \
+    #     --src $DATASET_FR_TRAIN \
+    #     --output $NATURALNESSDIR"/"$pol_input+".train.en.fake" \
+    #     --beam-size 5 \
+    #     --batch-size 10
 
-    python3 translate.py \
-        -model transformer \
-        -checkpoint_encoder $BASE_FREN_ENCODER \
-        -checkpoint_decoder $decoder \
-        -vocab $vocab \
-        -src $DATASET_FR_VALID \
-        -output $NATURALNESSDIR"/"$pol_input+".val.en.fake" \
-        -beam_size 5 \
-        -batch_size 10 \
-        -cuda
+    python3 -m specialk.translate \
+        --checkpoint "$checkpoint" \
+        --src $DATASET_FR_VALID \
+        --output $NATURALNESSDIR"/"$pol_input+".val.en.fake" \
+        --beam-size 5 \
+        --batch-size 10
 
     # cp $DATASET_EN_TRAIN $NATURALNESSDIR"/"$pol_input+".train.en.real"
     cp $DATASET_EN_VALID $NATURALNESSDIR"/"$pol_input+".val.en.real"
 }
 
-# gen_fake_seq $LABEL0
-# gen_fake_seq $LABEL1
+# Set CHECKPOINT_POPULAR / CHECKPOINT_QUALITY to the style-transfer .ckpt paths.
+# gen_fake_seq $LABEL0 "$CHECKPOINT_POPULAR"
+# gen_fake_seq $LABEL1 "$CHECKPOINT_QUALITY"
 
 
 gen_fake_classify () {

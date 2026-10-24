@@ -169,8 +169,17 @@ class Beam(Generic[T]):
         Returns:
             Tuple of (top-k values, top-k indices)
         """
+        self.mask_repeated_ngrams(logprobs, no_repeat_ngram_size)
+        return logprobs.topk(k=k, dim=-1)
+
+    def mask_repeated_ngrams(
+        self,
+        logprobs: Float[Tensor, "batch d_vocab"],
+        no_repeat_ngram_size: Optional[int],
+    ) -> None:
+        """Mask (in-place) next tokens that would repeat an ngram in self.tokens."""
         if self._should_skip_ngram_check(no_repeat_ngram_size):
-            return logprobs.topk(k=k, dim=-1)
+            return
 
         _, seq_len = self.tokens.shape
 
@@ -179,8 +188,6 @@ class Beam(Generic[T]):
         for i in range(seq_len - (no_repeat_ngram_size - 1)):
             ngrams = self.tokens[:, i : i + no_repeat_ngram_size]
             self._mask_repeated_ngrams(logprobs, ngrams, last_ngram_prefix)
-
-        return logprobs.topk(k=k, dim=-1)
 
     def _should_skip_ngram_check(self, no_repeat_ngram_size: Optional[int]) -> bool:
         """

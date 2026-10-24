@@ -16,6 +16,7 @@ from torch import Tensor
 
 from specialk.core.constants import (
     PAD,
+    SOS,
     SOURCE,
     TARGET,
     TEACHER_FORCING_RATIO,
@@ -478,3 +479,121 @@ class RNNModule(NMTModule):
             Y = torch.cat((Y, token_n), axis=1)
             probabilities += max_probs_n
         return Y, probabilities
+
+    @torch.inference_mode()
+    def beam_search(
+        self,
+        input_tokens: Int[Tensor, "batch seq_len"],
+        num_return_sequences: int,
+        num_beams: int,
+        max_new_tokens: int,
+        length_penalty: float = 1.0,
+        no_repeat_ngram_size: Optional[int] = None,
+        verbose=False,
+    ) -> Tuple[
+        Float[Tensor, "batch n_return_seq"], Int[Tensor, "batch n_return_seq seq_len"]
+    ]:
+        """Batched beam search for recurrent models.
+
+        Mirrors ``PyTorchTransformerModule.beam_search``: the whole batch is
+        decoded at once, and each input keeps its ``num_beams`` live
+        hypotheses plus up to ``num_return_sequences`` finished ones.
+        ``input_feed`` decoders are supported through ``RNNEncoderDecoder.decode_step``.
+        """
+        if num_return_sequences > num_beams:
+            raise ValueError(
+                f"num_return_sequences (currently {num_return_sequences} "
+                f"must be <= num_beams (currently {num_beams})"
+            )
+
+        B, K, N = input_tokens.size(0), num_beams, num_return_sequences
+        device = input_tokens.device
+        tokenizer = self.decoder_tokenizer
+        pad, eos = tokenizer.PAD, tokenizer.EOS
+        neg_inf = float("-inf")
+        max_len = max_new_tokens + 1
+
+        model = self.model
+        # Encoder is batch-first; the RNN itself is sequence-first.
+        context, (hidden, cell) = model.encoder(input_tokens.transpose(0, 1))
+        hidden = (
+            model._fix_enc_hidden(hidden).repeat_interleave(K, dim=1),
+            model._fix_enc_hidden(cell).repeat_interleave(K, dim=1),
+        )
+        context = context.repeat_interleave(K, dim=1)
+        output = model.make_init_decoder_output(B * K)
+
+        tokens = torch.full((B * K, 1), SOS, dtype=torch.long, device=device)
+        scores = torch.zeros(B, K, device=device)
+        scores[:, 1:] = neg_inf  # beams start identical; only expand one of them.
+        row_offset = torch.arange(B, device=device)[:, None] * K
+
+        # best finished hypotheses per input, by length-normalised score.
+        fin_scores = torch.full((B, N), neg_inf, device=device)
+        fin_tokens = torch.full((B, N, max_len), pad, dtype=torch.long, device=device)
+        fin_count = torch.zeros(B, dtype=torch.long, device=device)
+
+        for n in range(max_new_tokens):
+            logprobs, hidden, output = model.decode_step(
+                tokens[:, -1], hidden, output, context
+            )
+            Beam(self.model, tokenizer, scores.flatten(), tokens).mask_repeated_ngrams(
+                logprobs, no_repeat_ngram_size
+            )
+
+            vocab = logprobs.size(-1)
+            candidates = (scores[..., None] + logprobs.view(B, K, vocab)).view(B, -1)
+            top_scores, top_idx = candidates.topk(2 * K, dim=-1)
+            parent = top_idx // vocab + row_offset  # row into the B * K beams
+            next_token = top_idx % vocab
+            is_eos = next_token == eos
+            length = tokens.size(1) + 1
+
+            # finished: EOS candidates in the top K, merged into fin_*.
+            is_finished = is_eos[:, :K]
+            fin_count += is_finished.sum(-1)
+            new_fin_tokens = F.pad(
+                torch.cat([tokens[parent[:, :K]], next_token[:, :K, None]], dim=-1),
+                (0, max_len - length),
+                value=pad,
+            )
+            new_fin_scores = top_scores[:, :K] / length**length_penalty
+            fin_scores, best = torch.cat(
+                [fin_scores, new_fin_scores.masked_fill(~is_finished, neg_inf)], dim=1
+            ).topk(N, dim=-1)
+            fin_tokens = torch.cat([fin_tokens, new_fin_tokens], dim=1).gather(
+                1, best[..., None].expand(-1, -1, max_len)
+            )
+
+            # continuing: the K best non-EOS candidates.
+            live = top_scores.masked_fill(is_eos, neg_inf).topk(K, dim=-1).indices
+            scores = top_scores.gather(1, live)
+            rows = parent.gather(1, live).flatten()
+            tokens = torch.cat(
+                [tokens[rows], next_token.gather(1, live).view(-1, 1)], -1
+            )
+            hidden = (hidden[0][:, rows], hidden[1][:, rows])
+            context = context[:, rows]
+            output = output[rows]
+
+            if (fin_count >= N).all():
+                break
+
+        if verbose:
+            Beam(self.model, tokenizer, scores.flatten(), tokens).print(
+                title=f"Best completions @ n={n+1}"
+            )
+
+        # pick the best of finished and still-running beams.
+        live_tokens = F.pad(tokens, (0, max_len - tokens.size(1)), value=pad)
+        scores_tensor, best = torch.cat(
+            [fin_scores, scores / tokens.size(1) ** length_penalty], dim=1
+        ).topk(N, dim=-1)
+        tokens_tensor = torch.cat(
+            [fin_tokens, live_tokens.view(B, K, max_len)], dim=1
+        ).gather(1, best[..., None].expand(-1, -1, max_len))
+        seq_len = int((tokens_tensor != pad).any(0).any(0).nonzero().max()) + 1
+        tokens_tensor = tokens_tensor[..., :seq_len]
+
+        log.info("scores", sc=scores_tensor.shape, tok=tokens_tensor.shape)
+        return scores_tensor, tokens_tensor

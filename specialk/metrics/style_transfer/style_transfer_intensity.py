@@ -28,7 +28,7 @@ Usage:
 
 import numpy as np
 from globals import MODEL_TO_PARAM_NAMES, MODEL_TO_PARAMS
-from pyemd import emd
+from ot import emd2
 from utils import calculate_correlations, get_val_as_str, load_turk_scores
 
 ASPECT = "style_transfer_intensity"
@@ -68,7 +68,7 @@ def calculate_emd(input_distribution, output_distribution):
 
     N = len(input_distribution)
     distance_matrix = np.ones((N, N))
-    return emd(input_distribution, output_distribution, distance_matrix)
+    return emd2(input_distribution, output_distribution, distance_matrix)
 
 
 def account_for_direction(

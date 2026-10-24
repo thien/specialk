@@ -1,13 +1,21 @@
 name: Run Lightweight Tests
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
 
 jobs:
   lightweight-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     strategy:
       fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
     steps:
     - uses: actions/checkout@v4
     - name: Install uv
@@ -15,10 +23,8 @@ jobs:
       with:
         version: 'latest'
     - name: Install Project
-      run: uv sync
+      run: uv sync --locked
     - name: Download misc. Dependencies
-      run: uv run python -m nltk.downloader cmudict averaged_perceptron_tagger
+      run: make download-deps
     - name: Run Lightweight Tests
-      run: |
-        export PYTHONPATH=$PYTHONPATH:$(pwd)
-        uv run pytest -v -m "not heavyweight"
+      run: uv run pytest -v -m "not heavyweight"

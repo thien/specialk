@@ -1711,15 +1711,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pyfakefs"
-version = "5.6.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/11/28/661bbbd3479b80b1185e4dfb8373fdf9191dedb9725765bcbf412ceaeb6c/pyfakefs-5.6.0.tar.gz", hash = "sha256:7a549b32865aa97d8ba6538285a93816941d9b7359be2954ac60ec36b277e879", size = 207911, upload-time = "2024-07-12T19:25:16.544Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/66/e0/024f81edd4f3550d5227c977860379b4dba95384e0f742d280056bc80ce3/pyfakefs-5.6.0-py3-none-any.whl", hash = "sha256:1a45bba8615323ec29d65929d32dc66d7b59a1e60a02109950440edb0486c539", size = 222168, upload-time = "2024-07-12T19:25:13.907Z" },
-]
-
-[[package]]
 name = "pygments"
 version = "2.21.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2306,7 +2297,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "pyfakefs" },
     { name = "pytest" },
     { name = "pytest-watch" },
     { name = "pytest-xdist" },
@@ -2360,7 +2350,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "pyfakefs", specifier = "==5.6.0" },
     { name = "pytest", specifier = "==9.1.1" },
     { name = "pytest-watch", specifier = "==4.2.0" },
     { name = "pytest-xdist", specifier = "==3.8.0" },

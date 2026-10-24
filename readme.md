@@ -23,6 +23,10 @@ This has been tested to run on both Linux and macOS Sequoia and above, and has n
 
 To train different models, see `specialk/trainers/*.py` for the different training use cases.
 
+### Generating
+
+To translate with a trained model, see [doc/generation.md](doc/generation.md).
+
 ## Datasets
 
 To make life easier, I've set up a one-command auto running program that'll deal with downloading all the necessary machine-translation datasets needed to make your model. You'll need `wget` however.

@@ -9,6 +9,7 @@ from typing import Dict, List, Tuple, Union
 import evaluate
 import gensim.downloader as api
 import numpy as np
+from filelock import FileLock
 from gensim.corpora.dictionary import Dictionary
 from gensim.models.keyedvectors import KeyedVectors
 from nltk import pos_tag, word_tokenize
@@ -448,15 +449,18 @@ class EarthMoverDistance(AlignmentMetric):
         path_w2v: Path = cache_dir / "w2v.bin"
 
         log.info("Loading GloVe Vectors")
-        if path_w2v.exists():
-            model = KeyedVectors.load_word2vec_format(path_w2v, binary=True)
-            log.info("Loaded GloVe Vectors from cache.", path=str(path_w2v))
-        else:
-            # download glove from the internet, cache it as a binary.
-            model: KeyedVectors = api.load("glove-twitter-200")
-            cache_dir.mkdir(exist_ok=True)
-            model.save(path_w2v, binary=True)
-            log.info("Created GloVe cache.", path=str(path_w2v))
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        # gensim's downloader writes through a shared temp directory and is not
+        # concurrency-safe, so serialize the cold-cache path across processes.
+        with FileLock(str(cache_dir / "glove.lock")):
+            if path_w2v.exists():
+                model = KeyedVectors.load_word2vec_format(path_w2v, binary=True)
+                log.info("Loaded GloVe Vectors from cache.", path=str(path_w2v))
+            else:
+                # download glove from the internet, cache it as a binary.
+                model: KeyedVectors = api.load("glove-twitter-200")
+                model.save_word2vec_format(path_w2v, binary=True)
+                log.info("Created GloVe cache.", path=str(path_w2v))
         return model
 
     @lru_cache

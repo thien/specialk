@@ -28,6 +28,7 @@ from torch.utils.data import DataLoader, Dataset as TorchDataset
 
 from datasets import Dataset, Value, load_dataset
 from specialk.core.constants import LOGGING_DIR, LOGGING_PERF_NAME, PROJECT_DIR
+from specialk.core.experiment import add_logger_args, init_logger
 from specialk.core.utils import check_torch_device, log, namespace_to_dict
 from specialk.models.classifier.models import (
     BERTClassifier,
@@ -247,30 +248,6 @@ def load_tokenized_classification_dataset(
         num_workers=n_workers,
     )
     return train_loader, val_loader, sequence_length, vocabulary_size
-
-
-def init_logger(args: argparse.Namespace, project_name: str, params: dict):
-    """Log to W&B by default, or to TensorBoard with ``--logger tensorboard``."""
-    if args.logger == "wandb":
-        from lightning.pytorch.loggers import WandbLogger
-
-        name = args.run_name
-        if name is None and not args.wandb_run_id:
-            name = project_name.replace("/", "-")
-        extra = {}
-        if args.wandb_run_id:
-            extra = {"id": args.wandb_run_id, "resume": "allow"}
-        return WandbLogger(
-            project=args.wandb_project,
-            group=args.wandb_group,
-            name=name,
-            save_dir=PROJECT_DIR,
-            config=params,
-            **extra,
-        )
-    logger = TensorBoardLogger(LOGGING_DIR, name=project_name)
-    logger.log_hyperparams(params=params)
-    return logger
 
 
 def main_new(args):
@@ -552,32 +529,7 @@ def get_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=None,
         help="resume from a checkpoint, or from the run's last.ckpt when no path is given",
     )
-    parser.add_argument(
-        "--logger",
-        choices=["wandb", "tensorboard"],
-        default="wandb",
-        help="experiment logger",
-    )
-    parser.add_argument(
-        "--wandb-project",
-        default="specialk",
-        help="W&B project to log to",
-    )
-    parser.add_argument(
-        "--wandb-group",
-        default="classifiers",
-        help="W&B group for the run",
-    )
-    parser.add_argument(
-        "--run-name",
-        default=None,
-        help="logger run name (default: dataset and model name)",
-    )
-    parser.add_argument(
-        "--wandb-run-id",
-        default=None,
-        help="continue an existing W&B run when resuming",
-    )
+    add_logger_args(parser, "classifiers")
     parser.add_argument(
         "--n-workers",
         type=int,

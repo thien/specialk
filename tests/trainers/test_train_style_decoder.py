@@ -77,7 +77,9 @@ def test_cli_smoke(tmp_path, monkeypatch):
     save_checkpoint(make_cnn_classifier(tokenizer), classifier_checkpoint)
 
     # Keep TensorBoard events out of the repo.
-    monkeypatch.setattr(train_style_decoder, "LOGGING_DIR", tmp_path / "tb_logs")
+    monkeypatch.setattr(
+        "specialk.core.experiment.LOGGING_DIR", tmp_path / "tb_logs"
+    )
     checkpoint_dir = tmp_path / "ckpt"
 
     trainer = train_style_decoder.main(
@@ -115,6 +117,8 @@ def test_cli_smoke(tmp_path, monkeypatch):
             str(STYLE_FIXTURE),
             "--source-column",
             "text_fr",
+            "--logger",
+            "tensorboard",
         ]
     )
 

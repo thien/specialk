@@ -34,6 +34,7 @@ from specialk.core.constants import (
     SEED,
     TRANSFORMER,
 )
+from specialk.core.experiment import add_logger_args, init_logger
 from specialk.core.utils import log
 from specialk.models.mt_model import RNNModule, TransformerModule
 from specialk.models.transformer.torch.pytorch_transformer import (
@@ -210,6 +211,7 @@ def train(
     seed: int = SEED,
     train_path: Optional[Union[str, Path]] = None,
     valid_path: Optional[Union[str, Path]] = None,
+    logger_options: Optional[argparse.Namespace] = None,
 ) -> pl.Trainer:
     """Train a model and return the Lightning trainer."""
     pl.seed_everything(seed, workers=True)
@@ -303,13 +305,22 @@ def train(
     }
     log.info("Hyperparameters initialised.", hyperparams=logging_hyperparameters)
 
-    logger = TensorBoardLogger(LOGGING_DIR, name=f"{bundle.task_name}/{task.name}")
-    logger.log_hyperparams(params=logging_hyperparameters)
+    if logger_options is not None:
+        logger = init_logger(
+            logger_options, f"{bundle.task_name}/{task.name}", logging_hyperparameters
+        )
+    else:
+        logger = TensorBoardLogger(
+            LOGGING_DIR, name=f"{bundle.task_name}/{task.name}"
+        )
+        logger.log_hyperparams(params=logging_hyperparameters)
 
     profiler = None
     if prod:
         # profiling will slow prod down.
-        profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
+        profiler = AdvancedProfiler(
+            dirpath=logger.log_dir or LOGGING_DIR, filename=LOGGING_PERF_NAME
+        )
 
     trainer = pl.Trainer(
         accelerator=accelerator,
@@ -407,6 +418,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=SEED)
     parser.add_argument("--train-path", type=Path, default=None)
     parser.add_argument("--valid-path", type=Path, default=None)
+    add_logger_args(parser, "translation")
     return parser
 
 
@@ -437,6 +449,7 @@ def main(argv: Optional[Sequence[str]] = None) -> pl.Trainer:
         seed=args.seed,
         train_path=args.train_path,
         valid_path=args.valid_path,
+        logger_options=args,
     )
 
 

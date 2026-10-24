@@ -22,12 +22,12 @@ from pathlib import Path
 
 import lightning.pytorch as pl
 from lightning.pytorch.callbacks import ModelCheckpoint
-from lightning.pytorch.loggers import TensorBoardLogger
 from peft import LoraConfig, get_peft_model
 from peft.utils.peft_types import TaskType
 from torch import Tensor
 
-from specialk.core.constants import LOGGING_DIR, SEED, VAL_LOSS
+from specialk.core.constants import SEED, VAL_LOSS
+from specialk.core.experiment import add_logger_args, init_logger
 from specialk.core.utils import log
 from specialk.models.classifier.models import BERTClassifier, CNNClassifier
 from specialk.models.style_decoder import (
@@ -245,25 +245,23 @@ def train(args: argparse.Namespace) -> pl.Trainer:
         vocabulary_size=mt_model.vocabulary_size,
     )
 
-    logger = TensorBoardLogger(
-        LOGGING_DIR, name=f"style_decoder/{args.dataset}_{args.target_label}"
-    )
-    logger.log_hyperparams(
-        params={
-            "batch_size": args.batch_size,
-            "dataset": args.dataset,
-            "target_label": args.target_label,
-            "seq2seq": args.seq2seq,
-            "lora_r": args.lora_r,
-            "mt_checkpoint": str(args.mt_checkpoint),
-            "classifier_checkpoint": str(args.classifier_checkpoint),
-            "classifier": args.classifier,
-            "lambda_class": args.lambda_class,
-            "tau_start": args.tau_start,
-            "tau_end": args.tau_end,
-            "learning_rate": args.learning_rate,
-            "max_epochs": args.max_epochs,
-        }
+    params = {
+        "batch_size": args.batch_size,
+        "dataset": args.dataset,
+        "target_label": args.target_label,
+        "seq2seq": args.seq2seq,
+        "lora_r": args.lora_r,
+        "mt_checkpoint": str(args.mt_checkpoint),
+        "classifier_checkpoint": str(args.classifier_checkpoint),
+        "classifier": args.classifier,
+        "lambda_class": args.lambda_class,
+        "tau_start": args.tau_start,
+        "tau_end": args.tau_end,
+        "learning_rate": args.learning_rate,
+        "max_epochs": args.max_epochs,
+    }
+    logger = init_logger(
+        args, f"style_decoder/{args.dataset}_{args.target_label}", params
     )
 
     checkpoint_dir = (
@@ -387,6 +385,7 @@ def build_parser() -> argparse.ArgumentParser:
             "publications to fr_text"
         ),
     )
+    add_logger_args(parser, "style-decoder")
     return parser
 
 

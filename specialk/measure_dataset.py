@@ -23,16 +23,16 @@ from nltk.translate.bleu_score import sentence_bleu
 
 # for emd
 from ot import emd2
-from rouge import Rouge
 from tqdm import tqdm
 
 from specialk.core.sentenciser import *
 from specialk.core.utils import batch_compute, get_len
+from specialk.metrics import ROUGE, Meteor
 
 warnings.filterwarnings("ignore")
 
-# load rouge
-rouge_comp = Rouge()
+# load rouge and meteor
+rouge_comp = ROUGE()
 meteor = Meteor()
 
 
@@ -214,17 +214,14 @@ class Metrics:
 
     def rouge(self, sequences):
         """
-        Calculates ROUGE scores (uses an independent library.)
+        Calculates ROUGE-Lsum.
         """
         reference, hypothesis = self.prep(sequences, tokenise=False)
-        return rouge_comp.get_scores(hypothesis, reference)[-1]
+        return rouge_comp.compute(predictions=[hypothesis], references=[reference])
 
     def meteor(self, sequences):
         reference, hypothesis = self.prep(sequences, tokenise=False)
-        # could try NLTK
-        score = meteor.compute_score(hypothesis, reference)
-        print(score)
-        return None
+        return meteor.compute(predictions=[hypothesis], references=[reference])
 
     # style transfer intensity
     # content preservation

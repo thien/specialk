@@ -183,6 +183,9 @@ def save(args):
 
     trainer.save_checkpoint(args.checkpoint)
 
+    if args.adapter:
+        module.save_adapter(args.adapter)
+
     reference = {
         "peft": bool(module.peft_config),
         "logits": logits.detach().cpu(),
@@ -194,10 +197,7 @@ def save(args):
     torch.save(reference, args.reference)
 
 
-def load(args):
-    reference = torch.load(args.reference, map_location="cpu", weights_only=True)
-    module_cls = {"bert": BERTClassifier, "marian": MarianMTModule}[args.arch]
-    module = module_cls.load_from_checkpoint(args.checkpoint, map_location="cpu")
+def _compare(module, reference, args):
     module.to(args.device)
     module.eval()
 
@@ -227,21 +227,38 @@ def load(args):
         json.dump(result, handle)
 
 
+def load(args):
+    reference = torch.load(args.reference, map_location="cpu", weights_only=True)
+    module_cls = {"bert": BERTClassifier, "marian": MarianMTModule}[args.arch]
+    module = module_cls.load_from_checkpoint(args.checkpoint, map_location="cpu")
+    _compare(module, reference, args)
+
+
+def load_adapter(args):
+    reference = torch.load(args.reference, map_location="cpu", weights_only=True)
+    module_cls = {"bert": BERTClassifier, "marian": MarianMTModule}[args.arch]
+    module = module_cls.from_adapter(args.adapter, name="checkpoint-test")
+    _compare(module, reference, args)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("phase", choices=["save", "load"])
+    parser.add_argument("phase", choices=["save", "load", "load-adapter"])
     parser.add_argument("--arch", required=True, choices=["bert", "marian"])
     parser.add_argument("--device", required=True)
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--reference", required=True)
     parser.add_argument("--result")
+    parser.add_argument("--adapter")
     parser.add_argument("--peft", action="store_true")
     args = parser.parse_args()
 
     if args.phase == "save":
         save(args)
-    else:
+    elif args.phase == "load":
         load(args)
+    else:
+        load_adapter(args)
 
 
 if __name__ == "__main__":

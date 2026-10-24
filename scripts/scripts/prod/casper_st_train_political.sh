@@ -18,7 +18,6 @@ for p in democratic republican
         -valid_tgt $POLDATA_DIR$p"_only.dev.en" \
         -save_name "models/nmt_fren_goldmaster_bpe_"$p 
 done
-python3 core/telegram.py -m "finished rebasing political datasets."
 
 train_st_model () {
     POLITICAL_CLASS=$1
@@ -55,7 +54,6 @@ train_st_model () {
         -cuda \
         -multi_gpu
 
-    python3 core/telegram.py -m "[Casper] Finished style-transfer training for $POLITICAL_DATA"
 }
 
 train_st_model "democratic"

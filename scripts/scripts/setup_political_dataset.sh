@@ -59,37 +59,31 @@ SUBJ="../datasets/political_data/democratic_only.dev"
 
 python3 translate.py -model $MODEL -checkpoint_encoder $ENFR_BASEDIR$ENCODER -checkpoint_decoder $ENFR_BASEDIR$DECODER -vocab $VOCAB -src $SUBJ$EN -output $SUBJ$FR -batch_size $BATCHSIZE -beam_size $BEAMSIZE -cuda
 
-python3 core/telegram.py -m "Translated "$SUBJ$EN
 
 SUBJ="../datasets/political_data/democratic_only.test"
 
 python3 translate.py -model $MODEL -checkpoint_encoder $ENFR_BASEDIR$ENCODER -checkpoint_decoder $ENFR_BASEDIR$DECODER -vocab $VOCAB -src $SUBJ$EN -output $SUBJ$FR -batch_size $BATCHSIZE -beam_size $BEAMSIZE -cuda
 
-python3 core/telegram.py -m "Translated "$SUBJ$EN
 
 SUBJ="../datasets/political_data/democratic_only.train"
 
 python3 translate.py -model $MODEL -checkpoint_encoder $ENFR_BASEDIR$ENCODER -checkpoint_decoder $ENFR_BASEDIR$DECODER -vocab $VOCAB -src $SUBJ$EN -output $SUBJ$FR -batch_size $BATCHSIZE -beam_size $BEAMSIZE -cuda
 
-python3 core/telegram.py -m "Translated "$SUBJ$EN
 
 SUBJ="../datasets/political_data/republican_only.dev"
 
 python3 translate.py -model $MODEL -checkpoint_encoder $ENFR_BASEDIR$ENCODER -checkpoint_decoder $ENFR_BASEDIR$DECODER -vocab $VOCAB -src $SUBJ$EN -output $SUBJ$FR -batch_size $BATCHSIZE -beam_size $BEAMSIZE -cuda
 
-python3 core/telegram.py -m "Translated "$SUBJ$EN
 
 SUBJ="../datasets/political_data/republican_only.test"
 
 python3 translate.py -model $MODEL -checkpoint_encoder $ENFR_BASEDIR$ENCODER -checkpoint_decoder $ENFR_BASEDIR$DECODER -vocab $VOCAB -src $SUBJ$EN -output $SUBJ$FR -batch_size $BATCHSIZE -beam_size $BEAMSIZE -cuda
 
-python3 core/telegram.py -m "Translated "$SUBJ$EN
 
 SUBJ="../datasets/political_data/republican_only.train"
 
 python3 translate.py -model $MODEL -checkpoint_encoder $ENFR_BASEDIR$ENCODER -checkpoint_decoder $ENFR_BASEDIR$DECODER -vocab $VOCAB -src $SUBJ$EN -output $SUBJ$FR -batch_size $BATCHSIZE -beam_size $BEAMSIZE -cuda
 
-python3 core/telegram.py -m "Translated "$SUBJ$EN
 
 
 # # once we have the translated data then we can go ahead

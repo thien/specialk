@@ -1811,18 +1811,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pytelegrambotapi"
-version = "4.20.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "requests" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/fb/9a/7acf5767fc77108672017fe79b745d2b63e650f0c22634c5a2c2d8b4c6df/pytelegrambotapi-4.20.0.tar.gz", hash = "sha256:97acd88723e6568ee5dbfa793eab64f0510c9a3b0a6dd571e26556e8c66b0a07", size = 1310016, upload-time = "2024-06-22T10:17:09.367Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/2b/12/3c6232c78345c0b86e40c27f8f0193ad2f65665739504b4d21efc9f98fb2/pytelegrambotapi-4.20.0-py3-none-any.whl", hash = "sha256:f0161a1f54c2066aead22ef47241d7ae153f827fc22e7bab43c6e7911d129f56", size = 248079, upload-time = "2024-06-22T10:17:03.303Z" },
-]
-
-[[package]]
 name = "pytest"
 version = "9.1.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2373,7 +2361,6 @@ dependencies = [
     { name = "peft" },
     { name = "pot" },
     { name = "pycocoevalcap" },
-    { name = "pytelegrambotapi" },
     { name = "pyyaml" },
     { name = "rich" },
     { name = "rouge-score" },
@@ -2426,7 +2413,6 @@ requires-dist = [
     { name = "peft", specifier = "==0.21.2" },
     { name = "pot", specifier = "==0.9.7.post1" },
     { name = "pycocoevalcap", specifier = "==1.2" },
-    { name = "pytelegrambotapi", specifier = "==4.20.0" },
     { name = "pyyaml", specifier = "==6.0.2" },
     { name = "rich", specifier = "==13.7.1" },
     { name = "rouge-score", specifier = "==0.1.2" },

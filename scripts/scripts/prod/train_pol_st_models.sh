@@ -18,7 +18,6 @@ for p in democratic republican
         -save_name $MODELDIR"gm_mk2_rebase_"$p \
         -max_seq_len $(($seq_len-2))
 done
-python3 core/telegram.py -m "finished rebasing political datasets."
 
 
 # train classifier
@@ -87,7 +86,6 @@ train_st_model () {
         -label_target $POLITICAL_CLASS \
         -classifier_model $MODELDIR"/"$cnn_model_name".pt"
 
-    python3 core/telegram.py -m "[Casper] Finished style-transfer training for $POLITICAL_DATA"
 }
 
 train_st_model "democratic"

@@ -61,7 +61,6 @@ python3 train.py \
     -cuda \
     -multi_gpu
 
-python3 core/telegram.py -m "[Snorlax] Finished training en-fr models."
 
 FREN_DIRNAME="enfr_bpe_filtered_final"
 
@@ -79,7 +78,6 @@ python3 train.py \
     -cuda \
     -multi_gpu
 
-python3 core/telegram.py -m "[Snorlax] Finished training fr-en models."
 
 # # Back-Translate nmt models.
 
@@ -100,7 +98,6 @@ python3 core/telegram.py -m "[Snorlax] Finished training fr-en models."
 #     -output $ENFR_BASEDIR$OUTPUT \
 #     -cuda
 
-# python3 core/telegram.py -m "[Snorlax] Finished translating en-fr models."
 
 # # created fr->en
 # python3 translate.py \
@@ -112,7 +109,6 @@ python3 core/telegram.py -m "[Snorlax] Finished training fr-en models."
 #     -output $FREN_BASEDIR$OUTPUT \
 #     -cuda
 
-# python3 core/telegram.py -m "[Snorlax] Finished translating fr-en (backtranslation) models."
 
 # # baseline fr->en
 # python3 translate.py \
@@ -124,4 +120,3 @@ python3 core/telegram.py -m "[Snorlax] Finished training fr-en models."
 #     -output $FREN_BASEDIR$OUTPUT \
 #     -cuda
 
-# python3 core/telegram.py -m "[Snorlax] Finished translating fr-en (source) models."

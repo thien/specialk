@@ -20,6 +20,8 @@ from specialk.models.transformer.hf_transformer import MarianMTModule
 from specialk.models.transformer.torch.pytorch_transformer import (
     PyTorchTransformerModel,
     PyTorchTransformerModule,
+    TransformerEncoder as SpecialKTransformerEncoder,
+    TransformerEncoderLayer as SpecialKTransformerEncoderLayer,
 )
 
 # below are being used, but the linter won't agree with that
@@ -47,6 +49,66 @@ SEQUENCE_LENGTH = 50
 
 torch.manual_seed(1337)
 torch.use_deterministic_algorithms(True)
+
+
+def test_transformer_encoder_matches_reference():
+    """Disabling nested tensors must not change encoder behaviour."""
+    reference_layer = nn.TransformerEncoderLayer(
+        d_model=8, nhead=2, dim_feedforward=16, dropout=0.0, batch_first=True
+    )
+    reference = nn.TransformerEncoder(
+        reference_layer, num_layers=2, enable_nested_tensor=False
+    )
+
+    layer = SpecialKTransformerEncoderLayer(
+        d_model=8, nhead=2, dim_feedforward=16, dropout=0.0, batch_first=True
+    )
+    encoder = SpecialKTransformerEncoder(layer, num_layers=2)
+
+    assert encoder.use_nested_tensor is False
+    assert reference.state_dict().keys() == encoder.state_dict().keys()
+    encoder.load_state_dict(reference.state_dict())
+    reference.eval()
+    encoder.eval()
+
+    src = torch.randn(3, 5, 8)
+    src_mask = torch.zeros(5, 5, dtype=torch.bool)
+    src_key_padding_mask = torch.tensor(
+        [
+            [False, False, False, True, True],
+            [False, False, False, False, False],
+            [False, True, True, True, True],
+        ]
+    )
+
+    with torch.no_grad():
+        expected = reference(
+            src, mask=src_mask, src_key_padding_mask=src_key_padding_mask
+        )
+        actual = encoder(src, mask=src_mask, src_key_padding_mask=src_key_padding_mask)
+
+    torch.testing.assert_close(actual, expected, atol=1e-5, rtol=1e-5)
+
+
+def test_transformer_encoder_skips_nested_tensor_fastpath(monkeypatch):
+    """The MPS-unsupported operator must not be reached, even in eval mode."""
+
+    def fail(*args, **kwargs):
+        raise AssertionError("nested-tensor fastpath should be disabled")
+
+    monkeypatch.setattr(torch, "_nested_tensor_from_mask_left_aligned", fail)
+
+    layer = SpecialKTransformerEncoderLayer(
+        d_model=8, nhead=2, dim_feedforward=16, dropout=0.0, batch_first=True
+    )
+    encoder = SpecialKTransformerEncoder(layer, num_layers=1)
+    encoder.eval()
+
+    src = torch.randn(2, 5, 8)
+    src_key_padding_mask = torch.zeros(2, 5, dtype=torch.bool)
+
+    with torch.no_grad():
+        encoder(src, src_key_padding_mask=src_key_padding_mask)
 
 
 @pytest.fixture(scope="session", autouse=True)

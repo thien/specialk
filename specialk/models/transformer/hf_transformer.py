@@ -13,7 +13,7 @@ from typing import Callable, List, Optional, Tuple, Union
 
 import safetensors
 import torch
-from peft.mapping import get_peft_model
+from peft import get_peft_model
 from peft.peft_model import PeftModel
 from peft.tuners.lora.config import LoraConfig
 from peft.utils.peft_types import TaskType

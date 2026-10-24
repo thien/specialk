@@ -14,15 +14,15 @@ dependencies = [
     "fasttext @ git+https://github.com/facebookresearch/fastText.git@1142dc4c4ecbc19cc16eee5cdd28472e689267e6",
     "ftfy==6.2.3",
     "gensim==4.3.2",
-    "huggingface-hub==0.23.4",
+    "huggingface-hub==0.36.2",
     "jaxtyping==0.2.31",
     "joblib==1.4.2",
-    "lightning==2.6.1",
+    "lightning==2.6.6",
     "matplotlib==3.9.2",
-    "nltk==3.8.1",
+    "nltk==3.10.4",
     "numpy==1.26.4",
     "pandas==2.2.2",
-    "peft==0.12.0",
+    "peft==0.21.2",
     "pot==0.9.3",
     "pyemd==1.0.0",
     "pytelegrambotapi==4.20.0",
@@ -30,11 +30,11 @@ dependencies = [
     "rich==13.7.1",
     "rouge-score==0.1.2",
     "sacremoses==0.1.1",
-    "safetensors==0.4.3",
+    "safetensors==0.8.0",
     "schedulefree==1.2.7",
     "scikit-learn==1.5.0",
     "scipy==1.12.0",
-    "sentencepiece==0.2.0",
+    "sentencepiece==0.2.2",
     "setuptools<81",
     "spacy==3.7.5",
     "structlog==24.2.0",
@@ -44,7 +44,7 @@ dependencies = [
     "torch==2.14.1",
     "torchmetrics==1.4.0.post0",
     "tqdm==4.66.4",
-    "transformers==4.43.3",
+    "transformers==4.57.6",
 ]
 readme = "readme.md"
 requires-python = ">=3.10,<3.13"
@@ -55,7 +55,7 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "pytest==8.2.2",
+    "pytest==9.1.1",
     "pytest-watch==4.2.0",
     "pytest-xdist==3.8.0",
     "pyfakefs==5.6.0",
@@ -63,6 +63,7 @@ dev = [
 
 [tool.uv]
 managed = true
+constraint-dependencies = ["pyarrow==17.0.0"]
 
 [tool.hatch.metadata]
 allow-direct-references = true

@@ -22,7 +22,7 @@ from nltk.sentiment.vader import SentimentIntensityAnalyzer
 from nltk.translate.bleu_score import sentence_bleu
 
 # for emd
-from pyemd import emd
+from ot import emd2
 from rouge import Rouge
 from tqdm import tqdm
 
@@ -139,8 +139,7 @@ class Metrics:
         Uses spacy tokenisers input.
         """
         # based on https://github.com/RaRe-Technologies/gensim/blob/18bcd113fd5ed31294a24c7274fcb95df001f88a/gensim/models/keyedvectors.py
-        # If pyemd C extension is available, import it.
-        # If pyemd is attempted to be used, but isn't installed, ImportError will be raised in wmdistance
+        # The EMD is solved with POT (`ot.emd2`).
 
         ref_tokens, hyp_tokens = self.prep(sequences, tokenise=True)
 
@@ -198,7 +197,7 @@ class Metrics:
         d1, d2 = nbow(document1), nbow(document2)
 
         # Compute WMD.
-        return {"value": emd(d1, d2, distance_matrix)}
+        return {"value": emd2(d1, d2, distance_matrix)}
 
     def bleu(self, sequences):
         """

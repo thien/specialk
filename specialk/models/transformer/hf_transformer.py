@@ -147,3 +147,18 @@ class MarianMTModule(NMTModule):
         return peft_utils.load_from_checkpoint(
             cls, checkpoint_path, map_location, weights_only
         )
+
+    def save_adapter(self, save_directory):
+        peft_utils.save_adapter(self, save_directory)
+
+    @classmethod
+    def from_adapter(
+        cls,
+        adapter_path,
+        name: str,
+        model_base_name: Optional[str] = None,
+        **kwargs,
+    ):
+        return peft_utils.load_adapter(
+            cls, adapter_path, name, model_base_name, **kwargs
+        )

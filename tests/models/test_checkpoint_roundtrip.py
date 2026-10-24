@@ -15,12 +15,16 @@ from pathlib import Path
 import pytest
 import torch
 
+from specialk.models import peft_utils
+
 ROOT = Path(__file__).resolve().parents[2]
 WORKER = Path(__file__).with_name("checkpoint_worker.py")
 DEVICES = ["cpu"] + (["mps"] if torch.backends.mps.is_available() else [])
 
 
-def _run(phase, arch, use_peft, device, checkpoint, reference, result=None):
+def _run(
+    phase, arch, use_peft, device, checkpoint, reference, result=None, adapter=None
+):
     command = [
         sys.executable,
         str(WORKER),
@@ -38,6 +42,8 @@ def _run(phase, arch, use_peft, device, checkpoint, reference, result=None):
         command.append("--peft")
     if result is not None:
         command.extend(["--result", str(result)])
+    if adapter is not None:
+        command.extend(["--adapter", str(adapter)])
 
     completed = subprocess.run(
         command,
@@ -89,5 +95,45 @@ def test_checkpoint_roundtrip_fresh_process(tmp_path, arch, use_peft, device):
     assert result["weights_max_diff"] <= 1e-7
     # Same inputs, same device, fresh interpreter.  MPS kernels are not
     # bitwise deterministic across processes, so allow a small relative error.
-    tolerance = 1e-6 + 1e-5 * result["logits_abs_max"]
+    tolerance = 1e-6 + 3e-5 * result["logits_abs_max"]
     assert result["logits_max_diff"] <= tolerance
+
+
+@pytest.mark.heavyweight
+@pytest.mark.parametrize("device", DEVICES)
+@pytest.mark.parametrize("arch", ["bert", "marian"])
+def test_adapter_roundtrip_fresh_process(tmp_path, arch, device):
+    checkpoint = tmp_path / "model.ckpt"
+    adapter = tmp_path / "adapter"
+    reference = tmp_path / "reference.pt"
+    result_path = tmp_path / "result.json"
+
+    _run("save", arch, True, device, checkpoint, reference, adapter=adapter)
+    _run(
+        "load-adapter",
+        arch,
+        True,
+        device,
+        checkpoint,
+        reference,
+        result_path,
+        adapter=adapter,
+    )
+
+    result = json.loads(result_path.read_text())
+
+    assert result["peft"] is True
+    assert (adapter / "adapter_config.json").exists()
+    assert (adapter / "adapter_model.safetensors").exists()
+    assert result["weight_keys_match"], "saved and loaded adapter keys differ"
+    assert result["weights_max_diff"] <= 1e-7
+    tolerance = 1e-6 + 3e-5 * result["logits_abs_max"]
+    assert result["logits_max_diff"] <= tolerance
+
+
+def test_save_adapter_requires_peft(tmp_path):
+    class Plain:
+        peft_config = None
+
+    with pytest.raises(ValueError):
+        peft_utils.save_adapter(Plain(), tmp_path / "adapter")

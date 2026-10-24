@@ -69,8 +69,12 @@ Run the lightweight suite with:
 
     make tests-light
 
-Run everything with:
+Run the full suite with:
 
     make tests
+
+Benchmarks run on their own, serially, because they saturate the GPU:
+
+    make tests-bench
 
 You can also call `uv run pytest` directly. `pytest-watch` works as well.

@@ -1,8 +1,8 @@
 """Training entry point for the style decoder.
 
 Fine-tunes a saved seq2seq checkpoint so that its translations are classified
-as the target style. The encoder and the classifier stay frozen; only the
-decoder and the vocabulary mapping learn.
+as the target style. Training updates the decoder and the vocabulary mapping.
+The encoder and classifier stay frozen.
 
 Example:
     python -m specialk.trainers.train_style_decoder --dataset political \\
@@ -193,8 +193,8 @@ def train(args: argparse.Namespace) -> pl.Trainer:
         gradient_clip_val=0.5,
         gradient_clip_algorithm="norm",
         callbacks=[
-            # Every epoch is kept: the thesis found three before overfitting,
-            # and the best one isn't known until the runs are compared.
+            # Every epoch is kept because the thesis found three before
+            # overfitting.
             ModelCheckpoint(
                 dirpath=checkpoint_dir, monitor=VAL_LOSS, save_top_k=-1
             ),

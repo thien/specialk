@@ -4,6 +4,9 @@ Fine-tunes a saved seq2seq checkpoint so that its translations are classified
 as the target style. Training updates the decoder and the vocabulary mapping.
 The encoder and classifier stay frozen.
 
+Pass ``--seq2seq marian`` for a HuggingFace Marian checkpoint. ``--lora-r``
+then trains a LoRA adapter on the decoder's cross-attention modules.
+
 Example:
     python -m specialk.trainers.train_style_decoder --dataset political \\
         --target-label 1 --mt-checkpoint checkpoints/mt.ckpt \\
@@ -20,6 +23,9 @@ from pathlib import Path
 import lightning.pytorch as pl
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
+from peft import LoraConfig, get_peft_model
+from peft.utils.peft_types import TaskType
+from torch import Tensor
 
 from specialk.core.constants import LOGGING_DIR, SEED, VAL_LOSS
 from specialk.core.utils import log
@@ -29,6 +35,8 @@ from specialk.models.style_decoder import (
     StyleBackTranslationModelWithBERT,
     StyleBackTranslationModelWithCNN,
 )
+from specialk.models.tokenizer import HuggingFaceVocabulary
+from specialk.models.transformer.hf_transformer import MarianMTModule
 from specialk.models.transformer.torch.pytorch_transformer import (
     PyTorchTransformerModule,
 )
@@ -41,6 +49,7 @@ from specialk.trainers.train import _int_or_float
 
 DATASETS = tuple(sorted(STYLE_DATASETS))
 CLASSIFIERS = ("cnn", "bert")
+SEQ2SEQ = ("transformer", "marian")
 
 
 def load_seq2seq(checkpoint_path: str | Path) -> PyTorchTransformerModule:
@@ -55,6 +64,69 @@ def load_seq2seq(checkpoint_path: str | Path) -> PyTorchTransformerModule:
     )
 
 
+def load_marian(
+    checkpoint_path: str | Path, lora_r: int | None = None
+) -> MarianMTModule:
+    """Load a Marian checkpoint and attach LoRA when ``lora_r`` is set.
+
+    A checkpoint that already carries an adapter keeps it; ``--lora-r`` then
+    has to match the adapter's rank. A checkpoint without adapters gets a new
+    one on the decoder's cross-attention modules.
+    """
+    model = MarianMTModule.load_from_checkpoint(
+        checkpoint_path, map_location="cpu", weights_only=False
+    )
+    if lora_r is None:
+        return model
+
+    if model.peft_config is not None:
+        if model.peft_config.r != lora_r:
+            raise ValueError(
+                f"The checkpoint has a LoRA adapter of rank "
+                f"{model.peft_config.r}, but --lora-r is {lora_r}"
+            )
+        return model
+
+    peft_config = LoraConfig(
+        task_type=TaskType.SEQ_2_SEQ_LM,
+        r=lora_r,
+        lora_alpha=4 * lora_r,
+        lora_dropout=0.1,
+        bias="none",
+        target_modules=model.get_lora_config_modules(),
+    )
+    model.model = get_peft_model(model.model, peft_config, adapter_name=model.name)
+    model.peft_config = peft_config
+    model._freeze_non_lora_weights()
+    log.info("Attached a LoRA adapter to the Marian decoder", rank=lora_r)
+    return model
+
+
+class MarianTargetVocabulary(HuggingFaceVocabulary):
+    """Encodes English targets with Marian's target sentencepiece model."""
+
+    def to_tensor(self, text: str | list[str]) -> Tensor:
+        return self.tokenizer(
+            text_target=text,
+            padding="max_length",
+            truncation=True,
+            max_length=self.max_length,
+            return_tensors="pt",
+        )["input_ids"]
+
+
+def marian_tokenizers(
+    model: MarianMTModule,
+) -> tuple[HuggingFaceVocabulary, MarianTargetVocabulary]:
+    """Source and target tokenizers that ``init_dataloader`` can call ``to_tensor`` on."""
+    options = {
+        "name": model.name,
+        "pretrained_model_name_or_path": model.model_base_name,
+        "max_length": model.sequence_length,
+    }
+    return HuggingFaceVocabulary(**options), MarianTargetVocabulary(**options)
+
+
 def load_classifier(
     kind: str, checkpoint_path: str | Path
 ) -> CNNClassifier | BERTClassifier:
@@ -67,7 +139,7 @@ def load_classifier(
 
 
 def build_style_model(
-    mt_model: PyTorchTransformerModule,
+    mt_model: PyTorchTransformerModule | MarianMTModule,
     classifier: CNNClassifier | BERTClassifier,
     target_label: int,
     lambda_class: float,
@@ -90,18 +162,31 @@ def build_style_model(
 
 def train(args: argparse.Namespace) -> pl.Trainer:
     """Train the style decoder described by the parsed CLI arguments."""
+    if args.lora_r is not None and args.seq2seq != "marian":
+        raise ValueError("--lora-r only applies to --seq2seq marian")
+
     pl.seed_everything(args.seed, workers=True)
 
-    mt_model = load_seq2seq(args.mt_checkpoint)
-    tokenizer, decoder_tokenizer = mt_model.tokenizer, mt_model.decoder_tokenizer
-    if tokenizer is None:
-        raise ValueError(
-            f"The seq2seq checkpoint {args.mt_checkpoint!r} holds no tokenizer; "
-            "pass one saved by specialk.trainers.train"
+    if args.seq2seq == "marian":
+        mt_model = load_marian(args.mt_checkpoint, args.lora_r)
+        # Marian's checkpoint records a vocabulary size of 1, so read the real
+        # one from its tokenizer before the style decoder builds its projections.
+        mt_model.vocabulary_size = mt_model.tokenizer.vocab_size
+        tokenizer, decoder_tokenizer = marian_tokenizers(mt_model)
+        sequence_length = mt_model.sequence_length
+    else:
+        mt_model = load_seq2seq(args.mt_checkpoint)
+        tokenizer, decoder_tokenizer = mt_model.tokenizer, mt_model.decoder_tokenizer
+        if tokenizer is None:
+            raise ValueError(
+                f"The seq2seq checkpoint {args.mt_checkpoint!r} holds no tokenizer; "
+                "pass one saved by specialk.trainers.train"
+            )
+        # ``to_tensor`` pads to the tokenizer's own max length, so the dataloaders
+        # need no separate sequence length; report it in the run log.
+        sequence_length = (
+            getattr(tokenizer, "max_length", None) or mt_model.sequence_length
         )
-    # ``to_tensor`` pads to the tokenizer's own max length, so the dataloaders
-    # need no separate sequence length; report it in the run log.
-    sequence_length = getattr(tokenizer, "max_length", None) or mt_model.sequence_length
     classifier = load_classifier(args.classifier, args.classifier_checkpoint)
 
     train_dataset, val_dataset = load_style_datasets(
@@ -148,6 +233,8 @@ def train(args: argparse.Namespace) -> pl.Trainer:
         "Loaded the style-decoder setup",
         dataset=args.dataset,
         target_label=args.target_label,
+        seq2seq=args.seq2seq,
+        lora_r=args.lora_r,
         mt_checkpoint=str(args.mt_checkpoint),
         classifier_checkpoint=str(args.classifier_checkpoint),
         classifier=args.classifier,
@@ -166,6 +253,8 @@ def train(args: argparse.Namespace) -> pl.Trainer:
             "batch_size": args.batch_size,
             "dataset": args.dataset,
             "target_label": args.target_label,
+            "seq2seq": args.seq2seq,
+            "lora_r": args.lora_r,
             "mt_checkpoint": str(args.mt_checkpoint),
             "classifier_checkpoint": str(args.classifier_checkpoint),
             "classifier": args.classifier,
@@ -209,7 +298,11 @@ def train(args: argparse.Namespace) -> pl.Trainer:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Train the style decoder on top of a frozen seq2seq checkpoint.",
+        description=(
+            "Train the style decoder on top of a frozen seq2seq checkpoint. "
+            "Use --seq2seq marian for a HuggingFace Marian checkpoint, and "
+            "--lora-r to train a LoRA adapter on its decoder."
+        ),
     )
     parser.add_argument("--dataset", choices=DATASETS, default="political")
     parser.add_argument(
@@ -223,6 +316,21 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         required=True,
         help="seq2seq checkpoint whose tokenizer and decoder are used",
+    )
+    parser.add_argument(
+        "--seq2seq",
+        choices=SEQ2SEQ,
+        default="transformer",
+        help="kind of seq2seq checkpoint --mt-checkpoint points at",
+    )
+    parser.add_argument(
+        "--lora-r",
+        type=int,
+        default=None,
+        help=(
+            "LoRA rank for the Marian decoder; requires --seq2seq marian and "
+            "must match a rank the checkpoint already carries"
+        ),
     )
     parser.add_argument(
         "--classifier-checkpoint",

@@ -46,7 +46,7 @@ class MarianMTModule(NMTModule):
 
         self.peft_config = None
         if peft_config:
-            assert peft_config.task_type == TaskType.SEQ_CLS
+            assert peft_config.task_type == TaskType.SEQ_2_SEQ_LM
             self.model = get_peft_model(self.base_model, peft_config, adapter_name=name)
             self.peft_config = peft_config
             log.info("Using PEFT.", config=self.peft_config)

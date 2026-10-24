@@ -128,7 +128,7 @@ class Beam(Generic[T]):
 
         Returns:
             (Beam): up to `num_beams` best beams which have not terminated.
-            (Beam): up to `num_beams` best beams which have terminated.
+            (Beam): beams in the overall top `num_beams` which have terminated.
 
         The continuing beam is kept full even when some of the best candidates
         terminate. Otherwise the beam width shrinks every time a candidate hits
@@ -139,22 +139,18 @@ class Beam(Generic[T]):
 
         is_terminated = (self.tokens == self.tokenizer.EOS).any(dim=-1)
 
-        def select_top(mask: Tensor, k: int) -> Beam:
-            if k == 0:
-                return self[torch.zeros_like(mask)]
+        # Only terminated candidates that rank in the overall top `num_beams` count
+        # as finished; low-ranked ones would otherwise trigger early stopping.
+        top = torch.zeros_like(is_terminated)
+        top[self.logprob_sums.topk(k=min(num_beams, self.num_beams)).indices] = True
 
-            scores = self.logprob_sums.masked_fill(~mask, float("-inf"))
-            indices = scores.topk(k=k, dim=0).indices
-            selection = torch.zeros_like(mask)
-            selection[indices] = True
-            return self[selection]
+        # Refill the continuing beam from the best live candidates.
+        live_scores = self.logprob_sums.masked_fill(is_terminated, float("-inf"))
+        live = torch.zeros_like(is_terminated)
+        k = min(num_beams, int((~is_terminated).sum()))
+        live[live_scores.topk(k=k).indices] = True
 
-        num_continuing = int((~is_terminated).sum())
-        num_terminated = int(is_terminated.sum())
-
-        continuing = select_top(~is_terminated, min(num_beams, num_continuing))
-        terminated = select_top(is_terminated, min(num_beams, num_terminated))
-        return continuing, terminated
+        return self[live], self[top & is_terminated]
 
     def get_topk_non_repeating(
         self,

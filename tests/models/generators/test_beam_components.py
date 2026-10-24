@@ -287,3 +287,19 @@ def test_filter_handles_empty_beam():
 
     assert continuing.num_beams == 0
     assert terminated.num_beams == 0
+
+
+def test_filter_ignores_low_ranked_terminated_candidates():
+    """A terminated candidate outside the top `num_beams` must not count as finished.
+
+    Otherwise weak, short hypotheses fill the finished list and stop search early.
+    """
+    num_beams = 5
+    tokens = torch.randint(10, 100, (num_beams * num_beams, 6))
+    scores = torch.arange(num_beams * num_beams, 0, -1).float()
+    tokens[-1, -1] = constants.EOS
+
+    continuing, terminated = _make_beam(tokens, scores).filter(num_beams)
+
+    assert continuing.num_beams == num_beams
+    assert terminated.num_beams == 0

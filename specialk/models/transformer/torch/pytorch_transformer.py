@@ -589,10 +589,6 @@ class PyTorchTransformerModule(NMTModule):
                     scores = beam.logprob_sums / (beam.tokens.size(1) ** length_penalty)
                     finished_beams[i].extend(list(zip(scores.tolist(), beam.tokens)))
 
-            # No live candidates left; stop rather than filtering an empty beam.
-            if all(beam.num_beams == 0 for beam in batch_of_beams.beams):
-                break
-
             # Check if all beams are finished
             if all(len(beams) >= num_return_sequences for beams in finished_beams):
                 break

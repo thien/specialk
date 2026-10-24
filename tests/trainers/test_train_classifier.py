@@ -79,6 +79,8 @@ def test_cli_smoke_and_checkpoint_reload(monkeypatch, tmp_path):
         "1",
         "--checkpoint-dir",
         str(checkpoint_dir),
+        "--logger",
+        "tensorboard",
     ]
     args = train_classifier.get_args(base_args)
     trainer = train_classifier.main_new(args)

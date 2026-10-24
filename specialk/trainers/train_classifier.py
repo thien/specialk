@@ -249,6 +249,22 @@ def load_tokenized_classification_dataset(
     return train_loader, val_loader, sequence_length, vocabulary_size
 
 
+def init_logger(args: argparse.Namespace, project_name: str, params: dict):
+    """Log to W&B by default, or to TensorBoard with ``--logger tensorboard``."""
+    if args.logger == "wandb":
+        from lightning.pytorch.loggers import WandbLogger
+
+        return WandbLogger(
+            project=args.wandb_project,
+            name=args.run_name or project_name.replace("/", "-"),
+            save_dir=PROJECT_DIR,
+            config=params,
+        )
+    logger = TensorBoardLogger(LOGGING_DIR, name=project_name)
+    logger.log_hyperparams(params=params)
+    return logger
+
+
 def main_new(args):
     batch_size = args.batch_size
 
@@ -345,30 +361,26 @@ def main_new(args):
         if not resume_from.exists():
             raise SystemExit(f"no checkpoint at {resume_from}")
 
-    logger = TensorBoardLogger(LOGGING_DIR, name=project_name)
-    logger.log_hyperparams(
-        params={
-            "batch_size": batch_size,
-            "tokenizer": tokenizer.__class__.__name__ if tokenizer else "legacy",
-            "dataset": dataset_name,
-            "tokenizer_path": str(
-                args.tokenizer_path or args.mt_checkpoint
-            )
-            if args.tokenizer_path or args.mt_checkpoint
-            else None,
-            "tokenized_path": str(args.tokenized_path)
-            if args.tokenized_path
-            else None,
-            "optimizer": args.optimizer,
-            "learning_rate": args.lr,
-            "lr_decay": args.lr_decay,
-            "decay_start": args.decay_start,
-            "max_epochs": args.epochs,
-            "resume_from": str(resume_from) if resume_from else None,
-        }
-    )
+    params = {
+        "batch_size": batch_size,
+        "tokenizer": tokenizer.__class__.__name__ if tokenizer else "legacy",
+        "dataset": dataset_name,
+        "tokenizer_path": str(args.tokenizer_path or args.mt_checkpoint)
+        if args.tokenizer_path or args.mt_checkpoint
+        else None,
+        "tokenized_path": str(args.tokenized_path) if args.tokenized_path else None,
+        "optimizer": args.optimizer,
+        "learning_rate": args.lr,
+        "lr_decay": args.lr_decay,
+        "decay_start": args.decay_start,
+        "max_epochs": args.epochs,
+        "resume_from": str(resume_from) if resume_from else None,
+    }
+    logger = init_logger(args, project_name, params)
 
-    profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
+    profiler = AdvancedProfiler(
+        dirpath=logger.log_dir or LOGGING_DIR, filename=LOGGING_PERF_NAME
+    )
 
     # 16-bit mixed precision is a CUDA recipe; MPS runs in full precision.
     resolved_accelerator = DEVICE if args.accelerator == "auto" else args.accelerator
@@ -531,6 +543,22 @@ def get_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         const="last",
         default=None,
         help="resume from a checkpoint, or from the run's last.ckpt when no path is given",
+    )
+    parser.add_argument(
+        "--logger",
+        choices=["wandb", "tensorboard"],
+        default="wandb",
+        help="experiment logger",
+    )
+    parser.add_argument(
+        "--wandb-project",
+        default="specialk",
+        help="W&B project to log to",
+    )
+    parser.add_argument(
+        "--run-name",
+        default=None,
+        help="logger run name (default: dataset and model name)",
     )
     parser.add_argument(
         "--n-workers",

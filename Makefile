@@ -1,11 +1,15 @@
+UV ?= uv
+
+.PHONY: download-deps tests-light tests-heavy tests
+
 download-deps:
-	python -m nltk.downloader cmudict averaged_perceptron_tagger
+	$(UV) run python -m nltk.downloader cmudict averaged_perceptron_tagger
 
 tests-light:
-	pytest -v -m "not heavyweight"
+	$(UV) run pytest -v -m "not heavyweight"
 
 tests-heavy:
-	pytest -v -m "not lightweight" -n auto
+	$(UV) run pytest -v -m "not lightweight" -n auto
 
 tests:
-	pytest -v -n auto
+	$(UV) run pytest -v -n auto

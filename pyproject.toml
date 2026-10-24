@@ -63,7 +63,6 @@ dev = [
 
 [tool.uv]
 managed = true
-constraint-dependencies = ["pyarrow==26.0.0"]
 
 [tool.hatch.metadata]
 allow-direct-references = true

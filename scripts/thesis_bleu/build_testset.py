@@ -85,29 +85,23 @@ def main() -> int:
     parser.add_argument(
         "--en",
         type=Path,
-        default=Path(
-            "/Users/t/projects/specialk/datasets/machine_translation/"
-            "corpus_enfr_final.test.en"
-        ),
+        default=ROOT / "datasets/machine_translation/corpus_enfr_final.test.en",
     )
     parser.add_argument(
         "--fr",
         type=Path,
-        default=Path(
-            "/Users/t/projects/specialk/datasets/machine_translation/"
-            "corpus_enfr_final.test.fr"
-        ),
+        default=ROOT / "datasets/machine_translation/corpus_enfr_final.test.fr",
     )
     parser.add_argument(
         "--fr-vocab",
         type=Path,
-        default=Path("/Users/t/projects/specialk/models/nmt_fren_goldmaster_bpe.pt"),
+        default=ROOT / "models/nmt_fren_goldmaster_bpe.pt",
         help="vocabulary whose tgt BPE encoder defines the 120-token cutoff",
     )
     parser.add_argument(
         "--out-dir",
         type=Path,
-        default=Path("/Users/t/projects/specialk/results/thesis_bleu/data"),
+        default=ROOT / "results/thesis_bleu/data",
     )
     parser.add_argument("--max-seq-len", type=int, default=120)
     parser.add_argument("--seed", type=int, default=0)

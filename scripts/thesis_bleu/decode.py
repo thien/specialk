@@ -89,10 +89,6 @@ def read_lines(path: Path) -> list[str]:
         return [line.rstrip("\n") for line in f]
 
 
-def read_indices(path: Path) -> list[int]:
-    return [int(line) for line in read_lines(path) if line.strip()]
-
-
 def translate_decode_bpe(hypotheses: list[list[list[int]]], bpe: BPE) -> list[str]:
     """Port of the old NMTModel.translate_decode_bpe."""
     first = [hypothesis[0] for hypothesis in hypotheses]
@@ -121,13 +117,7 @@ def main() -> int:
     parser.add_argument("--src", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--beam", type=int, default=5)
-    parser.add_argument("--n-best", type=int, default=1)
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument(
-        "--indices",
-        type=Path,
-        help="file with one 0-based source line number per line (in output order)",
-    )
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument(
         "--device", choices=["mps", "cpu"], default=None
@@ -165,9 +155,6 @@ def main() -> int:
     tgt_bpe = BPE.from_dict(vocab_data["dict"]["tgt"])
 
     sources = read_lines(args.src)
-    if args.indices:
-        indices = read_indices(args.indices)
-        sources = [sources[i] for i in indices]
     if args.limit:
         sources = sources[: args.limit]
 
@@ -214,6 +201,7 @@ def main() -> int:
     args.cuda_device = None
     args.cuda = False
     args.beam_size = args.beam
+    args.n_best = 1
     translator = Translator(args, new=False)
     translator.device = device
     translator.model = model

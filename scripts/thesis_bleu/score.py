@@ -49,13 +49,9 @@ def main() -> int:
     parser.add_argument("--ref", required=True, type=Path)
     parser.add_argument(
         "--lang",
+        required=True,
         choices=["en", "fr"],
         help="target language, used for sacremoses detokenization",
-    )
-    parser.add_argument(
-        "--no-detok",
-        action="store_true",
-        help="score sacreBLEU on the tokenized text as-is",
     )
     parser.add_argument(
         "--limit", type=int, default=None, help="only score the first N lines"
@@ -70,13 +66,8 @@ def main() -> int:
 
     coco = coco_bleu(hyps, refs)
 
-    if args.no_detok:
-        sacre_hyps, sacre_refs = hyps, refs
-    else:
-        if not args.lang:
-            parser.error("--lang is required unless --no-detok is used")
-        sacre_hyps = detokenize(hyps, args.lang)
-        sacre_refs = detokenize(refs, args.lang)
+    sacre_hyps = detokenize(hyps, args.lang)
+    sacre_refs = detokenize(refs, args.lang)
 
     import sacrebleu
 

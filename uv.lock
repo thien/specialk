@@ -2801,7 +2801,7 @@ requires-dist = [
     { name = "pandas", specifier = "==2.2.2" },
     { name = "peft", specifier = "==0.21.2" },
     { name = "pot", specifier = "==0.9.3" },
-    { name = "pycocoevalcap", specifier = ">=1.2" },
+    { name = "pycocoevalcap", specifier = "==1.2" },
     { name = "pyemd", specifier = "==1.0.0" },
     { name = "pytelegrambotapi", specifier = "==4.20.0" },
     { name = "pyyaml", specifier = "==6.0.1" },

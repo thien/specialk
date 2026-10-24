@@ -1,5 +1,6 @@
 import json
 import math
+from pathlib import Path
 from typing import List
 
 # from sklearn.externals import joblib
@@ -86,6 +87,8 @@ def load_turk_scores(aspect, model, param, param_val, npy_file=True):
 
 
 def save_json(data, path):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as f:
         json.dump(data, f)
 

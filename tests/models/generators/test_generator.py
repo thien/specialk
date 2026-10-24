@@ -14,16 +14,20 @@ from specialk.models.transformer.torch.pytorch_transformer import (
 torch.manual_seed(SEED)
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="module")
 def module() -> PyTorchTransformerModule:
-    checkpoint_path = next(
-        Path(
-            f"{PROJECT_DIR}/tb_logs/nmt_model_dummy/transformer_smol/version_0/checkpoints/"
-        ).iterdir()
+    checkpoint_dir = Path(
+        f"{PROJECT_DIR}/tb_logs/nmt_model_dummy/transformer_smol/version_0/checkpoints/"
     )
+    checkpoints = list(checkpoint_dir.glob("*.ckpt"))
+    if not checkpoints:
+        pytest.skip(
+            f"missing dummy transformer checkpoint in {checkpoint_dir}; "
+            "run specialk.trainers.train first"
+        )
 
     module = PyTorchTransformerModule.load_from_checkpoint(
-        checkpoint_path=checkpoint_path, weights_only=False
+        checkpoint_path=checkpoints[0], weights_only=False
     )
     # Generation is inference; in train mode torch >= 2.13 rejects nonzero
     # dropout in MPS scaled_dot_product_attention.

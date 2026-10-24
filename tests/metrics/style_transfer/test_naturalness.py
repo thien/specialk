@@ -1,10 +1,19 @@
 import pytest
 
+from specialk.core.constants import PROJECT_DIR
 from specialk.metrics import Naturalness
+
+CKPT_PATH = (
+    PROJECT_DIR
+    / "assets/classifiers/legacy/cnn_classifier/naturalness_political/"
+    "naturalness_political.ckpt"
+)
 
 
 @pytest.fixture
 def naturalness():
+    if not CKPT_PATH.exists():
+        pytest.skip(f"missing classifier checkpoint: {CKPT_PATH}")
     return Naturalness("political")
 
 @pytest.mark.heavyweight

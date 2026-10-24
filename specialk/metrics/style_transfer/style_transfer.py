@@ -187,6 +187,7 @@ class Preservation(StyleMetric, AlignmentMetric):
         else:
             self.w2v = Word2Vec(predictions + references)
             if self.enable_cache:
+                path_w2v.parent.mkdir(parents=True, exist_ok=True)
                 self.w2v.save(path_w2v_str)
 
     def compute(

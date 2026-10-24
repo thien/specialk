@@ -27,4 +27,4 @@ jobs:
     - name: Download misc. Dependencies
       run: make download-deps
     - name: Run Lightweight Tests
-      run: uv run pytest -v -m "not heavyweight"
+      run: uv run pytest -v -m "not heavyweight and not benchmark"

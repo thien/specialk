@@ -7,24 +7,19 @@ This is to leverage existing pre-trained modules.
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple, Union
+from typing import List, Optional, Tuple
 
-import safetensors
 import torch
 from peft import get_peft_model
-from peft.peft_model import PeftModel
 from peft.tuners.lora.config import LoraConfig
 from peft.utils.peft_types import TaskType
-from peft.utils.save_and_load import get_peft_model_state_dict
 from torch import Tensor
-from torch.nn import LayerNorm
-from torch.optim import AdamW
 from transformers import AutoConfig, AutoModelForSeq2SeqLM, AutoTokenizer
 
 from specialk.core.constants import TRAIN_ACC, TRAIN_BATCH_ID, TRAIN_LOSS
 from specialk.core.utils import log
+from specialk.models import peft_utils
 from specialk.models.mt_model import NMTModule
 from specialk.models.tokenizer import Vocabulary
 
@@ -134,55 +129,11 @@ class MarianMTModule(NMTModule):
         accuracy = self.calculate_classification_metrics(y_hat.logits, y)
         return loss, accuracy
 
-    def load_peft_from_checkpoint(self, checkpoint) -> PeftModel:
-        """For some reason, the PeftModel.from_pretrained works, when
-        directly setting the weights from the state_dict doesn't.
-
-        I've spent way too long trying to debug this."""
-
-        peft_config = checkpoint["hyper_parameters"]["peft_config"]
-        peft_state_dict = checkpoint["peft_state_dict"]
-
-        # TODO change this with a fake filesytem
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Save the modified config to the temp directory
-            peft_config.save_pretrained(temp_dir)
-
-            # Save the filtered state dict to the temp directory
-            path_peft_tensors = Path(temp_dir) / "adapter_model.safetensors"
-            safetensors.torch.save_file(peft_state_dict, path_peft_tensors)
-
-            # Use the standard PEFT loading mechanism.
-            peft_model = PeftModel.from_pretrained(
-                self.base_model,
-                temp_dir,
-                adapter_name=self.name,
-            )
-
-        return peft_model
-
     def on_save_checkpoint(self, checkpoint: dict):
-        if self.peft_config:
-            # Save only the PEFT state dict
-            peft_state_dict = get_peft_model_state_dict(
-                self.model, adapter_name=self.name
-            )
-            checkpoint["peft_state_dict"] = peft_state_dict
-            # you don't need it because we're only saving peft_state_dict.
-            del checkpoint["state_dict"]
-        else:
-            # For non-PEFT models, save the entire state dict
-            checkpoint["state_dict"] = self.model.state_dict()
+        peft_utils.save_checkpoint(self, checkpoint)
 
     def on_load_checkpoint(self, checkpoint: dict):
-        # Reload the base model to ensure clean slate
-        if "peft_state_dict" in checkpoint:
-            # Re-initialize the PEFT model
-            self.model = self.load_peft_from_checkpoint(checkpoint)
-
-        else:
-            # For non-PEFT models, load the entire state dict
-            self.model.load_state_dict(checkpoint["state_dict"])
+        peft_utils.load_checkpoint(self, checkpoint)
 
     def _freeze_non_lora_weights(self):
         for name, param in self.model.named_parameters():
@@ -193,18 +144,6 @@ class MarianMTModule(NMTModule):
     def load_from_checkpoint(
         cls, checkpoint_path: Path, map_location=None, weights_only: bool = False
     ):
-        # Checkpoints contain PEFT config objects, which are rejected by the
-        # weights_only=True default introduced in torch 2.6. These are trusted
-        # local checkpoint files, so retain the pre-2.6 behaviour.
-        checkpoint = torch.load(
-            checkpoint_path, map_location=map_location, weights_only=weights_only
+        return peft_utils.load_from_checkpoint(
+            cls, checkpoint_path, map_location, weights_only
         )
-
-        model = cls(
-            name=checkpoint["hyper_parameters"]["name"],
-            model_base_name=checkpoint["hyper_parameters"]["model_base_name"],
-            peft_config=checkpoint["hyper_parameters"].get("peft_config"),
-        )
-
-        model.on_load_checkpoint(checkpoint)
-        return model

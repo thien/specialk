@@ -1,10 +1,11 @@
 """Score a CNN classifier on a labelled text file or the old tokenized split.
 
-    python3 scripts/classifier/evaluate.py CHECKPOINT \
+    python3 scripts/classifier/evaluate_classifier.py CHECKPOINT \
         --tokenized political.train.pt --split valid
 
-The legacy checkpoints need their sibling ``hyperparameters.yaml``; the script
-falls back to it automatically.
+CHECKPOINT can be a run directory, in which case every ``epoch=*.ckpt`` is
+scored and the best one is printed. The legacy checkpoints need their sibling
+``hyperparameters.yaml``; the script falls back to it automatically.
 """
 
 import argparse
@@ -79,9 +80,22 @@ def tokenized_rows(
     return rows, labels
 
 
+def score(
+    model: CNNClassifier,
+    rows: list[torch.Tensor],
+    labels: list[int],
+    batch_size: int,
+) -> tuple[float, torch.Tensor, torch.Tensor]:
+    probabilities = batch_probabilities(model, rows, batch_size)
+    targets = torch.tensor(labels)
+    predictions = (probabilities > 0.5).long()
+    accuracy = (predictions == targets).float().mean().item()
+    return accuracy, probabilities, predictions
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("checkpoint", type=Path)
+    parser.add_argument("checkpoint", type=Path, help="a .ckpt or a run directory")
     parser.add_argument("--tokenized", type=Path, default=None)
     parser.add_argument("--split", choices=["train", "valid"], default="valid")
     parser.add_argument("--text", type=Path, default=None)
@@ -93,7 +107,15 @@ def main(argv=None) -> int:
     parser.add_argument("--device", default="cpu")
     args = parser.parse_args(argv)
 
-    model = load_model(args.checkpoint, args.device)
+    checkpoints = (
+        sorted(args.checkpoint.glob("epoch=*.ckpt"))
+        if args.checkpoint.is_dir()
+        else [args.checkpoint]
+    )
+    if not checkpoints:
+        raise SystemExit(f"no epoch checkpoints in {args.checkpoint}")
+
+    model = load_model(checkpoints[0], args.device)
     if args.tokenizer:
         model.tokenizer = WordVocabulary.from_file(args.tokenizer)
 
@@ -106,10 +128,25 @@ def main(argv=None) -> int:
     else:
         raise SystemExit("pass --tokenized or --text")
 
-    probabilities = batch_probabilities(model, rows, args.batch_size)
-    predictions = (probabilities > 0.5).long()
+    if len(checkpoints) > 1:
+        best_accuracy = -1.0
+        best_checkpoint = None
+        for checkpoint in checkpoints:
+            model = load_model(checkpoint, args.device)
+            if args.tokenizer:
+                model.tokenizer = WordVocabulary.from_file(args.tokenizer)
+            accuracy, _, _ = score(model, rows, labels, args.batch_size)
+            print(f"{checkpoint.stem:<24} {accuracy:.4f}")
+            if accuracy > best_accuracy:
+                best_accuracy = accuracy
+                best_checkpoint = checkpoint
+        print(f"{'best':<24} {best_accuracy:.4f}  {best_checkpoint.name}")
+        return 0
+
+    accuracy, probabilities, predictions = score(
+        model, rows, labels, args.batch_size
+    )
     targets = torch.tensor(labels)
-    accuracy = (predictions == targets).float().mean().item()
 
     print(f"checkpoint  {args.checkpoint}")
     print(f"examples    {len(labels)}")

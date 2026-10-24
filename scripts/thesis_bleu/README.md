@@ -4,7 +4,7 @@ The logged thesis scores came from teacher-forced argmax validation outputs. The
 
 ## Requirements
 
-- Python 3.10 and `uv sync`.
+- Python 3.11 to 3.13 and `uv sync`.
 - The checkpoints and datasets are gitignored and live in the main checkout. The commands below use absolute paths.
 - On Apple silicon the decoder uses MPS automatically. Pass `--device cpu` to force CPU.
 

@@ -209,12 +209,21 @@ class TransformerDecoderLayer(nn.TransformerDecoderLayer):
 
 
 class TransformerEncoder(nn.TransformerEncoder):
+    """Encoder with the nested-tensor fastpath disabled by default.
+
+    ``nn.TransformerEncoder.forward`` may call
+    ``aten::_nested_tensor_from_mask_left_aligned`` while deciding whether to
+    use its nested-tensor fastpath. That operator is not implemented on MPS,
+    and strided NestedTensor storage is not supported on MPS. Passing
+    ``enable_nested_tensor=False`` makes torch stop before that check.
+    """
+
     def __init__(
         self,
         encoder_layer: "TransformerEncoderLayer",
         num_layers: int,
         norm: Optional[nn.Module] = None,
-        enable_nested_tensor: bool = True,
+        enable_nested_tensor: bool = False,
         mask_check: bool = True,
     ) -> None:
         super().__init__(
@@ -282,7 +291,7 @@ class PyTorchTransformerModel(nn.Transformer):
         encoder_norm = LayerNorm(
             dim_model, eps=layer_norm_eps, bias=bias, **factory_kwargs
         )
-        encoder = nn.TransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm)
+        encoder = TransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm)
 
         decoder_layer = TransformerDecoderLayer(
             dim_model,

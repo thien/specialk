@@ -8,11 +8,11 @@ from jaxtyping import Int
 
 from specialk.core import constants
 from specialk.core.utils import log
+from specialk.models.generators.beam import Beam
 
 # Import the class to be tested
 from specialk.models.transformer.torch.pytorch_transformer import (
     PyTorchTransformerModule,
-    TransformerEncoderDecoderBeam,
 )
 
 torch.manual_seed(constants.SEED)
@@ -69,13 +69,11 @@ def mock_beam():
     hidden_size = 512
     vocab_size = 1000
 
-    return TransformerEncoderDecoderBeam(
+    return Beam(
         model=model,
         tokenizer=tokenizer,
         logprob_sums=torch.randn(batch_size * beam_size),
         tokens=torch.randint(0, vocab_size, (batch_size * beam_size, seq_len)),
-        memory=torch.randn(batch_size * beam_size, enc_seq, hidden_size),
-        x_pad_mask=torch.randint(0, 2, (batch_size * beam_size, enc_seq)).float(),
     )
 
 
@@ -83,8 +81,8 @@ def test_filter(mock_beam):
     num_beams = 2
     continuing, terminated = mock_beam.filter(num_beams)
 
-    assert isinstance(continuing, TransformerEncoderDecoderBeam)
-    assert isinstance(terminated, TransformerEncoderDecoderBeam)
+    assert isinstance(continuing, Beam)
+    assert isinstance(terminated, Beam)
     assert continuing.num_beams <= num_beams
     assert terminated.num_beams <= num_beams
     assert not (continuing.tokens == constants.EOS).any()
@@ -114,13 +112,11 @@ def mock_beam_semi_completed():
     tokens[2, -2] = tokenizer.EOS  # Last sequence in first batch
     tokens[4, -3] = tokenizer.EOS  # Middle sequence in second batch
 
-    return TransformerEncoderDecoderBeam(
+    return Beam(
         model=model,
         tokenizer=tokenizer,
         logprob_sums=torch.randn(batch_size * beam_size),
         tokens=tokens,
-        memory=torch.randn(batch_size * beam_size, enc_seq, hidden_size),
-        x_pad_mask=torch.randint(0, 2, (batch_size * beam_size, enc_seq)).float(),
     )
 
 
@@ -131,8 +127,8 @@ def test_filter_with_terminated_sequences(mock_beam_semi_completed):
 
     continuing, terminated = beam.filter()
 
-    assert isinstance(continuing, TransformerEncoderDecoderBeam)
-    assert isinstance(terminated, TransformerEncoderDecoderBeam)
+    assert isinstance(continuing, Beam)
+    assert isinstance(terminated, Beam)
 
     # Check that we have both continuing and terminated beams
     assert continuing.logprob_sums.shape[0] > 0
@@ -161,22 +157,10 @@ def test_filter_with_terminated_sequences(mock_beam_semi_completed):
 
 
 def test_new_beams(mock_beam):
-    new_beam = mock_beam.new(
-        mock_beam.logprob_sums, mock_beam.tokens, mock_beam.memory, mock_beam.x_pad_mask
-    )
-    assert isinstance(new_beam, TransformerEncoderDecoderBeam)
+    new_beam = mock_beam.new(mock_beam.logprob_sums, mock_beam.tokens)
+    assert isinstance(new_beam, Beam)
     assert torch.equal(new_beam.logprob_sums, mock_beam.logprob_sums)
     assert torch.equal(new_beam.tokens, mock_beam.tokens)
-    assert torch.equal(new_beam.memory, mock_beam.memory)
-    assert torch.equal(new_beam.x_pad_mask, mock_beam.x_pad_mask)
-
-
-def test_get_logits(mock_beam):
-    logits = mock_beam.get_logits()
-    assert logits.shape == (
-        mock_beam.tokens.shape[0],
-        1000,
-    )  # Assuming vocab size of 1000
 
 
 def test_calculate_new_logprob_sums(mock_beam):
@@ -205,17 +189,16 @@ def test_generate_new_tokens(mock_beam):
 def test_getitem(mock_beam):
     idx = 1
     sub_beam = mock_beam[idx]
-    assert isinstance(sub_beam, TransformerEncoderDecoderBeam)
+    assert isinstance(sub_beam, Beam)
     assert torch.equal(sub_beam.logprob_sums, mock_beam.logprob_sums[idx])
     assert torch.equal(sub_beam.tokens, mock_beam.tokens[idx])
-    assert torch.equal(sub_beam.memory, mock_beam.memory[idx])
-    assert torch.equal(sub_beam.x_pad_mask, mock_beam.x_pad_mask[idx])
 
 
 def test_generate(mock_beam):
     tokens_per_beam = 2
-    new_beam = mock_beam.generate(tokens_per_beam)
-    assert isinstance(new_beam, TransformerEncoderDecoderBeam)
+    log_logits = torch.randn(mock_beam.num_beams, 1000).log_softmax(-1)
+    new_beam = mock_beam.generate(tokens_per_beam, log_logits=log_logits)
+    assert isinstance(new_beam, Beam)
     assert (
         new_beam.logprob_sums.shape[0]
         == mock_beam.logprob_sums.shape[0] * tokens_per_beam
@@ -257,13 +240,11 @@ def test_beam_search(mock_pytorch_transformer_module):
 
 def _make_beam(tokens: Int[torch.Tensor, "rows seq"], scores: torch.Tensor):
     rows = tokens.shape[0]
-    return TransformerEncoderDecoderBeam(
+    return Beam(
         model=MockModel(),
         tokenizer=MockTokenizer(),
         logprob_sums=scores,
         tokens=tokens,
-        memory=torch.randn(rows, 8, 512),
-        x_pad_mask=torch.zeros(rows, 8),
     )
 
 

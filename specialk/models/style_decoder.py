@@ -3,7 +3,9 @@ Style Decoder Model.
 
 Fine-tunes a sequence-to-sequence model so that its translations are
 classified as the target style. The classifier and the encoder are frozen;
-only the decoder and the vocabulary mapping are trained.
+only the decoder is trained. When the classifier uses a different vocabulary,
+a fixed token map translates between the two, so the classifier cannot be
+satisfied by a map that drifts away from the decoder.
 """
 
 import math
@@ -30,6 +32,7 @@ from specialk.models.classifier.models import (
 )
 from specialk.models.mt_model import NMTModule
 from specialk.models.ops.ops import token_accuracy
+from specialk.models.token_map import build_token_map
 
 # key used for the style accuracy metric at validation time.
 STYLE_ACC = "style_acc"
@@ -376,11 +379,36 @@ class StyleBackTranslationModelWithBERT(StyleBackTranslationModel):
         assert isinstance(classifier, BERTClassifier), (
             f"Classifier is not a BERTClassifier (found {type(classifier).__name__})"
         )
-        # BERT needs a distribution over its own vocabulary.
-        # shortcut: the mapping trains too, so it can raise style accuracy
-        # without the decoder; freeze it or build a fixed token map if BERT runs matter.
-        kwargs["use_mapping"] = True
+        # BERT has its own vocabulary, so the distributions still need
+        # translating. The map is fixed: a trained one can raise style accuracy
+        # without the decoder improving.
+        kwargs["use_mapping"] = False
         super().__init__(mt_model=mt_model, classifier=classifier, **kwargs)
+
+        if self.sequence_model.tokenizer is None:
+            raise ValueError(
+                "The BERT style decoder needs the seq2seq tokenizer to build a "
+                "fixed token map; load a checkpoint saved with one"
+            )
+        token_map, coverage = build_token_map(
+            self.sequence_model.tokenizer,
+            self.classifier.tokenizer,
+            self.sequence_model.vocabulary_size,
+            self._classifier_vocabulary_size(),
+        )
+        self.register_buffer("token_map", token_map)
+        # Share of ordinary seq2seq tokens that found a BERT token by surface
+        # form. The rest become [UNK]; log it so a run can be judged with it.
+        self.mapping_coverage = coverage
+
+    def _map(self, soft: Tensor) -> Tensor:
+        """Translate seq2seq token scores into BERT token scores."""
+        batch, length, _ = soft.shape
+        mapped = soft.new_zeros(
+            batch, length, self._classifier_vocabulary_size()
+        )
+        index = self.token_map.view(1, 1, -1).expand(batch, length, -1)
+        return mapped.scatter_add_(2, index, soft)
 
     def _sequence_mask(
         self, y: Int[Tensor, "batch seq_len"]

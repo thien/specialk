@@ -127,7 +127,8 @@ def classify_texts(
             with torch.inference_mode():
                 scores.append(torch.sigmoid(classifier.model(one_hot).reshape(-1)))
         positive = torch.cat(scores).float().cpu()
-        predictions = (positive > 0.5).long()
+        threshold = getattr(classifier, "decision_threshold", 0.5)
+        predictions = (positive > threshold).long()
         target = positive if target_label == 1 else 1 - positive
         return predictions, target
 
@@ -292,6 +293,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--style-checkpoint", type=Path, default=None)
     parser.add_argument("--classifier-checkpoint", type=Path, required=True)
     parser.add_argument("--classifier", choices=("cnn", "bert"), default="cnn")
+    parser.add_argument(
+        "--classifier-threshold",
+        type=float,
+        default=None,
+        help="override the CNN's sigmoid decision threshold",
+    )
     parser.add_argument("--classifier-tokenizer", type=Path, default=None)
     parser.add_argument(
         "--limit",
@@ -337,6 +344,8 @@ def main(argv: Sequence[str] | None = None) -> dict:
     classifier = load_classifier(
         args.classifier, args.classifier_checkpoint, args.classifier_tokenizer
     )
+    if args.classifier_threshold is not None:
+        classifier.decision_threshold = args.classifier_threshold
     classifier.to(device).eval()
 
     model = base_model(args).to(device).eval()

@@ -111,3 +111,20 @@ def test_load_model_from_checkpoint():
         output: Float[Tensor, "batch 1"] = module.generate(text, batch_size)
         log.info("output", out=output, shape=output.shape)
         assert output.shape == torch.Size((len(text), 1))
+
+
+@pytest.mark.lightweight
+def test_cnn_decision_threshold_changes_the_report():
+    model = CNNClassifier(
+        name="threshold",
+        vocabulary_size=8,
+        sequence_length=8,
+        decision_threshold=0.7,
+    )
+    output = torch.tensor([0.65, 0.75])
+    target = torch.tensor([0, 1])
+
+    assert model.calculate_classification_metrics(output, target) == 1.0
+
+    model.decision_threshold = 0.5
+    assert model.calculate_classification_metrics(output, target) == 0.5

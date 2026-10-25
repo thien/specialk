@@ -330,6 +330,20 @@ def main_new(args):
         )
 
     project_name = f"{dataset_name}/{task.name}"
+    checkpoint_dir = (
+        Path(args.checkpoint_dir)
+        if args.checkpoint_dir
+        else Path.cwd() / "checkpoints"
+    )
+    resume_from = None
+    if args.resume:
+        resume_from = (
+            checkpoint_dir / "last.ckpt"
+            if args.resume == "last"
+            else Path(args.resume)
+        )
+        if not resume_from.exists():
+            raise SystemExit(f"no checkpoint at {resume_from}")
 
     logger = TensorBoardLogger(LOGGING_DIR, name=project_name)
     logger.log_hyperparams(
@@ -350,12 +364,8 @@ def main_new(args):
             "lr_decay": args.lr_decay,
             "decay_start": args.decay_start,
             "max_epochs": args.epochs,
+            "resume_from": str(resume_from) if resume_from else None,
         }
-    )
-    checkpoint_dir = (
-        Path(args.checkpoint_dir)
-        if args.checkpoint_dir
-        else Path.cwd() / "checkpoints"
     )
 
     profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
@@ -382,7 +392,10 @@ def main_new(args):
     )
 
     trainer.fit(
-        task, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader
+        task,
+        train_dataloaders=train_dataloader,
+        val_dataloaders=val_dataloader,
+        ckpt_path=resume_from,
     )
     return trainer
 
@@ -511,6 +524,13 @@ def get_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=Path,
         default=None,
         help="where to write checkpoints (default: ./checkpoints)",
+    )
+    parser.add_argument(
+        "--resume",
+        nargs="?",
+        const="last",
+        default=None,
+        help="resume from a checkpoint, or from the run's last.ckpt when no path is given",
     )
     parser.add_argument(
         "--n-workers",

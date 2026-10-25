@@ -62,26 +62,25 @@ def test_cli_smoke_and_checkpoint_reload(monkeypatch, tmp_path):
     monkeypatch.setattr(train_classifier, "init_dataloader", init_dataloader)
 
     checkpoint_dir = tmp_path / "checkpoints"
-    args = train_classifier.get_args(
-        [
-            "--model_type",
-            "cnn",
-            "--batch_size",
-            "2",
-            "--epochs",
-            "1",
-            "--lr",
-            str(LEARNING_RATE),
-            "--accelerator",
-            "auto",
-            "--limit-train-batches",
-            "2",
-            "--limit-val-batches",
-            "1",
-            "--checkpoint-dir",
-            str(checkpoint_dir),
-        ]
-    )
+    base_args = [
+        "--model_type",
+        "cnn",
+        "--batch_size",
+        "2",
+        "--epochs",
+        "1",
+        "--lr",
+        str(LEARNING_RATE),
+        "--accelerator",
+        "auto",
+        "--limit-train-batches",
+        "2",
+        "--limit-val-batches",
+        "1",
+        "--checkpoint-dir",
+        str(checkpoint_dir),
+    ]
+    args = train_classifier.get_args(base_args)
     trainer = train_classifier.main_new(args)
 
     assert trainer.global_step == 2
@@ -99,6 +98,10 @@ def test_cli_smoke_and_checkpoint_reload(monkeypatch, tmp_path):
     with torch.inference_mode():
         output = module(torch.zeros(SEQUENCE_LENGTH, 2, VOCAB_SIZE))
     assert output.shape == (2, 1)
+
+    resumed = train_classifier.get_args([*base_args, "--resume", "--epochs", "2"])
+    trainer = train_classifier.main_new(resumed)
+    assert trainer.global_step == 4
 
 
 @pytest.mark.lightweight

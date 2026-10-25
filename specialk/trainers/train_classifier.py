@@ -21,13 +21,12 @@ from typing import List, Optional, Tuple, Union
 import lightning.pytorch as pl
 import torch
 from lightning.pytorch.callbacks import ModelCheckpoint
-from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.profilers import AdvancedProfiler
 from peft import LoraConfig, TaskType
 from torch.utils.data import DataLoader, Dataset as TorchDataset
 
 from datasets import Dataset, Value, load_dataset
-from specialk.core.constants import LOGGING_DIR, LOGGING_PERF_NAME, PROJECT_DIR
+from specialk.core.constants import LOGGING_PERF_NAME, PROJECT_DIR
 from specialk.core.experiment import add_logger_args, init_logger
 from specialk.core.utils import check_torch_device, log, namespace_to_dict
 from specialk.models.classifier.models import (
@@ -364,7 +363,7 @@ def main_new(args):
     logger = init_logger(args, project_name, params)
 
     profiler = AdvancedProfiler(
-        dirpath=logger.log_dir or LOGGING_DIR, filename=LOGGING_PERF_NAME
+        dirpath=PROJECT_DIR / "wandb", filename=LOGGING_PERF_NAME
     )
 
     # 16-bit mixed precision is a CUDA recipe; MPS runs in full precision.

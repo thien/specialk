@@ -24,17 +24,20 @@ import pandas as pd
 import torch
 from datasets import Dataset
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
-from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.profilers import AdvancedProfiler
 
 from specialk.core.constants import (
-    LOGGING_DIR,
     LOGGING_PERF_NAME,
+    PROJECT_DIR,
     RNN,
     SEED,
     TRANSFORMER,
 )
-from specialk.core.experiment import add_logger_args, init_logger
+from specialk.core.experiment import (
+    add_logger_args,
+    default_logger_args,
+    init_logger,
+)
 from specialk.core.utils import log
 from specialk.models.mt_model import RNNModule, TransformerModule
 from specialk.models.transformer.torch.pytorch_transformer import (
@@ -305,21 +308,17 @@ def train(
     }
     log.info("Hyperparameters initialised.", hyperparams=logging_hyperparameters)
 
-    if logger_options is not None:
-        logger = init_logger(
-            logger_options, f"{bundle.task_name}/{task.name}", logging_hyperparameters
-        )
-    else:
-        logger = TensorBoardLogger(
-            LOGGING_DIR, name=f"{bundle.task_name}/{task.name}"
-        )
-        logger.log_hyperparams(params=logging_hyperparameters)
+    logger = init_logger(
+        logger_options or default_logger_args("translation"),
+        f"{bundle.task_name}/{task.name}",
+        logging_hyperparameters,
+    )
 
     profiler = None
     if prod:
         # profiling will slow prod down.
         profiler = AdvancedProfiler(
-            dirpath=logger.log_dir or LOGGING_DIR, filename=LOGGING_PERF_NAME
+            dirpath=PROJECT_DIR / "wandb", filename=LOGGING_PERF_NAME
         )
 
     trainer = pl.Trainer(

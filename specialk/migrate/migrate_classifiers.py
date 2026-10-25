@@ -4,11 +4,9 @@ from pathlib import Path
 
 import lightning.pytorch as pl
 import torch
-from lightning.pytorch.loggers import TensorBoardLogger
 from torch.utils.data import DataLoader
 
 from specialk.core import log
-from specialk.core.constants import LOGGING_DIR
 from specialk.core.utils import namespace_to_dict, save_dict_to_yaml
 from specialk.models.classifier.onmt import CNNModels
 from specialk.models.classifier.trainer import CNNClassifier
@@ -119,9 +117,7 @@ def deal_with_components(path: Path, tgt_dir: Path):
 
     log.info("hyperparams", params=hyperparams)
 
-    logger = TensorBoardLogger(LOGGING_DIR)
-    logger.log_hyperparams(params=hyperparams)
-    trainer = pl.Trainer(max_epochs=0, logger=logger)
+    trainer = pl.Trainer(max_epochs=0, logger=False)
     dataloader = DataLoader([])
     trainer.fit(new_model, train_dataloaders=dataloader)
 

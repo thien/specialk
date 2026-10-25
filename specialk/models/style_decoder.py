@@ -66,6 +66,7 @@ class StyleBackTranslationModel(pl.LightningModule):
         tau_start: float = 1.0,
         tau_end: float = 0.1,
         learning_rate: float = 1e-3,
+        preserve_weight: float = 0.0,
         fixed_token_map: Tensor | None = None,
     ):
         """
@@ -89,6 +90,9 @@ class StyleBackTranslationModel(pl.LightningModule):
                 Final softmax temperature.
             learning_rate (float):
                 Learning rate for the trainable parameters.
+            preserve_weight (float):
+                Weight of the KL penalty against the frozen base decoder.
+                Requires a PEFT seq2seq, which can disable its adapter.
             fixed_token_map (Tensor | None):
                 A ``[seq_vocab]`` table of classifier token ids. When set, the
                 mapping is deterministic and never trained.
@@ -237,6 +241,28 @@ class StyleBackTranslationModel(pl.LightningModule):
         # NMTModule.criterion ignores index 0, which is Marian's </s>.
         return F.cross_entropy(seq_logits, y, ignore_index=self.seq_pad)
 
+    def _base_logits(self, x: Tensor, y: Tensor) -> Tensor:
+        """Logits from the frozen base model, with the LoRA adapter disabled."""
+        if not self._uses_peft():
+            raise ValueError(
+                "preserve_weight needs a PEFT seq2seq so the base can be "
+                "recovered by disabling its adapter"
+            )
+        with torch.no_grad(), self.sequence_model.model.disable_adapter():
+            return self.sequence_model(x, y)
+
+    def preservation_loss(self, x: Tensor, y: Tensor, seq_logits: Tensor) -> Tensor:
+        """KL from the base decoder's next-token distribution to the tuned one."""
+        weight = float(self.hparams.preserve_weight)
+        if weight <= 0:
+            return seq_logits.new_zeros(())
+        base_logits = self._base_logits(x, y)
+        return F.kl_div(
+            F.log_softmax(seq_logits.flatten(0, 1), dim=-1),
+            F.softmax(base_logits.flatten(0, 1), dim=-1),
+            reduction="batchmean",
+        )
+
     def _batch_tensors(self, batch: dict[str, Tensor]) -> tuple[Tensor, Tensor, Tensor]:
         x: Tensor = batch[SOURCE]
         y: Tensor = batch[TARGET]
@@ -278,9 +304,23 @@ class StyleBackTranslationModel(pl.LightningModule):
         recon_loss = self.reconstruction_loss(seq_logits.flatten(0, 1), y.flatten())
         target = torch.full_like(label, self.target_label)
         class_loss = self.classifier_loss(clf_out, target)
-        loss = recon_loss + self.hparams.lambda_class * class_loss
+        preserve_loss = self.preservation_loss(x, y, seq_logits)
+        loss = (
+            recon_loss
+            + self.hparams.lambda_class * class_loss
+            + self.hparams.preserve_weight * preserve_loss
+        )
 
-        self._log_metrics(stage, x, y, seq_logits, loss, recon_loss, class_loss)
+        self._log_metrics(
+            stage,
+            x,
+            y,
+            seq_logits,
+            loss,
+            recon_loss,
+            class_loss,
+            preserve_loss,
+        )
         return loss
 
     def _log_metrics(
@@ -292,6 +332,7 @@ class StyleBackTranslationModel(pl.LightningModule):
         loss: Tensor,
         recon_loss: Tensor,
         class_loss: Tensor,
+        preserve_loss: Tensor,
     ) -> None:
         prefix, loss_name = {
             "train": ("train", TRAIN_LOSS),
@@ -303,6 +344,7 @@ class StyleBackTranslationModel(pl.LightningModule):
             loss_name: loss,
             f"{prefix}_recon_loss": recon_loss,
             f"{prefix}_class_loss": class_loss,
+            f"{prefix}_preserve_loss": preserve_loss,
             f"{prefix}_acc": token_accuracy(
                 seq_logits.flatten(0, 1), y.flatten(), self.seq_pad
             ),

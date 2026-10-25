@@ -362,6 +362,18 @@ def test_bert_mask(bert_style_module, train_dataloader, monkeypatch):
 
 
 @pytest.mark.heavyweight
+def test_bert_can_use_the_learned_map(seq2seq, pretrained_bert):
+    module = StyleBackTranslationModelWithBERT(
+        seq2seq, pretrained_bert, use_mapping=True
+    )
+
+    assert module.use_mapping is True
+    assert module.token_map is None
+    assert module.seq_projection is not None
+    assert module.clf_projection is not None
+
+
+@pytest.mark.heavyweight
 def test_bert_token_map_is_fixed(bert_style_module, train_dataloader):
     module = bert_style_module
     assert "token_map" not in dict(module.named_parameters())

@@ -403,9 +403,13 @@ class StyleBackTranslationModelWithBERT(StyleBackTranslationModel):
         assert isinstance(classifier, BERTClassifier), (
             f"Classifier is not a BERTClassifier (found {type(classifier).__name__})"
         )
-        # BERT has its own vocabulary, so the distributions still need
-        # translating. The map is fixed: a trained one can raise style accuracy
-        # without the decoder improving.
+        # Keep the trainable map for reproducing the original implementation.
+        # The default is the fixed table: a trained map can raise style
+        # accuracy without the decoder improving.
+        if kwargs.get("use_mapping") is True:
+            super().__init__(mt_model=mt_model, classifier=classifier, **kwargs)
+            return
+
         seq_tokenizer = mt_model.decoder_tokenizer or mt_model.tokenizer
         if seq_tokenizer is None:
             raise ValueError(

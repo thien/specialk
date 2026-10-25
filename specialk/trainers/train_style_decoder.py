@@ -173,6 +173,7 @@ def build_style_model(
     tau_start: float,
     tau_end: float,
     learning_rate: float,
+    learned_mapping: bool = False,
 ) -> StyleBackTranslationModel:
     """Wrap the two frozen models in the matching style decoder."""
     options = {
@@ -181,6 +182,7 @@ def build_style_model(
         "tau_start": tau_start,
         "tau_end": tau_end,
         "learning_rate": learning_rate,
+        "use_mapping": learned_mapping,
     }
     if isinstance(classifier, CNNClassifier):
         return StyleBackTranslationModelWithCNN(mt_model, classifier, **options)
@@ -263,6 +265,7 @@ def train(args: argparse.Namespace) -> pl.Trainer:
         tau_start=args.tau_start,
         tau_end=args.tau_end,
         learning_rate=args.learning_rate,
+        learned_mapping=args.learned_mapping,
     )
 
     log.info(
@@ -285,6 +288,7 @@ def train(args: argparse.Namespace) -> pl.Trainer:
         vocabulary_size=mt_model.vocabulary_size,
         use_mapping=task.use_mapping,
         mapping_coverage=getattr(task, "mapping_coverage", None),
+        learned_mapping=args.learned_mapping,
     )
 
     params = {
@@ -307,6 +311,7 @@ def train(args: argparse.Namespace) -> pl.Trainer:
         "max_epochs": args.max_epochs,
         "use_mapping": task.use_mapping,
         "mapping_coverage": getattr(task, "mapping_coverage", None),
+        "learned_mapping": args.learned_mapping,
     }
     logger = init_logger(
         args, f"style_decoder/{args.dataset}_{args.target_label}", params
@@ -392,6 +397,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="WordVocabulary JSON the CNN was trained with",
+    )
+    parser.add_argument(
+        "--learned-mapping",
+        action="store_true",
+        help="use the trainable vocabulary projection (original implementation)",
     )
     parser.add_argument("--lambda-class", type=float, default=1.0)
     parser.add_argument("--tau-start", type=float, default=1.0)

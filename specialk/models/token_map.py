@@ -49,9 +49,7 @@ def _token_strings(tokenizer: Any, size: int) -> list[str] | None:
         tokenizer = inner
 
     if hasattr(tokenizer, "convert_ids_to_tokens"):
-        return [
-            tokenizer.convert_ids_to_tokens(i) or "" for i in range(size)
-        ]
+        return [tokenizer.convert_ids_to_tokens(i) or "" for i in range(size)]
 
     # WordVocabulary stores an idx -> label dictionary.
     labels = getattr(getattr(tokenizer, "vocab", None), "idxToLabel", None)
@@ -68,7 +66,7 @@ def _special_ids(tokenizer: Any) -> dict[str, int]:
     names = {
         "pad": ("PAD", "pad_token_id"),
         "unk": ("UNK", "unk_token_id"),
-        "bos": ("BOS", "bos_token_id"),
+        "bos": ("BOS", "SOS", "bos_token_id"),
         "eos": ("EOS", "eos_token_id"),
         "cls": ("CLS", "cls_token_id"),
         "sep": ("SEP", "sep_token_id"),

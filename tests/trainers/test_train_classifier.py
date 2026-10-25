@@ -204,3 +204,19 @@ def test_unknown_political_label_is_rejected():
 
     with pytest.raises(ValueError, match="Unknown political labels"):
         train_classifier._encode_labels(dataset, "thien/political")
+
+
+@pytest.mark.lightweight
+def test_marian_mt_checkpoint_is_accepted():
+    args = train_classifier.get_args(
+        [
+            "--model_type",
+            "cnn",
+            "--mt-checkpoint",
+            "marian.ckpt",
+            "--seq2seq",
+            "marian",
+        ]
+    )
+
+    assert args.seq2seq == "marian"

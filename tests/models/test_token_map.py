@@ -107,3 +107,26 @@ def test_map_is_one_target_per_source_token():
     assert ids.shape == (4,)
     assert int(ids.min()) >= 0
     assert int(ids.max()) < 4
+
+
+@pytest.mark.lightweight
+def test_sentencepiece_bos_maps_to_the_classifier_cls():
+    from specialk.core.constants import PROJECT_DIR
+    from specialk.models.tokenizer import SentencePieceVocabulary
+
+    seq = SentencePieceVocabulary.from_file(
+        PROJECT_DIR / "assets" / "tokenizer" / "sentencepiece" / "enfr_small.model",
+        max_length=50,
+    )
+    clf = FakeTokenizer(
+        ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "hello"],
+        cls=2,
+        sep=3,
+    )
+
+    ids, _ = build_token_map(seq, clf, seq.vocab_size, 5)
+
+    assert ids[seq.SOS].item() == 2
+    assert ids[seq.EOS].item() == 3
+    assert ids[seq.UNK].item() == 1
+    assert ids[seq.PAD].item() == 0

@@ -124,3 +124,15 @@ def test_cli_smoke(tmp_path, monkeypatch):
     eval_loss = trainer.callback_metrics.get("eval_loss")
     assert eval_loss is not None, sorted(trainer.callback_metrics)
     assert torch.isfinite(eval_loss)
+
+
+@pytest.mark.heavyweight
+def test_marian_target_vocabulary_uses_target_spm():
+    text = ["The senator voted against the bill."]
+    vocab = train_style_decoder.MarianTargetVocabulary(
+        name="marian",
+        pretrained_model_name_or_path="Helsinki-NLP/opus-mt-fr-en",
+        max_length=16,
+    )
+    expected = vocab.tokenizer(text_target=text, max_length=16, padding="max_length")
+    assert vocab.to_tensor(text)[0].tolist() == expected["input_ids"][0]

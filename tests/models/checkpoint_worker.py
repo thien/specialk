@@ -82,7 +82,7 @@ def _build(arch: str, use_peft: bool):
 
     peft_config = (
         LoraConfig(
-            task_type=TaskType.SEQ_CLS,
+            task_type=TaskType.SEQ_2_SEQ_LM,
             r=8,
             lora_alpha=32,
             lora_dropout=0.0,

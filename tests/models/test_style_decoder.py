@@ -497,15 +497,16 @@ def test_marianmt_bert_fit(spm_dataloader, pretrained_bert):
 
 
 @pytest.mark.heavyweight
-def test_marianmt_lora_bert_fit(spm_dataloader, pretrained_bert):
-    modules = [
-        f"decoder.layers.{layer}.encoder_attn.{proj}"
-        for layer in range(6)
-        for proj in ["q_proj", "k_proj", "v_proj"]
-    ]
+def test_marianmt_lora_bert_fit(spm_dataloader, val_dataloader, pretrained_bert):
     model_base_name = "Helsinki-NLP/opus-mt-fr-en"
+    # The helper reads the decoder's layer count off a live module.
+    base = MarianMTModule(name=model_base_name, model_base_name=model_base_name)
+    modules = base.get_lora_config_modules()
+    decoder_layers = len(base.model.model.decoder.layers)
+    del base
+
     peft_config = LoraConfig(
-        task_type=TaskType.SEQ_CLS,
+        task_type=TaskType.SEQ_2_SEQ_LM,
         r=8,
         lora_alpha=32,
         lora_dropout=0.1,
@@ -520,6 +521,44 @@ def test_marianmt_lora_bert_fit(spm_dataloader, pretrained_bert):
     seq2seq.vocabulary_size = seq2seq.tokenizer.vocab_size
     seq2seq._freeze_non_lora_weights()
 
+    # Two weights (A and B) per adapted module.
+    lora_names = [
+        name for name, _ in seq2seq.model.named_parameters() if "lora_" in name
+    ]
+    assert len(lora_names) == 2 * len(modules)
+    cross_attention = [module for module in modules if "encoder_attn" in module]
+    assert len(cross_attention) == 3 * decoder_layers
+    for module in cross_attention:
+        assert any(module in name for name in lora_names), module
+
     module = StyleBackTranslationModelWithBERT(seq2seq, pretrained_bert, target_label=1)
 
-    make_trainer().fit(module, train_dataloaders=spm_dataloader)
+    recorder = MetricRecorder()
+    trainer = make_trainer(callbacks=[recorder], limit_val_batches=1)
+    trainer.fit(
+        module,
+        train_dataloaders=spm_dataloader,
+        val_dataloaders=val_dataloader,
+    )
+
+    metrics = recorder.metrics
+    assert "eval_loss" in metrics, sorted(metrics)
+    assert math.isfinite(metrics["eval_loss"])
+    assert 0.0 <= metrics["eval_style_acc"] <= 1.0
+
+
+@pytest.mark.lightweight
+def test_lora_r_requires_marian(tmp_path):
+    from specialk.trainers import train_style_decoder
+
+    with pytest.raises(ValueError, match="--lora-r"):
+        train_style_decoder.main(
+            [
+                "--mt-checkpoint",
+                str(tmp_path / "mt.ckpt"),
+                "--classifier-checkpoint",
+                str(tmp_path / "classifier.ckpt"),
+                "--lora-r",
+                "8",
+            ]
+        )

@@ -559,7 +559,7 @@ def pretrained_marianmt_peft() -> MarianMTModule:
     ]
     model_base_name: str = "Helsinki-NLP/opus-mt-fr-en"
     peft_config = LoraConfig(
-        task_type=TaskType.SEQ_CLS,
+        task_type=TaskType.SEQ_2_SEQ_LM,
         r=8,
         lora_alpha=32,
         lora_dropout=0.1,

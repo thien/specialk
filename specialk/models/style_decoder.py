@@ -66,6 +66,7 @@ class StyleBackTranslationModel(pl.LightningModule):
         tau_start: float = 1.0,
         tau_end: float = 0.1,
         learning_rate: float = 1e-3,
+        fixed_token_map: Tensor | None = None,
     ):
         """
         Args:
@@ -77,7 +78,7 @@ class StyleBackTranslationModel(pl.LightningModule):
                 Label the decoder is trained to produce.
             use_mapping (bool):
                 Learn a mapping between the sequence model's vocabulary and
-                the classifier's vocabulary.
+                the classifier's vocabulary. Ignored when a fixed map is given.
             mapping_dim (int):
                 Dimension of the learned mapping between vocabularies.
             lambda_class (float):
@@ -88,13 +89,16 @@ class StyleBackTranslationModel(pl.LightningModule):
                 Final softmax temperature.
             learning_rate (float):
                 Learning rate for the trainable parameters.
+            fixed_token_map (Tensor | None):
+                A ``[seq_vocab]`` table of classifier token ids. When set, the
+                mapping is deterministic and never trained.
         """
         super().__init__()
-        self.save_hyperparameters(ignore=["mt_model", "classifier"])
+        self.save_hyperparameters(ignore=["mt_model", "classifier", "fixed_token_map"])
 
         self.sequence_model: NMTModule = mt_model
         self.classifier: TextClassifier = classifier
-        self.use_mapping: bool = use_mapping
+        self.use_mapping: bool = use_mapping and fixed_token_map is None
 
         self.target_label: int = target_label
         self.tau: float = tau_start
@@ -102,15 +106,17 @@ class StyleBackTranslationModel(pl.LightningModule):
         # Marian's padding token is not 0, so it can't be a constant.
         self.seq_pad: int = self._sequence_pad()
 
+        self.register_buffer("token_map", fixed_token_map)
+
         # having one tensor is an unreasonable size; (marianMT is 50k, BERT 30k)...
         self.seq_projection = (
             nn.Linear(self.sequence_model.vocabulary_size, mapping_dim)
-            if use_mapping
+            if self.use_mapping
             else None
         )
         self.clf_projection = (
             nn.Linear(mapping_dim, self._classifier_vocabulary_size())
-            if use_mapping
+            if self.use_mapping
             else None
         )
 
@@ -187,6 +193,11 @@ class StyleBackTranslationModel(pl.LightningModule):
     # ------------------------------------------------------------------
     def _map(self, soft: Tensor) -> Tensor:
         """Map a distribution over the seq2seq vocabulary into the classifier's."""
+        if self.token_map is not None:
+            batch, length, _ = soft.shape
+            mapped = soft.new_zeros(batch, length, self._classifier_vocabulary_size())
+            index = self.token_map.view(1, 1, -1).expand(batch, length, -1)
+            return mapped.scatter_add_(2, index, soft)
         if not self.use_mapping:
             return soft
         return F.softmax(self.clf_projection(self.seq_projection(soft)), dim=-1)
@@ -346,12 +357,35 @@ class StyleBackTranslationModelWithCNN(StyleBackTranslationModel):
         assert isinstance(classifier, CNNClassifier), (
             f"Classifier is not a CNNClassifier (found {type(classifier).__name__})"
         )
-        # A CNN trained on the seq2seq vocabulary needs no mapping, and a
-        # trainable one could satisfy the classifier without the decoder.
-        kwargs.setdefault(
-            "use_mapping", classifier.vocabulary_size != mt_model.vocabulary_size
-        )
+        # A CNN trained on the seq2seq vocabulary needs no mapping. A CNN with
+        # another vocabulary needs a tokenizer to build a fixed map; never a
+        # trainable one, which could satisfy the classifier without the decoder.
+        if classifier.vocabulary_size != mt_model.vocabulary_size:
+            if kwargs.get("use_mapping") is True:
+                # An explicit request for the learned map, used by experiments.
+                pass
+            elif classifier.tokenizer is None or mt_model.tokenizer is None:
+                raise ValueError(
+                    "The classifier and seq2seq vocabularies differ, so they need "
+                    "a fixed token map; attach the classifier's tokenizer or pass "
+                    "a classifier trained on the seq2seq vocabulary"
+                )
+            else:
+                token_map, coverage = build_token_map(
+                    mt_model.tokenizer,
+                    classifier.tokenizer,
+                    mt_model.vocabulary_size,
+                    classifier.vocabulary_size,
+                )
+                kwargs["fixed_token_map"] = token_map
+                kwargs["use_mapping"] = False
+                kwargs["mapping_coverage"] = coverage
+        else:
+            kwargs.setdefault("use_mapping", False)
+        coverage = kwargs.pop("mapping_coverage", None)
         super().__init__(mt_model=mt_model, classifier=classifier, **kwargs)
+        if coverage is not None:
+            self.mapping_coverage = coverage
 
     def _classify(
         self,
@@ -382,33 +416,26 @@ class StyleBackTranslationModelWithBERT(StyleBackTranslationModel):
         # BERT has its own vocabulary, so the distributions still need
         # translating. The map is fixed: a trained one can raise style accuracy
         # without the decoder improving.
-        kwargs["use_mapping"] = False
-        super().__init__(mt_model=mt_model, classifier=classifier, **kwargs)
-
-        if self.sequence_model.tokenizer is None:
+        if mt_model.tokenizer is None:
             raise ValueError(
                 "The BERT style decoder needs the seq2seq tokenizer to build a "
                 "fixed token map; load a checkpoint saved with one"
             )
-        token_map, coverage = build_token_map(
-            self.sequence_model.tokenizer,
-            self.classifier.tokenizer,
-            self.sequence_model.vocabulary_size,
-            self._classifier_vocabulary_size(),
+        clf_vocab = classifier.vocabulary_size or int(
+            classifier.model.get_input_embeddings().weight.size(0)
         )
-        self.register_buffer("token_map", token_map)
+        token_map, coverage = build_token_map(
+            mt_model.tokenizer,
+            classifier.tokenizer,
+            mt_model.vocabulary_size,
+            clf_vocab,
+        )
+        kwargs["use_mapping"] = False
+        kwargs["fixed_token_map"] = token_map
+        super().__init__(mt_model=mt_model, classifier=classifier, **kwargs)
         # Share of ordinary seq2seq tokens that found a BERT token by surface
         # form. The rest become [UNK]; log it so a run can be judged with it.
         self.mapping_coverage = coverage
-
-    def _map(self, soft: Tensor) -> Tensor:
-        """Translate seq2seq token scores into BERT token scores."""
-        batch, length, _ = soft.shape
-        mapped = soft.new_zeros(
-            batch, length, self._classifier_vocabulary_size()
-        )
-        index = self.token_map.view(1, 1, -1).expand(batch, length, -1)
-        return mapped.scatter_add_(2, index, soft)
 
     def _sequence_mask(
         self, y: Int[Tensor, "batch seq_len"]

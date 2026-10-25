@@ -1,11 +1,7 @@
-"""Fixed maps between a seq2seq vocabulary and a classifier vocabulary.
+"""Fixed token maps between a seq2seq vocabulary and a classifier vocabulary.
 
-The style decoder feeds token distributions to a frozen classifier. When the
-two models use different tokenizers, something has to translate between them.
 A trained projection can satisfy the classifier without the decoder improving,
-so this module builds a deterministic map: a seq2seq token points at the
-classifier token with the same surface form, or at the classifier's unknown
-token when there is none.
+so the map uses surface forms and falls back to the classifier's unknown token.
 """
 
 from __future__ import annotations

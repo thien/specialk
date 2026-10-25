@@ -135,10 +135,8 @@ def load_classifier(
     """Load a trained style classifier of the requested kind.
 
     A CNN checkpoint does not store its tokenizer. ``tokenizer_path`` attaches
-    the ``WordVocabulary`` JSON it was trained with, which the style decoder
-    needs to build a fixed token map when the vocabularies differ. The 2019
-    checkpoints also lack hyperparameters, so the tokenizer supplies the
-    vocabulary and sequence length.
+    the WordVocabulary it was trained with; the 2019 checkpoints also take their
+    vocabulary and sequence length from it.
     """
     if kind == "cnn":
         checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
@@ -364,10 +362,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--dataset-label",
         type=int,
         default=None,
-        help=(
-            "style dataset label to train on (default: --target-label); set it "
-            "when the classifier lists the classes in another order"
-        ),
+        help="style dataset label to train on (default: --target-label)",
     )
     parser.add_argument(
         "--mt-checkpoint",
@@ -401,10 +396,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--classifier-tokenizer",
         type=Path,
         default=None,
-        help=(
-            "WordVocabulary JSON the CNN was trained with; needed when its "
-            "vocabulary differs from the seq2seq's"
-        ),
+        help="WordVocabulary JSON the CNN was trained with",
     )
     parser.add_argument("--lambda-class", type=float, default=1.0)
     parser.add_argument("--tau-start", type=float, default=1.0)

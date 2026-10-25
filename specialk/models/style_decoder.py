@@ -357,9 +357,8 @@ class StyleBackTranslationModelWithCNN(StyleBackTranslationModel):
         assert isinstance(classifier, CNNClassifier), (
             f"Classifier is not a CNNClassifier (found {type(classifier).__name__})"
         )
-        # A CNN trained on the seq2seq vocabulary needs no mapping. A CNN with
-        # another vocabulary needs a tokenizer to build a fixed map; never a
-        # trainable one, which could satisfy the classifier without the decoder.
+        # A shared vocabulary needs no map. A different one needs a fixed
+        # table; a trained map can satisfy the classifier without the decoder.
         seq_tokenizer = mt_model.decoder_tokenizer or mt_model.tokenizer
         if classifier.vocabulary_size != mt_model.vocabulary_size:
             if kwargs.get("use_mapping") is True:
@@ -367,9 +366,8 @@ class StyleBackTranslationModelWithCNN(StyleBackTranslationModel):
                 pass
             elif classifier.tokenizer is None or seq_tokenizer is None:
                 raise ValueError(
-                    "The classifier and seq2seq vocabularies differ, so they need "
-                    "a fixed token map; attach the classifier's tokenizer or pass "
-                    "a classifier trained on the seq2seq vocabulary"
+                    "The vocabularies differ; attach the classifier's tokenizer "
+                    "or use a classifier trained on the seq2seq vocabulary"
                 )
             else:
                 token_map, coverage = build_token_map(
@@ -420,8 +418,8 @@ class StyleBackTranslationModelWithBERT(StyleBackTranslationModel):
         seq_tokenizer = mt_model.decoder_tokenizer or mt_model.tokenizer
         if seq_tokenizer is None:
             raise ValueError(
-                "The BERT style decoder needs the seq2seq tokenizer to build a "
-                "fixed token map; load a checkpoint saved with one"
+                "The BERT map needs the seq2seq tokenizer; load a checkpoint "
+                "saved with one"
             )
         clf_vocab = classifier.vocabulary_size or int(
             classifier.model.get_input_embeddings().weight.size(0)
@@ -435,8 +433,8 @@ class StyleBackTranslationModelWithBERT(StyleBackTranslationModel):
         kwargs["use_mapping"] = False
         kwargs["fixed_token_map"] = token_map
         super().__init__(mt_model=mt_model, classifier=classifier, **kwargs)
-        # Share of ordinary seq2seq tokens that found a BERT token by surface
-        # form. The rest become [UNK]; log it so a run can be judged with it.
+        # Share of seq2seq tokens that matched a BERT token. The rest become
+        # [UNK]; log it with the run.
         self.mapping_coverage = coverage
 
     def _sequence_mask(
@@ -456,9 +454,8 @@ class StyleBackTranslationModelWithBERT(StyleBackTranslationModel):
         embeddings = soft @ embedding
         mask = self._sequence_mask(y)
 
-        # BERT was trained with [CLS] at position 0 and pools that position.
-        # The transformer's target starts with <s>, which maps to [CLS], but
-        # Marian's target starts with the first word.
+        # BERT pools position 0, which is [CLS] in training. The transformer
+        # starts with <s> (maps to [CLS]); Marian starts with a word.
         cls_id = self.classifier.tokenizer.cls_token_id
         if cls_id is not None and y.size(1) > 0:
             first = self.token_map[y[:, 0]]

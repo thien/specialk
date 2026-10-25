@@ -7,11 +7,28 @@ from torch import Tensor
 
 from specialk.core.constants import EOS, PAD, PROJECT_DIR, SEED, SOS
 from specialk.core.utils import log
+from specialk.models.generators.sampling import LanguageModelSampler
 from specialk.models.transformer.torch.pytorch_transformer import (
     PyTorchTransformerModule,
 )
 
 torch.manual_seed(SEED)
+
+
+@pytest.mark.lightweight
+def test_greedy_search_handles_a_batch():
+    logits = torch.tensor([[1.0, 3.0, 2.0], [5.0, 1.0, 0.0]])
+
+    tokens = LanguageModelSampler.greedy_search(logits)
+
+    assert tokens.tolist() == [1, 0]
+
+
+@pytest.mark.lightweight
+def test_greedy_search_handles_one_row():
+    logits = torch.tensor([1.0, 4.0, 2.0])
+
+    assert int(LanguageModelSampler.greedy_search(logits)) == 1
 
 
 @pytest.fixture(scope="module")

@@ -144,12 +144,9 @@ class LanguageModelSampler:
         return option
 
     @staticmethod
-    def greedy_search(logits: Float[Tensor, "d_vocab"]) -> int:
-        """
-        Returns the most likely token (as an int).
-        """
-        out = int(logits.argmax().item())
-        return out
+    def greedy_search(logits: Float[Tensor, "..."]) -> Tensor:
+        """Return the most likely token for every row of ``logits``."""
+        return logits.argmax(dim=-1)
 
     @staticmethod
     def apply_frequency_penalty(

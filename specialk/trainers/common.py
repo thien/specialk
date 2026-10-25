@@ -1,9 +1,4 @@
-"""Helpers shared by the machine-translation training entry points.
-
-These used to be duplicated in ``train_nmt.py`` and ``train_model_decoder.py``.
-Keeping them in one place means a dataset or tokenizer fix only has to be made
-once.
-"""
+"""Helpers shared by the machine-translation training entry points."""
 
 from __future__ import annotations
 
@@ -177,6 +172,7 @@ def load_style_datasets(
     num_proc: int = 8,
     path: Optional[Union[str, Path]] = None,
     source_column: Optional[str] = None,
+    eval_path: Optional[Union[str, Path]] = None,
 ) -> Tuple[Dataset, Dataset]:
     """Load a labelled style corpus as ``(train, eval)``.
 
@@ -191,7 +187,8 @@ def load_style_datasets(
 
     ``path`` loads a local parquet instead of the Hub. A local file usually
     holds one split, which is returned as both train and eval. A file with an
-    eval/validation/test split gives two different ones.
+    eval/validation/test split gives two different ones. ``eval_path`` loads a
+    separate file for the evaluation split, so a local run can hold out data.
     """
     try:
         hub_name, config, default_source = STYLE_DATASETS[name]
@@ -203,17 +200,34 @@ def load_style_datasets(
 
     if path is not None:
         loaded = load_dataset("parquet", data_files=str(path))
+        train = _prepare_style_split(
+            _single_split(loaded, "train"), name, source_column
+        )
+        if eval_path is not None:
+            loaded_eval = load_dataset("parquet", data_files=str(eval_path))
+            eval_split = _prepare_style_split(
+                _single_split(loaded_eval, "train"), name, source_column
+            )
+        else:
+            try:
+                eval_split = _single_split(
+                    loaded, "eval", "validation", "valid", "test"
+                )
+            except ValueError:
+                # A single-split local file is its own evaluation set.
+                eval_split = train
+            else:
+                eval_split = _prepare_style_split(eval_split, name, source_column)
     else:
         loaded = load_dataset(hub_name, config, num_proc=num_proc, keep_in_memory=True)
-
-    train = _prepare_style_split(_single_split(loaded, "train"), name, source_column)
-    try:
-        eval_split = _single_split(loaded, "eval", "validation", "valid", "test")
-    except ValueError:
-        # A single-split local file is its own evaluation set.
-        eval_split = train
-    else:
-        eval_split = _prepare_style_split(eval_split, name, source_column)
+        train = _prepare_style_split(
+            _single_split(loaded, "train"), name, source_column
+        )
+        eval_split = _prepare_style_split(
+            _single_split(loaded, "eval", "validation", "valid", "test"),
+            name,
+            source_column,
+        )
 
     if target_label is not None:
         train = train.filter(lambda row: row["label"] == target_label)

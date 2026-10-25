@@ -1,11 +1,7 @@
 """Training entry point for the style decoder.
 
-Fine-tunes a saved seq2seq checkpoint so that its translations are classified
-as the target style. Training updates the decoder and the vocabulary mapping.
-The encoder and classifier stay frozen.
-
-Pass ``--seq2seq marian`` for a HuggingFace Marian checkpoint. ``--lora-r``
-then trains a LoRA adapter on the decoder's cross-attention modules.
+Pass ``--seq2seq marian`` for a Marian checkpoint; ``--lora-r`` trains a LoRA
+adapter on its decoder.
 
 Example:
     python -m specialk.trainers.train_style_decoder --dataset political \\
@@ -21,6 +17,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import lightning.pytorch as pl
+import torch
 from lightning.pytorch.callbacks import ModelCheckpoint
 from peft import LoraConfig, get_peft_model
 from peft.utils.peft_types import TaskType
@@ -35,7 +32,7 @@ from specialk.models.style_decoder import (
     StyleBackTranslationModelWithBERT,
     StyleBackTranslationModelWithCNN,
 )
-from specialk.models.tokenizer import HuggingFaceVocabulary
+from specialk.models.tokenizer import HuggingFaceVocabulary, WordVocabulary
 from specialk.models.transformer.hf_transformer import MarianMTModule
 from specialk.models.transformer.torch.pytorch_transformer import (
     PyTorchTransformerModule,
@@ -128,11 +125,41 @@ def marian_tokenizers(
 
 
 def load_classifier(
-    kind: str, checkpoint_path: str | Path
+    kind: str, checkpoint_path: str | Path, tokenizer_path: str | Path | None = None
 ) -> CNNClassifier | BERTClassifier:
-    """Load a trained style classifier of the requested kind."""
+    """Load a trained style classifier of the requested kind.
+
+    A CNN checkpoint does not store its tokenizer. ``tokenizer_path`` attaches
+    the WordVocabulary it was trained with; the 2019 checkpoints also take their
+    vocabulary and sequence length from it.
+    """
     if kind == "cnn":
-        return CNNClassifier.load_from_checkpoint(checkpoint_path, map_location="cpu")
+        checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+        hparams = checkpoint.get("hyper_parameters") or {}
+        tokenizer = (
+            WordVocabulary.from_file(tokenizer_path)
+            if tokenizer_path is not None
+            else None
+        )
+        if tokenizer is None and not hparams:
+            raise ValueError(
+                f"{checkpoint_path} has no hyperparameters; pass "
+                "--classifier-tokenizer with the vocabulary it was trained on"
+            )
+        model = CNNClassifier(
+            name=hparams.get("name", Path(checkpoint_path).stem),
+            vocabulary_size=hparams.get("vocabulary_size") or tokenizer.vocab_size,
+            sequence_length=hparams.get("sequence_length") or tokenizer.max_length,
+            tokenizer=tokenizer,
+            learning_rate=hparams.get("learning_rate", 0.001),
+            optimizer=hparams.get("optimizer", "adam"),
+            lr_decay=hparams.get("lr_decay", 1.0),
+            decay_start=hparams.get("decay_start", 0),
+        )
+        model.load_state_dict(checkpoint["state_dict"])
+        return model
+    if tokenizer_path is not None:
+        raise ValueError("--classifier-tokenizer only applies to --classifier cnn")
     if kind == "bert":
         return BERTClassifier.load_from_checkpoint(checkpoint_path, map_location="cpu")
     raise ValueError(f"Unknown classifier {kind!r}; expected one of {CLASSIFIERS}")
@@ -146,6 +173,7 @@ def build_style_model(
     tau_start: float,
     tau_end: float,
     learning_rate: float,
+    learned_mapping: bool = False,
 ) -> StyleBackTranslationModel:
     """Wrap the two frozen models in the matching style decoder."""
     options = {
@@ -154,6 +182,7 @@ def build_style_model(
         "tau_start": tau_start,
         "tau_end": tau_end,
         "learning_rate": learning_rate,
+        "use_mapping": learned_mapping,
     }
     if isinstance(classifier, CNNClassifier):
         return StyleBackTranslationModelWithCNN(mt_model, classifier, **options)
@@ -173,6 +202,9 @@ def train(args: argparse.Namespace) -> pl.Trainer:
         # one from its tokenizer before the style decoder builds its projections.
         mt_model.vocabulary_size = mt_model.tokenizer.vocab_size
         tokenizer, decoder_tokenizer = marian_tokenizers(mt_model)
+        # The style decoder maps the target distribution, so it needs the
+        # target tokenizer rather than the source one.
+        mt_model.decoder_tokenizer = decoder_tokenizer
         sequence_length = mt_model.sequence_length
     else:
         mt_model = load_seq2seq(args.mt_checkpoint)
@@ -187,19 +219,25 @@ def train(args: argparse.Namespace) -> pl.Trainer:
         sequence_length = (
             getattr(tokenizer, "max_length", None) or mt_model.sequence_length
         )
-    classifier = load_classifier(args.classifier, args.classifier_checkpoint)
+    classifier = load_classifier(
+        args.classifier, args.classifier_checkpoint, args.classifier_tokenizer
+    )
 
+    dataset_label = (
+        args.dataset_label if args.dataset_label is not None else args.target_label
+    )
     train_dataset, val_dataset = load_style_datasets(
         args.dataset,
-        target_label=args.target_label,
+        target_label=dataset_label,
         num_proc=max(args.n_workers, 1),
         path=args.path,
         source_column=args.source_column,
+        eval_path=args.eval_path,
     )
     if len(train_dataset) == 0:
         raise ValueError(
-            f"No {args.dataset!r} rows have label {args.target_label}; "
-            "check --target-label and --source-column"
+            f"No {args.dataset!r} rows have label {dataset_label}; "
+            "check --dataset-label and --source-column"
         )
 
     train_dataloader, _ = init_dataloader(
@@ -227,47 +265,60 @@ def train(args: argparse.Namespace) -> pl.Trainer:
         tau_start=args.tau_start,
         tau_end=args.tau_end,
         learning_rate=args.learning_rate,
+        learned_mapping=args.learned_mapping,
     )
 
     log.info(
         "Loaded the style-decoder setup",
         dataset=args.dataset,
         target_label=args.target_label,
+        dataset_label=dataset_label,
         seq2seq=args.seq2seq,
         lora_r=args.lora_r,
         mt_checkpoint=str(args.mt_checkpoint),
         classifier_checkpoint=str(args.classifier_checkpoint),
         classifier=args.classifier,
+        classifier_tokenizer=str(args.classifier_tokenizer)
+        if args.classifier_tokenizer
+        else None,
         train_rows=len(train_dataset),
         val_rows=len(val_dataset),
         tokenizer=tokenizer.__class__.__name__,
         sequence_length=sequence_length,
         vocabulary_size=mt_model.vocabulary_size,
+        use_mapping=task.use_mapping,
+        mapping_coverage=getattr(task, "mapping_coverage", None),
+        learned_mapping=args.learned_mapping,
     )
 
     params = {
         "batch_size": args.batch_size,
         "dataset": args.dataset,
         "target_label": args.target_label,
+        "dataset_label": dataset_label,
         "seq2seq": args.seq2seq,
         "lora_r": args.lora_r,
         "mt_checkpoint": str(args.mt_checkpoint),
         "classifier_checkpoint": str(args.classifier_checkpoint),
         "classifier": args.classifier,
+        "classifier_tokenizer": str(args.classifier_tokenizer)
+        if args.classifier_tokenizer
+        else None,
         "lambda_class": args.lambda_class,
         "tau_start": args.tau_start,
         "tau_end": args.tau_end,
         "learning_rate": args.learning_rate,
         "max_epochs": args.max_epochs,
+        "use_mapping": task.use_mapping,
+        "mapping_coverage": getattr(task, "mapping_coverage", None),
+        "learned_mapping": args.learned_mapping,
     }
     logger = init_logger(
         args, f"style_decoder/{args.dataset}_{args.target_label}", params
     )
 
     checkpoint_dir = (
-        Path(args.checkpoint_dir)
-        if args.checkpoint_dir
-        else Path.cwd() / "checkpoints"
+        Path(args.checkpoint_dir) if args.checkpoint_dir else Path.cwd() / "checkpoints"
     )
 
     trainer = pl.Trainer(
@@ -282,9 +333,7 @@ def train(args: argparse.Namespace) -> pl.Trainer:
         callbacks=[
             # Every epoch is kept because the thesis found three before
             # overfitting.
-            ModelCheckpoint(
-                dirpath=checkpoint_dir, monitor=VAL_LOSS, save_top_k=-1
-            ),
+            ModelCheckpoint(dirpath=checkpoint_dir, monitor=VAL_LOSS, save_top_k=-1),
         ],
     )
 
@@ -308,6 +357,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=1,
         help="label the translations should be classified as",
+    )
+    parser.add_argument(
+        "--dataset-label",
+        type=int,
+        default=None,
+        help="style dataset label to train on (default: --target-label)",
     )
     parser.add_argument(
         "--mt-checkpoint",
@@ -337,6 +392,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="trained style classifier checkpoint",
     )
     parser.add_argument("--classifier", choices=CLASSIFIERS, default="cnn")
+    parser.add_argument(
+        "--classifier-tokenizer",
+        type=Path,
+        default=None,
+        help="WordVocabulary JSON the CNN was trained with",
+    )
+    parser.add_argument(
+        "--learned-mapping",
+        action="store_true",
+        help="use the trainable vocabulary projection (original implementation)",
+    )
     parser.add_argument("--lambda-class", type=float, default=1.0)
     parser.add_argument("--tau-start", type=float, default=1.0)
     parser.add_argument("--tau-end", type=float, default=0.1)
@@ -376,6 +442,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="load a local parquet instead of the Hub dataset",
+    )
+    parser.add_argument(
+        "--eval-path",
+        type=Path,
+        default=None,
+        help="local parquet for the validation split",
     )
     parser.add_argument(
         "--source-column",

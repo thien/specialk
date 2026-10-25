@@ -1,5 +1,6 @@
 import math
 import warnings
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -83,6 +84,7 @@ def make_seq2seq(tokenizer: SentencePieceVocabulary) -> PyTorchTransformerModule
         n_heads=2,
         num_encoder_layers=1,
         num_decoder_layers=1,
+        tokenizer=tokenizer,
     )
 
 
@@ -228,7 +230,10 @@ def test_bert_fit_with_validation(bert_style_module, train_dataloader, val_datal
 
     assert math.isfinite(metrics["eval_loss"])
     assert 0.0 <= metrics["eval_style_acc"] <= 1.0
-    assert bert_style_module.use_mapping is True
+    # BERT uses a fixed token map rather than a trainable projection.
+    assert bert_style_module.use_mapping is False
+    assert bert_style_module.token_map.requires_grad is False
+    assert 0.0 <= bert_style_module.mapping_coverage <= 1.0
 
 
 @pytest.mark.lightweight
@@ -344,7 +349,7 @@ def test_bert_mask(bert_style_module, train_dataloader, monkeypatch):
     monkeypatch.setattr(module.classifier.model, "forward", forward)
 
     soft = torch.softmax(
-        torch.randn(x.size(0), y.size(1), module.clf_projection.out_features),
+        torch.randn(x.size(0), y.size(1), module._classifier_vocabulary_size()),
         dim=-1,
     )
     module.eval()
@@ -354,6 +359,81 @@ def test_bert_mask(bert_style_module, train_dataloader, monkeypatch):
     assert logits.shape == (x.size(0), 2)
     assert captured["attention_mask"] is not None
     assert torch.equal(captured["attention_mask"].bool(), y.ne(module.seq_pad))
+
+
+@pytest.mark.heavyweight
+def test_bert_can_use_the_learned_map(seq2seq, pretrained_bert):
+    module = StyleBackTranslationModelWithBERT(
+        seq2seq, pretrained_bert, use_mapping=True
+    )
+
+    assert module.use_mapping is True
+    assert module.token_map is None
+    assert module.seq_projection is not None
+    assert module.clf_projection is not None
+
+
+@pytest.mark.heavyweight
+def test_bert_token_map_is_fixed(bert_style_module, train_dataloader):
+    module = bert_style_module
+    assert "token_map" not in dict(module.named_parameters())
+    assert isinstance(module.token_map, Tensor)
+    assert module.token_map.dtype == torch.long
+
+    optimizer = module.configure_optimizers()
+    optimizer_ids = {
+        id(param) for group in optimizer.param_groups for param in group["params"]
+    }
+    assert id(module.token_map) not in optimizer_ids
+    assert module.seq_projection is None
+    assert module.clf_projection is None
+
+    x, y, _ = module._batch_tensors(next(iter(train_dataloader)))
+    with torch.no_grad():
+        soft = torch.softmax(
+            torch.randn(x.size(0), y.size(1), module.sequence_model.vocabulary_size),
+            dim=-1,
+        )
+        mapped = module._map(soft)
+
+    assert mapped.shape == (
+        x.size(0),
+        y.size(1),
+        module._classifier_vocabulary_size(),
+    )
+    assert torch.allclose(mapped.sum(-1), torch.ones_like(mapped.sum(-1)), atol=1e-5)
+
+
+@pytest.mark.heavyweight
+def test_bert_prepends_cls_for_word_first_targets(bert_style_module, monkeypatch):
+    module = bert_style_module
+    module.eval()
+    vocab = module._classifier_vocabulary_size()
+    # The transformer target starts with <s>, which maps to [CLS]. A word
+    # first token, as Marian produces, should get a [CLS] prepended.
+    y = torch.full((2, 6), 7, dtype=torch.long)
+    soft = torch.softmax(torch.randn(2, 6, vocab), dim=-1)
+    cls_id = module.classifier.tokenizer.cls_token_id
+    embedding = module.classifier.model.get_input_embeddings().weight
+
+    captured = {}
+    original = module.classifier.model.forward
+
+    def forward(*args, **kwargs):
+        captured["inputs_embeds"] = kwargs.get("inputs_embeds")
+        captured["mask"] = kwargs.get("attention_mask")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(module.classifier.model, "forward", forward)
+    with torch.no_grad():
+        logits = module._classify(soft, y)
+
+    assert captured["inputs_embeds"].shape == (2, 7, embedding.size(1))
+    assert torch.allclose(
+        captured["inputs_embeds"][:, 0], embedding[cls_id].expand(2, -1)
+    )
+    assert captured["mask"][:, 0].eq(1).all()
+    assert logits.shape == (2, 2)
 
 
 @pytest.mark.lightweight
@@ -402,6 +482,57 @@ def test_recon_loss_ignores_seq_pad(cnn_style_module):
 def test_cnn_shared_vocab_skips_mapping(cnn_style_module):
     assert cnn_style_module.use_mapping is False
     assert cnn_style_module.seq_projection is None
+
+
+class FakeWordTokenizer:
+    """The parts of a WordVocabulary the fixed map reads."""
+
+    vocab_size = 6
+    max_length = SEQUENCE_LENGTH
+    PAD = 0
+    UNK = 1
+    BOS = 2
+    EOS = 3
+    vocab = SimpleNamespace(
+        idxToLabel={
+            0: "<blank>",
+            1: "<unk>",
+            2: "<s>",
+            3: "</s>",
+            4: "hello",
+            5: "world",
+        }
+    )
+
+
+@pytest.mark.lightweight
+def test_cnn_different_vocab_builds_fixed_map(seq2seq):
+    classifier = CNNClassifier(
+        name="legacy",
+        vocabulary_size=FakeWordTokenizer.vocab_size,
+        sequence_length=SEQUENCE_LENGTH,
+        tokenizer=FakeWordTokenizer(),
+    )
+
+    module = StyleBackTranslationModelWithCNN(seq2seq, classifier)
+
+    assert module.use_mapping is False
+    assert module.seq_projection is None
+    assert module.clf_projection is None
+    assert module.token_map.numel() == seq2seq.vocabulary_size
+    assert 0.0 < module.mapping_coverage <= 1.0
+
+
+@pytest.mark.lightweight
+def test_cnn_different_vocab_without_tokenizer_raises(seq2seq):
+    classifier = CNNClassifier(
+        name="legacy",
+        vocabulary_size=FakeWordTokenizer.vocab_size,
+        sequence_length=SEQUENCE_LENGTH,
+    )
+
+    with pytest.raises(ValueError, match="vocabularies differ"):
+        StyleBackTranslationModelWithCNN(seq2seq, classifier)
 
 
 @pytest.mark.lightweight
@@ -475,7 +606,7 @@ def test_bert_forward_with_class(bert_style_module, train_dataloader):
     with torch.no_grad():
         seq_logits, clf_out = module._forward(x, y)
 
-    assert module.use_mapping is True
+    assert module.use_mapping is False
     assert seq_logits.shape[-1] == module.sequence_model.vocabulary_size
     assert clf_out.shape == (x.size(0), 2)
 

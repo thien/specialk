@@ -169,3 +169,19 @@ def test_legacy_tokenized_labels_are_flipped(monkeypatch):
     assert vocabulary_size == VOCAB_SIZE
     assert train.dataset.labels == [0, 1]
     assert valid.dataset.labels == [1]
+
+
+@pytest.mark.lightweight
+def test_resolve_batch_size_defaults():
+    assert train_classifier.resolve_batch_size("cnn", None) == 128
+    assert train_classifier.resolve_batch_size("bert", None) == 32
+    assert train_classifier.resolve_batch_size("bert", 8) == 8
+
+
+@pytest.mark.lightweight
+@pytest.mark.parametrize(
+    "flag", ["--tokenized-path", "--tokenizer-path", "--mt-checkpoint"]
+)
+def test_bert_rejects_cnn_tokenizers(flag):
+    with pytest.raises(SystemExit):
+        train_classifier.get_args(["--model_type", "bert", flag, "some-path"])

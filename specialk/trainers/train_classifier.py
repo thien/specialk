@@ -249,8 +249,14 @@ def load_tokenized_classification_dataset(
     return train_loader, val_loader, sequence_length, vocabulary_size
 
 
+def resolve_batch_size(model_type: str, batch_size: int | None) -> int:
+    """Pick the default batch size for the model, unless the caller set one."""
+    if batch_size is not None:
+        return batch_size
+    return 32 if model_type == "bert" else 128
+
 def main_new(args):
-    batch_size = args.batch_size
+    batch_size = resolve_batch_size(args.model_type, args.batch_size)
 
     # tokenizer
     vocabulary_size = None
@@ -490,7 +496,10 @@ def get_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="gradient clipping value",
     )
     parser.add_argument(
-        "--batch_size", type=int, default=128, help="Batch size for training"
+        "--batch_size",
+        type=int,
+        default=None,
+        help="Batch size for training (default: 128 for CNN, 32 for BERT)",
     )
     parser.add_argument(
         "--max-seq-len",
@@ -540,6 +549,21 @@ def get_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
 
     args = parser.parse_args(argv)
+    if args.model_type == "bert":
+        incompatible = [
+            flag
+            for flag, value in (
+                ("--tokenized-path", args.tokenized_path),
+                ("--tokenizer-path", args.tokenizer_path),
+                ("--mt-checkpoint", args.mt_checkpoint),
+            )
+            if value is not None
+        ]
+        if incompatible:
+            parser.error(
+                f"{', '.join(incompatible)} cannot be used with --model_type bert; "
+                "BERT builds its own tokenizer"
+            )
     return args
 
 

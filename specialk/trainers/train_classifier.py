@@ -277,6 +277,7 @@ def resolve_batch_size(model_type: str, batch_size: int | None) -> int:
         return batch_size
     return 32 if model_type == "bert" else 128
 
+
 def main_new(args):
     batch_size = resolve_batch_size(args.model_type, args.batch_size)
 

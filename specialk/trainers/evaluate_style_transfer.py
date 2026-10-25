@@ -49,6 +49,7 @@ def generate_texts(
     batch_size: int,
     max_new_tokens: int,
     seq2seq: str,
+    no_repeat_ngram_size: int = 0,
 ) -> list[str]:
     """Translate ``sources`` with the model as-is."""
     generated: list[str] = []
@@ -64,7 +65,11 @@ def generate_texts(
                 max_length=model.sequence_length,
             ).to(device)
             with torch.inference_mode():
-                output = model.model.generate(**encoded, max_new_tokens=max_new_tokens)
+                output = model.model.generate(
+                    **encoded,
+                    max_new_tokens=max_new_tokens,
+                    no_repeat_ngram_size=no_repeat_ngram_size or None,
+                )
             generated.extend(
                 model.tokenizer.batch_decode(output, skip_special_tokens=True)
             )
@@ -156,9 +161,32 @@ def style_accuracy(predictions: Tensor, target_label: int) -> float:
 
 
 def corpus_bleu(hypotheses: list[str], references: list[str]) -> float | None:
+    """Corpus BLEU, case-folded because the political references are lowercase.
+
+    The references also come from the old corpus with spaces before punctuation,
+    so let SacreBLEU's 13a tokenizer normalise both sides.
+    """
     if not references:
         return None
-    return float(sacrebleu.corpus_bleu(hypotheses, [references]).score)
+    score = sacrebleu.corpus_bleu(hypotheses, [references], lowercase=True).score
+    return float(score)
+
+
+def repetition_stats(texts: list[str]) -> tuple[float, float]:
+    """Return mean token repetition and the share of badly looping rows.
+
+    A token-level ratio near zero means ordinary prose. A ratio above 0.5 means
+    the decoder is repeating itself, which style accuracy alone will not show.
+    """
+    ratios = []
+    for text in texts:
+        tokens = text.split()
+        ratios.append(0.0 if not tokens else 1.0 - len(set(tokens)) / len(tokens))
+    if not ratios:
+        return 0.0, 0.0
+    mean = sum(ratios) / len(ratios)
+    share = sum(ratio > 0.5 for ratio in ratios) / len(ratios)
+    return mean, share
 
 
 def evaluate(
@@ -172,18 +200,29 @@ def evaluate(
     max_new_tokens: int,
     seq2seq: str,
     samples: int = 3,
+    no_repeat_ngram_size: int = 0,
 ) -> dict:
     """Generate, classify and score one model."""
-    generated = generate_texts(model, sources, batch_size, max_new_tokens, seq2seq)
+    generated = generate_texts(
+        model,
+        sources,
+        batch_size,
+        max_new_tokens,
+        seq2seq,
+        no_repeat_ngram_size,
+    )
     predictions, probability = classify_texts(
         classifier, clf_tokenizer, generated, target_label, batch_size
     )
+    repetition, degenerate = repetition_stats(generated)
 
     return {
         "rows": len(generated),
         "style_accuracy": style_accuracy(predictions, target_label),
         "mean_target_probability": float(probability.mean()),
         "bleu": corpus_bleu(generated, references),
+        "token_repetition": repetition,
+        "degenerate_rows": degenerate,
         "samples": [
             {
                 "source": source,
@@ -273,7 +312,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="number of evaluation rows (0 means all)",
     )
     parser.add_argument("--batch-size", type=int, default=16)
-    parser.add_argument("--max-new-tokens", type=int, default=100)
+    parser.add_argument("--max-new-tokens", type=int, default=200)
+    parser.add_argument(
+        "--no-repeat-ngram-size",
+        type=int,
+        default=0,
+        help="block repeated n-grams during generation (0 disables it)",
+    )
     parser.add_argument(
         "--accelerator", choices=["auto", "cpu", "mps", "cuda"], default="auto"
     )
@@ -318,6 +363,7 @@ def main(argv: Sequence[str] | None = None) -> dict:
         args.max_new_tokens,
         args.seq2seq,
         args.samples,
+        args.no_repeat_ngram_size,
     )
 
     if args.style_checkpoint is not None:
@@ -333,6 +379,7 @@ def main(argv: Sequence[str] | None = None) -> dict:
             args.max_new_tokens,
             args.seq2seq,
             args.samples,
+            args.no_repeat_ngram_size,
         )
 
     results["settings"] = {

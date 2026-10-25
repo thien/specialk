@@ -7,6 +7,7 @@ from torch import nn
 from specialk.trainers.evaluate_style_transfer import (
     corpus_bleu,
     load_style_weights,
+    repetition_stats,
     style_accuracy,
 )
 
@@ -59,3 +60,17 @@ def test_load_style_weights_reads_the_sequence_model_prefix(tmp_path):
     load_style_weights(model, checkpoint)
 
     assert torch.equal(model.weight.detach(), torch.tensor([1.0, 2.0]))
+
+
+def test_corpus_bleu_folds_case():
+    references = ["the senator voted against the bill"]
+    hypotheses = ["The Senator Voted Against The Bill"]
+
+    assert corpus_bleu(hypotheses, references) == pytest.approx(100.0)
+
+
+def test_repetition_stats_spot_loops():
+    mean, share = repetition_stats(["a b c", "a a a a"])
+
+    assert mean == pytest.approx((0.0 + 0.75) / 2)
+    assert share == pytest.approx(0.5)

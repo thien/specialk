@@ -450,7 +450,6 @@ class RNNModule(NMTModule):
             )
 
             self.model.decoder.teacher_forcing_ratio = ratio
-            # you can observe this in tensorboard.scalars
             self.log(TEACHER_FORCING_RATIO, ratio)
 
     def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:

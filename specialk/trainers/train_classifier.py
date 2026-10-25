@@ -16,19 +16,20 @@ import pickle
 import types
 from collections.abc import Sequence
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import Optional, Union
 
 import lightning.pytorch as pl
 import torch
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.profilers import AdvancedProfiler
 from peft import LoraConfig, TaskType
-from torch.utils.data import DataLoader, Dataset as TorchDataset
+from torch.utils.data import DataLoader
+from torch.utils.data import Dataset as TorchDataset
 
 from datasets import Dataset, Value, load_dataset
 from specialk.core.constants import LOGGING_PERF_NAME, PROJECT_DIR
 from specialk.core.experiment import add_logger_args, init_logger
-from specialk.core.utils import check_torch_device, log, namespace_to_dict
+from specialk.core.utils import check_torch_device, log
 from specialk.models.classifier.models import (
     BERTClassifier,
     CNNClassifier,

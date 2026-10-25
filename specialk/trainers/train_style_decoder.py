@@ -35,7 +35,7 @@ from specialk.models.style_decoder import (
     StyleBackTranslationModelWithBERT,
     StyleBackTranslationModelWithCNN,
 )
-from specialk.models.tokenizer import HuggingFaceVocabulary
+from specialk.models.tokenizer import HuggingFaceVocabulary, WordVocabulary
 from specialk.models.transformer.hf_transformer import MarianMTModule
 from specialk.models.transformer.torch.pytorch_transformer import (
     PyTorchTransformerModule,
@@ -128,11 +128,21 @@ def marian_tokenizers(
 
 
 def load_classifier(
-    kind: str, checkpoint_path: str | Path
+    kind: str, checkpoint_path: str | Path, tokenizer_path: str | Path | None = None
 ) -> CNNClassifier | BERTClassifier:
-    """Load a trained style classifier of the requested kind."""
+    """Load a trained style classifier of the requested kind.
+
+    A CNN checkpoint does not store its tokenizer. ``tokenizer_path`` attaches
+    the ``WordVocabulary`` JSON it was trained with, which the style decoder
+    needs to build a fixed token map when the vocabularies differ.
+    """
     if kind == "cnn":
-        return CNNClassifier.load_from_checkpoint(checkpoint_path, map_location="cpu")
+        model = CNNClassifier.load_from_checkpoint(checkpoint_path, map_location="cpu")
+        if tokenizer_path is not None:
+            model.tokenizer = WordVocabulary.from_file(tokenizer_path)
+        return model
+    if tokenizer_path is not None:
+        raise ValueError("--classifier-tokenizer only applies to --classifier cnn")
     if kind == "bert":
         return BERTClassifier.load_from_checkpoint(checkpoint_path, map_location="cpu")
     raise ValueError(f"Unknown classifier {kind!r}; expected one of {CLASSIFIERS}")
@@ -187,7 +197,9 @@ def train(args: argparse.Namespace) -> pl.Trainer:
         sequence_length = (
             getattr(tokenizer, "max_length", None) or mt_model.sequence_length
         )
-    classifier = load_classifier(args.classifier, args.classifier_checkpoint)
+    classifier = load_classifier(
+        args.classifier, args.classifier_checkpoint, args.classifier_tokenizer
+    )
 
     train_dataset, val_dataset = load_style_datasets(
         args.dataset,
@@ -238,6 +250,9 @@ def train(args: argparse.Namespace) -> pl.Trainer:
         mt_checkpoint=str(args.mt_checkpoint),
         classifier_checkpoint=str(args.classifier_checkpoint),
         classifier=args.classifier,
+        classifier_tokenizer=str(args.classifier_tokenizer)
+        if args.classifier_tokenizer
+        else None,
         train_rows=len(train_dataset),
         val_rows=len(val_dataset),
         tokenizer=tokenizer.__class__.__name__,
@@ -256,6 +271,9 @@ def train(args: argparse.Namespace) -> pl.Trainer:
         "mt_checkpoint": str(args.mt_checkpoint),
         "classifier_checkpoint": str(args.classifier_checkpoint),
         "classifier": args.classifier,
+        "classifier_tokenizer": str(args.classifier_tokenizer)
+        if args.classifier_tokenizer
+        else None,
         "lambda_class": args.lambda_class,
         "tau_start": args.tau_start,
         "tau_end": args.tau_end,
@@ -269,9 +287,7 @@ def train(args: argparse.Namespace) -> pl.Trainer:
     )
 
     checkpoint_dir = (
-        Path(args.checkpoint_dir)
-        if args.checkpoint_dir
-        else Path.cwd() / "checkpoints"
+        Path(args.checkpoint_dir) if args.checkpoint_dir else Path.cwd() / "checkpoints"
     )
 
     trainer = pl.Trainer(
@@ -286,9 +302,7 @@ def train(args: argparse.Namespace) -> pl.Trainer:
         callbacks=[
             # Every epoch is kept because the thesis found three before
             # overfitting.
-            ModelCheckpoint(
-                dirpath=checkpoint_dir, monitor=VAL_LOSS, save_top_k=-1
-            ),
+            ModelCheckpoint(dirpath=checkpoint_dir, monitor=VAL_LOSS, save_top_k=-1),
         ],
     )
 
@@ -341,6 +355,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="trained style classifier checkpoint",
     )
     parser.add_argument("--classifier", choices=CLASSIFIERS, default="cnn")
+    parser.add_argument(
+        "--classifier-tokenizer",
+        type=Path,
+        default=None,
+        help=(
+            "WordVocabulary JSON the CNN was trained with; needed when its "
+            "vocabulary differs from the seq2seq's"
+        ),
+    )
     parser.add_argument("--lambda-class", type=float, default=1.0)
     parser.add_argument("--tau-start", type=float, default=1.0)
     parser.add_argument("--tau-end", type=float, default=0.1)

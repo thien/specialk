@@ -1,5 +1,6 @@
 import math
 import warnings
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -377,7 +378,10 @@ def test_bert_token_map_is_fixed(bert_style_module, train_dataloader):
 
     x, y, _ = module._batch_tensors(next(iter(train_dataloader)))
     with torch.no_grad():
-        soft = torch.softmax(torch.randn(x.size(0), y.size(1), module.sequence_model.vocabulary_size), dim=-1)
+        soft = torch.softmax(
+            torch.randn(x.size(0), y.size(1), module.sequence_model.vocabulary_size),
+            dim=-1,
+        )
         mapped = module._map(soft)
 
     assert mapped.shape == (
@@ -385,9 +389,7 @@ def test_bert_token_map_is_fixed(bert_style_module, train_dataloader):
         y.size(1),
         module._classifier_vocabulary_size(),
     )
-    assert torch.allclose(
-        mapped.sum(-1), torch.ones_like(mapped.sum(-1)), atol=1e-5
-    )
+    assert torch.allclose(mapped.sum(-1), torch.ones_like(mapped.sum(-1)), atol=1e-5)
 
 
 @pytest.mark.lightweight
@@ -436,6 +438,57 @@ def test_recon_loss_ignores_seq_pad(cnn_style_module):
 def test_cnn_shared_vocab_skips_mapping(cnn_style_module):
     assert cnn_style_module.use_mapping is False
     assert cnn_style_module.seq_projection is None
+
+
+class FakeWordTokenizer:
+    """The parts of a WordVocabulary the fixed map reads."""
+
+    vocab_size = 6
+    max_length = SEQUENCE_LENGTH
+    PAD = 0
+    UNK = 1
+    BOS = 2
+    EOS = 3
+    vocab = SimpleNamespace(
+        idxToLabel={
+            0: "<blank>",
+            1: "<unk>",
+            2: "<s>",
+            3: "</s>",
+            4: "hello",
+            5: "world",
+        }
+    )
+
+
+@pytest.mark.lightweight
+def test_cnn_different_vocab_builds_fixed_map(seq2seq):
+    classifier = CNNClassifier(
+        name="legacy",
+        vocabulary_size=FakeWordTokenizer.vocab_size,
+        sequence_length=SEQUENCE_LENGTH,
+        tokenizer=FakeWordTokenizer(),
+    )
+
+    module = StyleBackTranslationModelWithCNN(seq2seq, classifier)
+
+    assert module.use_mapping is False
+    assert module.seq_projection is None
+    assert module.clf_projection is None
+    assert module.token_map.numel() == seq2seq.vocabulary_size
+    assert 0.0 < module.mapping_coverage <= 1.0
+
+
+@pytest.mark.lightweight
+def test_cnn_different_vocab_without_tokenizer_raises(seq2seq):
+    classifier = CNNClassifier(
+        name="legacy",
+        vocabulary_size=FakeWordTokenizer.vocab_size,
+        sequence_length=SEQUENCE_LENGTH,
+    )
+
+    with pytest.raises(ValueError, match="fixed token map"):
+        StyleBackTranslationModelWithCNN(seq2seq, classifier)
 
 
 @pytest.mark.lightweight

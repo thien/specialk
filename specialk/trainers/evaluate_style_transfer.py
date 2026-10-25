@@ -73,7 +73,9 @@ def generate_texts(
             if tokens.dim() == 3:
                 tokens = tokens.squeeze(1)
             tokens = tokens.to(device)
-            output = model.generate(tokens, max_len=max_new_tokens, temperature=0)
+            # the transformer's positional table ends at sequence_length
+            max_len = min(max_new_tokens, model.sequence_length)
+            output = model.generate(tokens, max_len=max_len, temperature=0)
             generated.extend(model.decoder_tokenizer.detokenize(output, specials=False))
 
     return generated

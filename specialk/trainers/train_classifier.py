@@ -12,16 +12,18 @@ TODO: Check this works on both BPE and word-separated tokenized datasets from th
 from __future__ import division
 
 import argparse
+from collections.abc import Sequence
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
 import lightning.pytorch as pl
+from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.profilers import AdvancedProfiler
 from peft import LoraConfig, TaskType
 from torch.utils.data import DataLoader
 
-from datasets import Dataset, load_dataset
+from datasets import Dataset, Value, load_dataset
 from specialk.core.constants import LOGGING_DIR, LOGGING_PERF_NAME, PROJECT_DIR
 from specialk.core.utils import check_torch_device, log, namespace_to_dict
 from specialk.models.classifier.models import (
@@ -36,8 +38,14 @@ from specialk.models.tokenizer import (
     Vocabulary,
     WordVocabulary,
 )
+from specialk.models.transformer.torch.pytorch_transformer import (
+    PyTorchTransformerModule,
+)
+from specialk.trainers.common import _single_split
+from specialk.trainers.train import _int_or_float
 
 DEVICE: str = check_torch_device()
+BERT_BASE_NAME = "distilbert/distilbert-base-cased"
 
 
 def init_dataloader(
@@ -61,12 +69,13 @@ def init_dataloader(
             cache_path = f"{cache_path}.parquet"
 
     tokenized_dataset = dataset.with_format("torch").map(
-        tokenize, batched=True, num_proc=n_workers, cache_file_name=cache_path
+        tokenize, batched=True, num_proc=n_workers or None, cache_file_name=cache_path
     )
     dataloader = DataLoader(
         tokenized_dataset,
         batch_size=batch_size,
-        persistent_workers=persistent_workers,
+        # DataLoader rejects persistent workers when workers are disabled.
+        persistent_workers=persistent_workers and n_workers > 0,
         shuffle=shuffle,
         num_workers=n_workers,
     )
@@ -74,7 +83,7 @@ def init_dataloader(
     return dataloader
 
 
-def get_tokenizer(tokenizer_option: str = "spm") -> Vocabulary:
+def get_tokenizer(tokenizer_option: str = "spm", max_length: int = 72) -> Vocabulary:
     # interestingly the bpe tokenizer is a lot slwoer to run instead of the word tokenizer.
     # we should see how well this performs with sentencepience.
     dir_tokenizer = PROJECT_DIR / "assets" / "tokenizer"
@@ -89,17 +98,26 @@ def get_tokenizer(tokenizer_option: str = "spm") -> Vocabulary:
     else:
         # sentencepiece
         tokenizer_filepath = str(dir_tokenizer / "sentencepiece" / "enfr.model")
-        tokenizer = SentencePieceVocabulary.from_file(tokenizer_filepath, max_length=72)
+        tokenizer = SentencePieceVocabulary.from_file(
+            tokenizer_filepath, max_length=max_length
+        )
     return tokenizer
 
 
-def get_model(model_option: str, tokenizer: Vocabulary) -> TextClassifier:
+def get_model(
+    model_option: str,
+    tokenizer: Vocabulary,
+    sequence_length: int | None = None,
+    learning_rate: float = 0.001,
+    name: str = "political",
+) -> TextClassifier:
     if model_option == "cnn":
         task = CNNClassifier(
-            "political",
+            name,
             vocabulary_size=tokenizer.vocab_size,
-            sequence_length=tokenizer.max_length,
+            sequence_length=sequence_length or tokenizer.max_length,
             tokenizer=tokenizer,
+            learning_rate=learning_rate,
         )
     elif model_option == "bert":
         peft_config = LoraConfig(
@@ -111,10 +129,9 @@ def get_model(model_option: str, tokenizer: Vocabulary) -> TextClassifier:
             target_modules=["q_lin", "k_lin", "v_lin", "out_lin"],
         )
 
-        model_base_name = "distilbert/distilbert-base-cased"
         task = BERTClassifier(
-            name="test_distilbert",
-            model_base_name=model_base_name,
+            name=name,
+            model_base_name=BERT_BASE_NAME,
             peft_config=peft_config,
         )
     else:
@@ -123,136 +140,108 @@ def get_model(model_option: str, tokenizer: Vocabulary) -> TextClassifier:
     return task
 
 
+def _encode_labels(dataset: Dataset) -> Dataset:
+    """Turn string labels into integer classes; leave integer labels alone."""
+    feature = dataset.features["label"]
+    if isinstance(feature, Value) and feature.dtype == "string":
+        return dataset.class_encode_column("label")
+    return dataset
+
+
 def main_new(args):
-    BATCH_SIZE = 128 if DEVICE == "mps" else 680
+    batch_size = args.batch_size
 
     # tokenizer
-    tokenizer = get_tokenizer(args.tokenizer)
-    task = get_model(args.model, tokenizer)
+    if args.model_type == "bert":
+        tokenizer = HuggingFaceVocabulary(
+            name=BERT_BASE_NAME,
+            pretrained_model_name_or_path=BERT_BASE_NAME,
+            max_length=args.max_seq_len or 512,
+        )
+        sequence_length = tokenizer.max_length
+    elif args.mt_checkpoint:
+        # The checkpoint holds a Vocabulary, which torch.load refuses by default.
+        mt_model = PyTorchTransformerModule.load_from_checkpoint(
+            args.mt_checkpoint, map_location="cpu", weights_only=False
+        )
+        tokenizer, sequence_length = mt_model.tokenizer, mt_model.sequence_length
+    else:
+        tokenizer = get_tokenizer(args.tokenizer, args.max_seq_len or 72)
+        sequence_length = tokenizer.max_length
+
+    task = get_model(
+        args.model_type,
+        tokenizer,
+        sequence_length=sequence_length,
+        learning_rate=args.lr,
+        name=args.model_name,
+    )
 
     log.info("Loaded tokenizer", tokenizer=tokenizer)
 
-    """
-    TODO we should add a wrapper function so we can intelligently describe the hf dataset
-    so we know which columns correspond to the label and the dataset also.
-    """
-    hf_dataset_name = "thien/political"
-    hf_dataset_name = "thien/publications"
-
-    dataset: Dataset = load_dataset(hf_dataset_name)
-    dataset = dataset.class_encode_column("label")
+    # publications uses the default config, political the ``classifier`` one.
+    dataset = load_dataset(args.dataset_name, args.config)
+    train_dataset = _encode_labels(_single_split(dataset, "train"))
+    val_dataset = _encode_labels(
+        _single_split(dataset, "eval", "validation", "valid", "test")
+    )
 
     train_dataloader = init_dataloader(
-        dataset["train"], tokenizer, BATCH_SIZE, shuffle=True
+        train_dataset, tokenizer, batch_size, shuffle=True
     )
     val_dataloader = init_dataloader(
-        dataset["eval"], tokenizer, BATCH_SIZE, shuffle=False
+        val_dataset, tokenizer, batch_size, shuffle=False
     )
 
-    project_name = f"{hf_dataset_name}/{task.name}"
+    project_name = f"{args.dataset_name}/{task.name}"
 
     logger = TensorBoardLogger(LOGGING_DIR, name=project_name)
     logger.log_hyperparams(
         params={
-            "batch_size": BATCH_SIZE,
+            "batch_size": batch_size,
             "tokenizer": tokenizer.__class__.__name__,
-            "dataset": hf_dataset_name,
-            "tokenizer_path": None,
+            "dataset": args.dataset_name,
+            "tokenizer_path": str(args.mt_checkpoint) if args.mt_checkpoint else None,
+            "learning_rate": args.lr,
+            "max_epochs": args.epochs,
         }
     )
     REVIEW_RATE = len(train_dataloader) // 32  # for debugging purposes.
 
+    checkpoint_dir = (
+        Path(args.checkpoint_dir)
+        if args.checkpoint_dir
+        else Path.cwd() / "checkpoints"
+    )
+
     profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
+
+    # 16-bit mixed precision is a CUDA recipe; MPS runs in full precision.
+    resolved_accelerator = DEVICE if args.accelerator == "auto" else args.accelerator
+    precision = "16-mixed" if resolved_accelerator == "cuda" else "32-true"
+
     trainer = pl.Trainer(
-        accelerator=DEVICE,
-        max_epochs=2,
+        accelerator=args.accelerator,
+        max_epochs=args.epochs,
         log_every_n_steps=20,
         logger=logger,
         profiler=profiler,
-        precision="16-mixed",
-        val_check_interval=REVIEW_RATE,
+        precision=precision,
+        limit_train_batches=args.limit_train_batches,
+        limit_val_batches=args.limit_val_batches,
+        val_check_interval=REVIEW_RATE if REVIEW_RATE >= 1 else 1.0,
         gradient_clip_val=0.5,
         gradient_clip_algorithm="norm",
+        callbacks=[ModelCheckpoint(dirpath=checkpoint_dir, save_last=True)],
     )
 
     trainer.fit(
         task, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader
     )
+    return trainer
 
 
-def main_distilbert_peft():
-    BATCH_SIZE = 32 if DEVICE == "mps" else 32
-    peft_config = LoraConfig(
-        task_type=TaskType.SEQ_CLS,
-        r=8,
-        lora_alpha=32,
-        lora_dropout=0.1,
-        bias="none",
-        target_modules=["q_lin", "k_lin", "v_lin", "out_lin"],
-    )
-
-    model_base_name = "distilbert/distilbert-base-cased"
-    task = BERTClassifier(
-        name="test_distilbert",
-        model_base_name=model_base_name,
-        peft_config=peft_config,
-    )
-    tokenizer = HuggingFaceVocabulary(
-        name=model_base_name,
-        pretrained_model_name_or_path=model_base_name,
-        max_length=512,
-    )
-
-    """
-    TODO we should add a wrapper function so we can intelligently describe the hf dataset
-    so we know which columns correspond to the label and the dataset also.
-    """
-    hf_dataset_name = "thien/political"
-    hf_dataset_name = "thien/publications"
-
-    dataset: Dataset = load_dataset(hf_dataset_name)
-    dataset = dataset.class_encode_column("label")
-
-    train_dataloader = init_dataloader(
-        dataset["train"], tokenizer, BATCH_SIZE, shuffle=True
-    )
-    val_dataloader = init_dataloader(
-        dataset["eval"], tokenizer, BATCH_SIZE, shuffle=False
-    )
-
-    project_name = f"{hf_dataset_name}/{task.name}"
-
-    logger = TensorBoardLogger(LOGGING_DIR, name=project_name)
-    logger.log_hyperparams(
-        params={
-            "batch_size": BATCH_SIZE,
-            "tokenizer": tokenizer.__class__.__name__,
-            "dataset": hf_dataset_name,
-            "model_base_name": model_base_name,
-            "tokenizer_path": None,
-        }
-    )
-    REVIEW_RATE = len(train_dataloader) // 32  # for debugging purposes.
-
-    profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
-    trainer = pl.Trainer(
-        accelerator=DEVICE,
-        max_epochs=2,
-        log_every_n_steps=20,
-        logger=logger,
-        profiler=profiler,
-        precision="16-mixed",
-        val_check_interval=REVIEW_RATE,
-        gradient_clip_val=0.5,
-        gradient_clip_algorithm="norm",
-    )
-
-    trainer.fit(
-        task, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader
-    )
-
-
-def get_args():
+def get_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="CNN Training Runner")
     parser.add_argument(
         "--model_type",
@@ -276,16 +265,57 @@ def get_args():
         help="Name of the dataset to use",
     )
     parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        help="Dataset config; political uses 'classifier', publications the default",
+    )
+    parser.add_argument(
+        "--mt-checkpoint",
+        type=Path,
+        default=None,
+        help="seq2seq checkpoint whose tokenizer and sequence length the CNN shares",
+    )
+    parser.add_argument(
         "--batch_size", type=int, default=128, help="Batch size for training"
+    )
+    parser.add_argument(
+        "--max-seq-len",
+        type=int,
+        default=None,
+        help="Maximum sequence length for the tokenizer (spm defaults to 72)",
     )
     parser.add_argument(
         "--epochs", type=int, default=2, help="Number of epochs for training"
     )
+    parser.add_argument(
+        "--lr", type=float, default=0.001, help="Learning rate for the CNN"
+    )
+    parser.add_argument(
+        "--accelerator", choices=["auto", "cpu", "mps", "cuda"], default="auto"
+    )
+    parser.add_argument(
+        "--limit-train-batches",
+        type=_int_or_float,
+        default=1.0,
+        help="batches (int, e.g. 2) or fraction of an epoch (float, e.g. 0.5)",
+    )
+    parser.add_argument(
+        "--limit-val-batches",
+        type=_int_or_float,
+        default=1.0,
+        help="batches (int) or fraction of the validation set (float)",
+    )
+    parser.add_argument(
+        "--checkpoint-dir",
+        type=Path,
+        default=None,
+        help="where to write checkpoints (default: ./checkpoints)",
+    )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     return args
 
 
 if __name__ == "__main__":
-    # main_new()
-    main_distilbert_peft()
+    main_new(get_args())

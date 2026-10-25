@@ -112,6 +112,7 @@ class CNNClassifier(TextClassifier):
         vocabulary_size: int,
         sequence_length: int,
         tokenizer: Optional[Vocabulary] = None,
+        learning_rate: float = 0.001,
     ):
         super().__init__(
             name=name,
@@ -119,12 +120,15 @@ class CNNClassifier(TextClassifier):
             sequence_length=sequence_length,
             tokenizer=tokenizer,
         )
+        self.learning_rate = learning_rate
         # min_batch_size is used because the convolution
         # operations depend on a minimum size.
         self.min_batch_size = 50
         self.model = ConvNet(
             vocab_size=self.vocabulary_size, sequence_length=self.sequence_length
         )
+        # The tokenizer is ignored so a checkpoint can be loaded without one.
+        self.save_hyperparameters(ignore=["tokenizer"])
 
     def forward(self, *args, **kwargs):
         return self.model(*args, **kwargs)
@@ -214,7 +218,7 @@ class CNNClassifier(TextClassifier):
         return torch.cat(results).cpu()
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
-        return torch.optim.Adam(self.model.parameters(), lr=0.02)
+        return torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
 
 class BERTClassifier(TextClassifier):

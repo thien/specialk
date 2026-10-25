@@ -37,13 +37,13 @@ dependencies = [
     "sentencepiece==0.2.2",
     "spacy==3.8.16",
     "structlog==24.2.0",
-    "tensorboardx==2.6.2.2",
     "termcolor==3.3.0",
     "toolz==0.12.1",
     "torch==2.14.1",
     "torchmetrics==1.4.0.post0",
     "tqdm==4.66.4",
     "transformers==5.20.2",
+    "wandb==0.31.0",
 ]
 readme = "readme.md"
 requires-python = ">=3.11,<3.14"

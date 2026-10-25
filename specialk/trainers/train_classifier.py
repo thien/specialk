@@ -21,13 +21,13 @@ from typing import List, Optional, Tuple, Union
 import lightning.pytorch as pl
 import torch
 from lightning.pytorch.callbacks import ModelCheckpoint
-from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.profilers import AdvancedProfiler
 from peft import LoraConfig, TaskType
 from torch.utils.data import DataLoader, Dataset as TorchDataset
 
 from datasets import Dataset, Value, load_dataset
-from specialk.core.constants import LOGGING_DIR, LOGGING_PERF_NAME, PROJECT_DIR
+from specialk.core.constants import LOGGING_PERF_NAME, PROJECT_DIR
+from specialk.core.experiment import add_logger_args, init_logger
 from specialk.core.utils import check_torch_device, log, namespace_to_dict
 from specialk.models.classifier.models import (
     BERTClassifier,
@@ -351,30 +351,26 @@ def main_new(args):
         if not resume_from.exists():
             raise SystemExit(f"no checkpoint at {resume_from}")
 
-    logger = TensorBoardLogger(LOGGING_DIR, name=project_name)
-    logger.log_hyperparams(
-        params={
-            "batch_size": batch_size,
-            "tokenizer": tokenizer.__class__.__name__ if tokenizer else "legacy",
-            "dataset": dataset_name,
-            "tokenizer_path": str(
-                args.tokenizer_path or args.mt_checkpoint
-            )
-            if args.tokenizer_path or args.mt_checkpoint
-            else None,
-            "tokenized_path": str(args.tokenized_path)
-            if args.tokenized_path
-            else None,
-            "optimizer": args.optimizer,
-            "learning_rate": args.lr,
-            "lr_decay": args.lr_decay,
-            "decay_start": args.decay_start,
-            "max_epochs": args.epochs,
-            "resume_from": str(resume_from) if resume_from else None,
-        }
-    )
+    params = {
+        "batch_size": batch_size,
+        "tokenizer": tokenizer.__class__.__name__ if tokenizer else "legacy",
+        "dataset": dataset_name,
+        "tokenizer_path": str(args.tokenizer_path or args.mt_checkpoint)
+        if args.tokenizer_path or args.mt_checkpoint
+        else None,
+        "tokenized_path": str(args.tokenized_path) if args.tokenized_path else None,
+        "optimizer": args.optimizer,
+        "learning_rate": args.lr,
+        "lr_decay": args.lr_decay,
+        "decay_start": args.decay_start,
+        "max_epochs": args.epochs,
+        "resume_from": str(resume_from) if resume_from else None,
+    }
+    logger = init_logger(args, project_name, params)
 
-    profiler = AdvancedProfiler(dirpath=logger.log_dir, filename=LOGGING_PERF_NAME)
+    profiler = AdvancedProfiler(
+        dirpath=PROJECT_DIR / "wandb", filename=LOGGING_PERF_NAME
+    )
 
     # 16-bit mixed precision is a CUDA recipe; MPS runs in full precision.
     resolved_accelerator = DEVICE if args.accelerator == "auto" else args.accelerator
@@ -541,6 +537,7 @@ def get_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=None,
         help="resume from a checkpoint, or from the run's last.ckpt when no path is given",
     )
+    add_logger_args(parser, "classifiers")
     parser.add_argument(
         "--n-workers",
         type=int,

@@ -76,8 +76,8 @@ def test_cli_smoke(tmp_path, monkeypatch):
     classifier_checkpoint = tmp_path / "cnn.ckpt"
     save_checkpoint(make_cnn_classifier(tokenizer), classifier_checkpoint)
 
-    # Keep TensorBoard events out of the repo.
-    monkeypatch.setattr(train_style_decoder, "LOGGING_DIR", tmp_path / "tb_logs")
+    # Keep W&B out of the test.
+    monkeypatch.setenv("WANDB_MODE", "disabled")
     checkpoint_dir = tmp_path / "ckpt"
 
     trainer = train_style_decoder.main(

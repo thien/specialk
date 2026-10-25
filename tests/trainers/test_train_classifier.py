@@ -43,7 +43,7 @@ def test_cli_smoke_and_checkpoint_reload(monkeypatch, tmp_path):
     tokenizer = TinyTokenizer()
     monkeypatch.setattr(train_classifier, "get_tokenizer", lambda *a, **k: tokenizer)
     monkeypatch.setattr(train_classifier, "load_dataset", lambda *a, **k: tiny_dataset())
-    monkeypatch.setattr(train_classifier, "LOGGING_DIR", tmp_path / "tb_logs")
+    monkeypatch.setenv("WANDB_MODE", "disabled")
     monkeypatch.chdir(tmp_path)
 
     # Keep the real loader but skip the eight worker processes.

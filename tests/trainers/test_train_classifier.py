@@ -62,26 +62,25 @@ def test_cli_smoke_and_checkpoint_reload(monkeypatch, tmp_path):
     monkeypatch.setattr(train_classifier, "init_dataloader", init_dataloader)
 
     checkpoint_dir = tmp_path / "checkpoints"
-    args = train_classifier.get_args(
-        [
-            "--model_type",
-            "cnn",
-            "--batch_size",
-            "2",
-            "--epochs",
-            "1",
-            "--lr",
-            str(LEARNING_RATE),
-            "--accelerator",
-            "auto",
-            "--limit-train-batches",
-            "2",
-            "--limit-val-batches",
-            "1",
-            "--checkpoint-dir",
-            str(checkpoint_dir),
-        ]
-    )
+    base_args = [
+        "--model_type",
+        "cnn",
+        "--batch_size",
+        "2",
+        "--epochs",
+        "1",
+        "--lr",
+        str(LEARNING_RATE),
+        "--accelerator",
+        "auto",
+        "--limit-train-batches",
+        "2",
+        "--limit-val-batches",
+        "1",
+        "--checkpoint-dir",
+        str(checkpoint_dir),
+    ]
+    args = train_classifier.get_args(base_args)
     trainer = train_classifier.main_new(args)
 
     assert trainer.global_step == 2
@@ -99,3 +98,74 @@ def test_cli_smoke_and_checkpoint_reload(monkeypatch, tmp_path):
     with torch.inference_mode():
         output = module(torch.zeros(SEQUENCE_LENGTH, 2, VOCAB_SIZE))
     assert output.shape == (2, 1)
+
+    resumed = train_classifier.get_args([*base_args, "--resume", "--epochs", "2"])
+    trainer = train_classifier.main_new(resumed)
+    assert trainer.global_step == 4
+
+
+@pytest.mark.lightweight
+def test_local_text_dataset_and_sgd_schedule(tmp_path):
+    train = tmp_path / "train.txt"
+    valid = tmp_path / "valid.txt"
+    train.write_text("democratic one\nrepublican two\n")
+    valid.write_text("democratic three\n")
+
+    train_dataset, valid_dataset = train_classifier.load_text_classification_dataset(
+        train, valid, "republican"
+    )
+    assert train_dataset["label"] == [0, 1]
+    assert valid_dataset["label"] == [0]
+
+    module = CNNClassifier(
+        "parity",
+        vocabulary_size=VOCAB_SIZE,
+        sequence_length=SEQUENCE_LENGTH,
+        learning_rate=1.0,
+        optimizer="sgd",
+        lr_decay=0.5,
+        decay_start=8,
+    )
+    config = module.configure_optimizers()
+    assert isinstance(config["optimizer"], torch.optim.SGD)
+    scheduler = config["lr_scheduler"]["scheduler"]
+    for _ in range(8):
+        config["optimizer"].step()
+        scheduler.step()
+    assert config["optimizer"].param_groups[0]["lr"] == pytest.approx(0.5)
+
+
+@pytest.mark.lightweight
+def test_legacy_tokenized_labels_are_flipped(monkeypatch):
+    import io
+
+    from specialk.models.tokenizers.dict import Dict
+
+    unpickler = train_classifier._LegacyDictUnpickler(io.BytesIO(b""))
+    assert unpickler.find_class("onmt", "Dict") is Dict
+
+    class FakeDict:
+        def size(self):
+            return VOCAB_SIZE
+
+    data = {
+        "dicts": {"src": FakeDict()},
+        "train": {
+            "src": [torch.arange(4), torch.arange(4) + 1],
+            "tgt": [torch.tensor([1]), torch.tensor([0])],
+        },
+        "valid": {"src": [torch.arange(4)], "tgt": [torch.tensor([0])]},
+    }
+    monkeypatch.setattr(
+        train_classifier, "load_legacy_tokenized_data", lambda path: data
+    )
+
+    train, valid, sequence_length, vocabulary_size = (
+        train_classifier.load_tokenized_classification_dataset(
+            "political.train.pt", batch_size=2, positive_label="democratic"
+        )
+    )
+    assert sequence_length == 4
+    assert vocabulary_size == VOCAB_SIZE
+    assert train.dataset.labels == [0, 1]
+    assert valid.dataset.labels == [1]

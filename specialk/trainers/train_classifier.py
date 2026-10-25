@@ -308,7 +308,10 @@ def main_new(args):
             sequence_length = tokenizer.max_length
         elif args.mt_checkpoint:
             mt_model = load_seq2seq(args.mt_checkpoint)
-            tokenizer, sequence_length = mt_model.tokenizer, mt_model.sequence_length
+            tokenizer, sequence_length = (
+                mt_model.tokenizer,
+                mt_model.sequence_length,
+            )
         else:
             tokenizer = get_tokenizer(args.tokenizer, args.max_seq_len or 72)
             sequence_length = tokenizer.max_length

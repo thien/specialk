@@ -1,12 +1,7 @@
 """Training entry point for the style decoder.
 
-Fine-tunes a saved seq2seq checkpoint so that its translations are classified
-as the target style. Training updates the decoder. The encoder and classifier
-stay frozen. When the two models use different vocabularies, a fixed token map
-translates between them.
-
-Pass ``--seq2seq marian`` for a HuggingFace Marian checkpoint. ``--lora-r``
-then trains a LoRA adapter on the decoder's cross-attention modules.
+Pass ``--seq2seq marian`` for a Marian checkpoint; ``--lora-r`` trains a LoRA
+adapter on its decoder.
 
 Example:
     python -m specialk.trainers.train_style_decoder --dataset political \\

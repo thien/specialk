@@ -122,9 +122,6 @@ class StyleBackTranslationModel(pl.LightningModule):
 
         self._freeze_frozen_parts()
 
-    # ------------------------------------------------------------------
-    # Frozen parts
-    # ------------------------------------------------------------------
     def _sequence_pad(self) -> int:
         """Padding index of the sequence model's tokenizer."""
         tokenizer = getattr(self.sequence_model, "tokenizer", None)
@@ -188,9 +185,6 @@ class StyleBackTranslationModel(pl.LightningModule):
         self._encoder().eval()
         return self
 
-    # ------------------------------------------------------------------
-    # Forward / losses
-    # ------------------------------------------------------------------
     def _map(self, soft: Tensor) -> Tensor:
         """Map a distribution over the seq2seq vocabulary into the classifier's."""
         if self.token_map is not None:
@@ -266,9 +260,6 @@ class StyleBackTranslationModel(pl.LightningModule):
 
         return (predictions == self.target_label).float().mean()
 
-    # ------------------------------------------------------------------
-    # Steps
-    # ------------------------------------------------------------------
     def _step(self, batch: dict[str, Tensor], stage: str) -> Tensor:
         """Shared train/eval step: sequence loss plus classification loss."""
         x, y, label = self._batch_tensors(batch)

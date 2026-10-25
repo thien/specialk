@@ -1,9 +1,4 @@
-"""Helpers shared by the machine-translation training entry points.
-
-These used to be duplicated in ``train_nmt.py`` and ``train_model_decoder.py``.
-Keeping them in one place means a dataset or tokenizer fix only has to be made
-once.
-"""
+"""Helpers shared by the machine-translation training entry points."""
 
 from __future__ import annotations
 

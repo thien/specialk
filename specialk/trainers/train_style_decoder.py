@@ -1,8 +1,9 @@
 """Training entry point for the style decoder.
 
 Fine-tunes a saved seq2seq checkpoint so that its translations are classified
-as the target style. Training updates the decoder and the vocabulary mapping.
-The encoder and classifier stay frozen.
+as the target style. Training updates the decoder. The encoder and classifier
+stay frozen. When the two models use different vocabularies, a fixed token map
+translates between them.
 
 Pass ``--seq2seq marian`` for a HuggingFace Marian checkpoint. ``--lora-r``
 then trains a LoRA adapter on the decoder's cross-attention modules.
@@ -21,6 +22,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import lightning.pytorch as pl
+import torch
 from lightning.pytorch.callbacks import ModelCheckpoint
 from peft import LoraConfig, get_peft_model
 from peft.utils.peft_types import TaskType
@@ -134,12 +136,34 @@ def load_classifier(
 
     A CNN checkpoint does not store its tokenizer. ``tokenizer_path`` attaches
     the ``WordVocabulary`` JSON it was trained with, which the style decoder
-    needs to build a fixed token map when the vocabularies differ.
+    needs to build a fixed token map when the vocabularies differ. The 2019
+    checkpoints also lack hyperparameters, so the tokenizer supplies the
+    vocabulary and sequence length.
     """
     if kind == "cnn":
-        model = CNNClassifier.load_from_checkpoint(checkpoint_path, map_location="cpu")
-        if tokenizer_path is not None:
-            model.tokenizer = WordVocabulary.from_file(tokenizer_path)
+        checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+        hparams = checkpoint.get("hyper_parameters") or {}
+        tokenizer = (
+            WordVocabulary.from_file(tokenizer_path)
+            if tokenizer_path is not None
+            else None
+        )
+        if tokenizer is None and not hparams:
+            raise ValueError(
+                f"{checkpoint_path} has no hyperparameters; pass "
+                "--classifier-tokenizer with the vocabulary it was trained on"
+            )
+        model = CNNClassifier(
+            name=hparams.get("name", Path(checkpoint_path).stem),
+            vocabulary_size=hparams.get("vocabulary_size") or tokenizer.vocab_size,
+            sequence_length=hparams.get("sequence_length") or tokenizer.max_length,
+            tokenizer=tokenizer,
+            learning_rate=hparams.get("learning_rate", 0.001),
+            optimizer=hparams.get("optimizer", "adam"),
+            lr_decay=hparams.get("lr_decay", 1.0),
+            decay_start=hparams.get("decay_start", 0),
+        )
+        model.load_state_dict(checkpoint["state_dict"])
         return model
     if tokenizer_path is not None:
         raise ValueError("--classifier-tokenizer only applies to --classifier cnn")
@@ -201,17 +225,21 @@ def train(args: argparse.Namespace) -> pl.Trainer:
         args.classifier, args.classifier_checkpoint, args.classifier_tokenizer
     )
 
+    dataset_label = (
+        args.dataset_label if args.dataset_label is not None else args.target_label
+    )
     train_dataset, val_dataset = load_style_datasets(
         args.dataset,
-        target_label=args.target_label,
+        target_label=dataset_label,
         num_proc=max(args.n_workers, 1),
         path=args.path,
         source_column=args.source_column,
+        eval_path=args.eval_path,
     )
     if len(train_dataset) == 0:
         raise ValueError(
-            f"No {args.dataset!r} rows have label {args.target_label}; "
-            "check --target-label and --source-column"
+            f"No {args.dataset!r} rows have label {dataset_label}; "
+            "check --dataset-label and --source-column"
         )
 
     train_dataloader, _ = init_dataloader(
@@ -245,6 +273,7 @@ def train(args: argparse.Namespace) -> pl.Trainer:
         "Loaded the style-decoder setup",
         dataset=args.dataset,
         target_label=args.target_label,
+        dataset_label=dataset_label,
         seq2seq=args.seq2seq,
         lora_r=args.lora_r,
         mt_checkpoint=str(args.mt_checkpoint),
@@ -266,6 +295,7 @@ def train(args: argparse.Namespace) -> pl.Trainer:
         "batch_size": args.batch_size,
         "dataset": args.dataset,
         "target_label": args.target_label,
+        "dataset_label": dataset_label,
         "seq2seq": args.seq2seq,
         "lora_r": args.lora_r,
         "mt_checkpoint": str(args.mt_checkpoint),
@@ -326,6 +356,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=1,
         help="label the translations should be classified as",
+    )
+    parser.add_argument(
+        "--dataset-label",
+        type=int,
+        default=None,
+        help=(
+            "style dataset label to train on (default: --target-label); set it "
+            "when the classifier lists the classes in another order"
+        ),
     )
     parser.add_argument(
         "--mt-checkpoint",
@@ -403,6 +442,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="load a local parquet instead of the Hub dataset",
+    )
+    parser.add_argument(
+        "--eval-path",
+        type=Path,
+        default=None,
+        help="local parquet for the validation split",
     )
     parser.add_argument(
         "--source-column",

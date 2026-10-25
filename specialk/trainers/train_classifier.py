@@ -16,19 +16,20 @@ import pickle
 import types
 from collections.abc import Sequence
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import Optional, Union
 
 import lightning.pytorch as pl
 import torch
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.profilers import AdvancedProfiler
 from peft import LoraConfig, TaskType
-from torch.utils.data import DataLoader, Dataset as TorchDataset
+from torch.utils.data import DataLoader
+from torch.utils.data import Dataset as TorchDataset
 
 from datasets import Dataset, Value, load_dataset
 from specialk.core.constants import LOGGING_PERF_NAME, PROJECT_DIR
 from specialk.core.experiment import add_logger_args, init_logger
-from specialk.core.utils import check_torch_device, log, namespace_to_dict
+from specialk.core.utils import check_torch_device, log
 from specialk.models.classifier.models import (
     BERTClassifier,
     CNNClassifier,
@@ -41,7 +42,7 @@ from specialk.models.tokenizer import (
     Vocabulary,
     WordVocabulary,
 )
-from specialk.trainers.common import _single_split
+from specialk.trainers.common import POLITICAL_LABELS, _single_split
 from specialk.trainers.train import _int_or_float
 from specialk.trainers.train_style_decoder import load_seq2seq
 
@@ -115,6 +116,7 @@ def get_model(
     optimizer: str = "adam",
     lr_decay: float = 1.0,
     decay_start: int = 0,
+    decision_threshold: float = 0.5,
 ) -> TextClassifier:
     if model_option == "cnn":
         task = CNNClassifier(
@@ -127,6 +129,7 @@ def get_model(
             optimizer=optimizer,
             lr_decay=lr_decay,
             decay_start=decay_start,
+            decision_threshold=decision_threshold,
         )
     elif model_option == "bert":
         peft_config = LoraConfig(
@@ -149,12 +152,31 @@ def get_model(
     return task
 
 
-def _encode_labels(dataset: Dataset) -> Dataset:
-    """Turn string labels into integer classes; leave integer labels alone."""
+def _encode_labels(dataset: Dataset, name: str | None = None) -> Dataset:
+    """Turn string labels into integer classes; leave integer labels alone.
+
+    The political dataset has to agree with ``load_style_datasets``: the plan
+    puts republican at 0 and democratic at 1, while ``class_encode_column``
+    would sort them the other way.
+    """
     feature = dataset.features["label"]
-    if isinstance(feature, Value) and feature.dtype == "string":
-        return dataset.class_encode_column("label")
-    return dataset
+    if not (isinstance(feature, Value) and feature.dtype == "string"):
+        return dataset
+    if name == "thien/political":
+        unknown = sorted(set(dataset.unique("label")) - set(POLITICAL_LABELS))
+        if unknown:
+            raise ValueError(
+                f"Unknown political labels {unknown}; expected one of "
+                f"{sorted(POLITICAL_LABELS)}"
+            )
+        dataset = dataset.map(
+            lambda batch: {
+                "label": [POLITICAL_LABELS[label] for label in batch["label"]]
+            },
+            batched=True,
+        )
+        return dataset.cast_column("label", Value("int64"))
+    return dataset.class_encode_column("label")
 
 
 def _read_labeled_text(path: Path, positive_label: str) -> Dataset:
@@ -255,6 +277,7 @@ def resolve_batch_size(model_type: str, batch_size: int | None) -> int:
         return batch_size
     return 32 if model_type == "bert" else 128
 
+
 def main_new(args):
     batch_size = resolve_batch_size(args.model_type, args.batch_size)
 
@@ -281,10 +304,15 @@ def main_new(args):
             sequence_length = tokenizer.max_length
         elif args.tokenizer_path:
             tokenizer = WordVocabulary.from_file(args.tokenizer_path)
+            if args.max_seq_len:
+                tokenizer.max_length = args.max_seq_len
             sequence_length = tokenizer.max_length
         elif args.mt_checkpoint:
             mt_model = load_seq2seq(args.mt_checkpoint)
-            tokenizer, sequence_length = mt_model.tokenizer, mt_model.sequence_length
+            tokenizer, sequence_length = (
+                mt_model.tokenizer,
+                mt_model.sequence_length,
+            )
         else:
             tokenizer = get_tokenizer(args.tokenizer, args.max_seq_len or 72)
             sequence_length = tokenizer.max_length
@@ -299,6 +327,7 @@ def main_new(args):
         optimizer=args.optimizer,
         lr_decay=args.lr_decay,
         decay_start=args.decay_start,
+        decision_threshold=args.decision_threshold,
     )
 
     log.info("Loaded tokenizer", tokenizer=tokenizer)
@@ -314,9 +343,12 @@ def main_new(args):
         else:
             # publications uses the default config, political the ``classifier`` one.
             dataset = load_dataset(args.dataset_name, args.config)
-            train_dataset = _encode_labels(_single_split(dataset, "train"))
+            train_dataset = _encode_labels(
+                _single_split(dataset, "train"), args.dataset_name
+            )
             val_dataset = _encode_labels(
-                _single_split(dataset, "eval", "validation", "valid", "test")
+                _single_split(dataset, "eval", "validation", "valid", "test"),
+                args.dataset_name,
             )
             dataset_name = args.dataset_name
 
@@ -363,6 +395,7 @@ def main_new(args):
         "learning_rate": args.lr,
         "lr_decay": args.lr_decay,
         "decay_start": args.decay_start,
+        "decision_threshold": args.decision_threshold,
         "max_epochs": args.epochs,
         "resume_from": str(resume_from) if resume_from else None,
     }
@@ -463,15 +496,21 @@ def get_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--positive-label",
-        choices=["democratic", "republican"],
+        type=str,
         default="democratic",
-        help="label that the sigmoid output should predict",
+        help="label that the sigmoid output should predict, e.g. democratic or popular",
     )
     parser.add_argument(
         "--optimizer",
         choices=["adam", "sgd"],
         default="adam",
         help="optimizer for the CNN",
+    )
+    parser.add_argument(
+        "--decision-threshold",
+        type=float,
+        default=0.5,
+        help="sigmoid threshold for the CNN's accuracy and style predictions",
     )
     parser.add_argument(
         "--lr-decay",

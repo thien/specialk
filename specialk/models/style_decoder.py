@@ -254,7 +254,8 @@ class StyleBackTranslationModel(pl.LightningModule):
         clf_out = self._classify(self._map(one_hot), y)
 
         if isinstance(self.classifier, CNNClassifier):
-            predictions = (clf_out > 0.5).long()
+            threshold = getattr(self.classifier, "decision_threshold", 0.5)
+            predictions = (clf_out > threshold).long()
         else:
             predictions = clf_out.argmax(dim=-1)
 

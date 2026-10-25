@@ -185,3 +185,22 @@ def test_resolve_batch_size_defaults():
 def test_bert_rejects_cnn_tokenizers(flag):
     with pytest.raises(SystemExit):
         train_classifier.get_args(["--model_type", "bert", flag, "some-path"])
+
+
+@pytest.mark.lightweight
+def test_political_labels_match_the_style_dataset():
+    dataset = Dataset.from_dict(
+        {"text": ["a", "b"], "label": ["democratic", "republican"]}
+    )
+
+    encoded = train_classifier._encode_labels(dataset, "thien/political")
+
+    assert encoded["label"] == [1, 0]
+
+
+@pytest.mark.lightweight
+def test_unknown_political_label_is_rejected():
+    dataset = Dataset.from_dict({"text": ["a"], "label": ["green"]})
+
+    with pytest.raises(ValueError, match="Unknown political labels"):
+        train_classifier._encode_labels(dataset, "thien/political")

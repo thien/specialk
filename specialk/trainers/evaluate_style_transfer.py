@@ -296,8 +296,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--dataset", choices=DATASETS, default="political")
     parser.add_argument("--path", type=Path, default=None)
+    parser.add_argument("--eval-path", type=Path, default=None)
     parser.add_argument("--source-column", default=None)
     parser.add_argument("--target-label", type=int, default=1)
+    parser.add_argument(
+        "--eval-label",
+        type=int,
+        default=None,
+        help="only evaluate rows whose reference has this label",
+    )
     parser.add_argument("--mt-checkpoint", type=Path, required=True)
     parser.add_argument("--seq2seq", choices=SEQ2SEQ, default="transformer")
     parser.add_argument("--lora-r", type=int, default=None)
@@ -336,7 +343,10 @@ def main(argv: Sequence[str] | None = None) -> dict:
         target_label=None,
         path=args.path,
         source_column=args.source_column,
+        eval_path=args.eval_path,
     )
+    if args.eval_label is not None:
+        evaluation = evaluation.filter(lambda row: row["label"] == args.eval_label)
     if args.limit:
         evaluation = evaluation.select(range(min(args.limit, len(evaluation))))
     sources = list(evaluation["source"])
@@ -386,6 +396,7 @@ def main(argv: Sequence[str] | None = None) -> dict:
         "dataset": args.dataset,
         "rows": len(sources),
         "target_label": args.target_label,
+        "eval_label": args.eval_label,
         "mt_checkpoint": str(args.mt_checkpoint),
         "style_checkpoint": str(args.style_checkpoint)
         if args.style_checkpoint

@@ -12,9 +12,15 @@ from pathlib import Path
 from typing import Optional, Tuple, Union
 
 import pandas as pd
-from datasets import Dataset, DatasetDict, concatenate_datasets, load_dataset
 from torch.utils.data import DataLoader
 
+from datasets import (
+    Dataset,
+    DatasetDict,
+    Value,
+    concatenate_datasets,
+    load_dataset,
+)
 from specialk.core.constants import PROJECT_DIR, SEED, SOURCE, TARGET
 from specialk.core.utils import log
 from specialk.models.tokenizer import (
@@ -38,7 +44,17 @@ MT_DATASET_SOURCES = (
     "thien/globalvoices",
 )
 MT_VALIDATION_DATASET = "wmt/wmt15"
+POLITICAL_DATASET = "thien/political"
 PUBLICATIONS_DATASET = "thien/publications"
+
+# name -> (Hub dataset, config, default French column)
+STYLE_DATASETS = {
+    "political": (POLITICAL_DATASET, "style", "text_fr"),
+    "publications": (PUBLICATIONS_DATASET, None, "fr_text"),
+}
+# The plan's class order. ``class_encode_column`` sorts alphabetically, which
+# would make democratic 0 and republican 1, so political is mapped explicitly.
+POLITICAL_LABELS = {"republican": 0, "democratic": 1}
 
 DATASET_DIR = PROJECT_DIR / "datasets" / "machine_translation" / "parquets"
 CACHE_DIR = PROJECT_DIR / "cache" / "datasets"
@@ -59,8 +75,7 @@ def _single_split(dataset: Union[Dataset, DatasetDict], *names: str) -> Dataset:
         if name in dataset:
             return dataset[name]
     raise ValueError(
-        f"Dataset has no split from {names!r}; available splits: "
-        f"{list(dataset.keys())}"
+        f"Dataset has no split from {names!r}; available splits: {list(dataset.keys())}"
     )
 
 
@@ -116,6 +131,95 @@ def load_publications_datasets(num_proc: int = 8) -> Tuple[Dataset, Dataset]:
         restructure(_single_split(ds, "train")),
         restructure(_single_split(ds, "eval", "validation", "valid", "test")),
     )
+
+
+def _is_string_column(dataset: Dataset, column: str) -> bool:
+    feature = dataset.features[column]
+    return isinstance(feature, Value) and feature.dtype == "string"
+
+
+def _encode_style_labels(dataset: Dataset, name: str) -> Dataset:
+    """Turn string labels into integer classes."""
+    if not _is_string_column(dataset, "label"):
+        return dataset
+    if name == "publications":
+        return dataset.class_encode_column("label")
+
+    unknown = sorted(set(dataset.unique("label")) - set(POLITICAL_LABELS))
+    if unknown:
+        raise ValueError(
+            f"Unknown political labels {unknown}; expected one of "
+            f"{sorted(POLITICAL_LABELS)}"
+        )
+    dataset = dataset.map(
+        lambda batch: {"label": [POLITICAL_LABELS[label] for label in batch["label"]]},
+        batched=True,
+    )
+    return dataset.cast_column("label", Value("int64"))
+
+
+def _prepare_style_split(dataset: Dataset, name: str, source_column: str) -> Dataset:
+    missing = {source_column, "text", "label"} - set(dataset.column_names)
+    if missing:
+        raise ValueError(
+            f"Style dataset {name!r} is missing column(s) {sorted(missing)}; "
+            f"available columns: {dataset.column_names}"
+        )
+    dataset = dataset.rename_column(source_column, SOURCE).rename_column("text", TARGET)
+    # Drop id, raw_text, filename, split, publication and any other leftovers.
+    dataset = dataset.select_columns([SOURCE, TARGET, "label"])
+    return _encode_style_labels(dataset, name)
+
+
+def load_style_datasets(
+    name: str,
+    target_label: Optional[int] = None,
+    num_proc: int = 8,
+    path: Optional[Union[str, Path]] = None,
+    source_column: Optional[str] = None,
+) -> Tuple[Dataset, Dataset]:
+    """Load a labelled style corpus as ``(train, eval)``.
+
+    ``name`` is ``"political"`` or ``"publications"``. The French column is
+    renamed to SOURCE and ``text`` to TARGET; every other column is dropped, so
+    only SOURCE, TARGET and ``label`` survive.
+
+    ``source_column`` overrides the French column name. The Hub's political
+    ``style`` config has no French column, so callers have to name the one they
+    mean; the defaults are ``text_fr`` for political (the original local data)
+    and ``fr_text`` for publications.
+
+    ``path`` loads a local parquet instead of the Hub. A local file usually
+    holds one split, which is returned as both train and eval. A file with an
+    eval/validation/test split gives two different ones.
+    """
+    try:
+        hub_name, config, default_source = STYLE_DATASETS[name]
+    except KeyError:
+        raise ValueError(
+            f"Unknown style dataset {name!r}; expected one of {sorted(STYLE_DATASETS)}"
+        ) from None
+    source_column = source_column or default_source
+
+    if path is not None:
+        loaded = load_dataset("parquet", data_files=str(path))
+    else:
+        loaded = load_dataset(hub_name, config, num_proc=num_proc, keep_in_memory=True)
+
+    train = _prepare_style_split(_single_split(loaded, "train"), name, source_column)
+    try:
+        eval_split = _single_split(loaded, "eval", "validation", "valid", "test")
+    except ValueError:
+        # A single-split local file is its own evaluation set.
+        eval_split = train
+    else:
+        eval_split = _prepare_style_split(eval_split, name, source_column)
+
+    if target_label is not None:
+        train = train.filter(lambda row: row["label"] == target_label)
+        eval_split = eval_split.filter(lambda row: row["label"] == target_label)
+
+    return train, eval_split
 
 
 def cache_filename(

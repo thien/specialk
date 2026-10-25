@@ -1,7 +1,9 @@
+from pathlib import Path
+
 import pandas as pd
 import pytest
-from datasets import Dataset, DatasetDict
 
+from datasets import Dataset, DatasetDict
 from specialk.core.constants import SOURCE, TARGET
 from specialk.trainers import common
 from specialk.trainers.common import (
@@ -9,6 +11,11 @@ from specialk.trainers.common import (
     _strip_index_column,
     cache_filename,
     invert_df_columns,
+    load_style_datasets,
+)
+
+STYLE_FIXTURE = (
+    Path(__file__).parents[1] / "test_files" / "datasets" / "en_fr_labels.parquet"
 )
 
 
@@ -89,9 +96,7 @@ def test_cache_filename_distinguishes_same_named_paths():
 
 @pytest.mark.lightweight
 def test_load_publications_datasets_normalises_columns(monkeypatch):
-    train = Dataset.from_dict(
-        {"fr_text": ["bonjour"], "text": ["hello"], "label": [1]}
-    )
+    train = Dataset.from_dict({"fr_text": ["bonjour"], "text": ["hello"], "label": [1]})
     valid = Dataset.from_dict({"fr_text": ["salut"], "text": ["hi"], "label": [0]})
 
     monkeypatch.setattr(
@@ -106,3 +111,49 @@ def test_load_publications_datasets_normalises_columns(monkeypatch):
     assert set(valid_dataset.column_names) == {SOURCE, TARGET, "label"}
     assert train_dataset[0][SOURCE] == "bonjour"
     assert train_dataset[0][TARGET] == "hello"
+
+
+@pytest.mark.lightweight
+def test_load_style_datasets_renames_and_encodes_the_fixture():
+    train, eval_split = load_style_datasets(
+        "political", path=STYLE_FIXTURE, source_column="text_fr", num_proc=1
+    )
+
+    assert train.column_names == [SOURCE, TARGET, "label"]
+    assert eval_split.column_names == [SOURCE, TARGET, "label"]
+    # The fixture has a single split, so it serves as train and eval.
+    assert train.num_rows == eval_split.num_rows == 10
+    assert train[0][SOURCE].startswith("Merci")
+    assert train[0][TARGET].startswith("thank you")
+    assert train.features["label"].dtype == "int64"
+    # political: republican=0, democratic=1
+    assert train[0]["label"] == 1
+
+
+@pytest.mark.lightweight
+def test_load_style_datasets_filters_by_target_label():
+    democratic, _ = load_style_datasets(
+        "political", target_label=1, path=STYLE_FIXTURE, source_column="text_fr"
+    )
+    republican, _ = load_style_datasets(
+        "political", target_label=0, path=STYLE_FIXTURE, source_column="text_fr"
+    )
+
+    assert democratic.num_rows == 10
+    assert set(democratic["label"]) == {1}
+    assert republican.num_rows == 0
+
+
+@pytest.mark.lightweight
+def test_load_style_datasets_class_encodes_publication_labels():
+    train, _ = load_style_datasets(
+        "publications", path=STYLE_FIXTURE, source_column="text_fr"
+    )
+
+    assert train.features["label"].dtype == "int64"
+
+
+@pytest.mark.lightweight
+def test_load_style_datasets_rejects_missing_source_column():
+    with pytest.raises(ValueError, match="available columns"):
+        load_style_datasets("political", path=STYLE_FIXTURE, source_column="text_de")

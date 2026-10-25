@@ -243,6 +243,8 @@ def train(args: argparse.Namespace) -> pl.Trainer:
         tokenizer=tokenizer.__class__.__name__,
         sequence_length=sequence_length,
         vocabulary_size=mt_model.vocabulary_size,
+        use_mapping=task.use_mapping,
+        mapping_coverage=getattr(task, "mapping_coverage", None),
     )
 
     params = {
@@ -259,6 +261,8 @@ def train(args: argparse.Namespace) -> pl.Trainer:
         "tau_end": args.tau_end,
         "learning_rate": args.learning_rate,
         "max_epochs": args.max_epochs,
+        "use_mapping": task.use_mapping,
+        "mapping_coverage": getattr(task, "mapping_coverage", None),
     }
     logger = init_logger(
         args, f"style_decoder/{args.dataset}_{args.target_label}", params

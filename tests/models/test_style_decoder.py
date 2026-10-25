@@ -83,6 +83,7 @@ def make_seq2seq(tokenizer: SentencePieceVocabulary) -> PyTorchTransformerModule
         n_heads=2,
         num_encoder_layers=1,
         num_decoder_layers=1,
+        tokenizer=tokenizer,
     )
 
 
@@ -228,7 +229,10 @@ def test_bert_fit_with_validation(bert_style_module, train_dataloader, val_datal
 
     assert math.isfinite(metrics["eval_loss"])
     assert 0.0 <= metrics["eval_style_acc"] <= 1.0
-    assert bert_style_module.use_mapping is True
+    # BERT uses a fixed token map rather than a trainable projection.
+    assert bert_style_module.use_mapping is False
+    assert bert_style_module.token_map.requires_grad is False
+    assert 0.0 <= bert_style_module.mapping_coverage <= 1.0
 
 
 @pytest.mark.lightweight
@@ -344,7 +348,7 @@ def test_bert_mask(bert_style_module, train_dataloader, monkeypatch):
     monkeypatch.setattr(module.classifier.model, "forward", forward)
 
     soft = torch.softmax(
-        torch.randn(x.size(0), y.size(1), module.clf_projection.out_features),
+        torch.randn(x.size(0), y.size(1), module._classifier_vocabulary_size()),
         dim=-1,
     )
     module.eval()
@@ -354,6 +358,36 @@ def test_bert_mask(bert_style_module, train_dataloader, monkeypatch):
     assert logits.shape == (x.size(0), 2)
     assert captured["attention_mask"] is not None
     assert torch.equal(captured["attention_mask"].bool(), y.ne(module.seq_pad))
+
+
+@pytest.mark.heavyweight
+def test_bert_token_map_is_fixed(bert_style_module, train_dataloader):
+    module = bert_style_module
+    assert "token_map" not in dict(module.named_parameters())
+    assert isinstance(module.token_map, Tensor)
+    assert module.token_map.dtype == torch.long
+
+    optimizer = module.configure_optimizers()
+    optimizer_ids = {
+        id(param) for group in optimizer.param_groups for param in group["params"]
+    }
+    assert id(module.token_map) not in optimizer_ids
+    assert module.seq_projection is None
+    assert module.clf_projection is None
+
+    x, y, _ = module._batch_tensors(next(iter(train_dataloader)))
+    with torch.no_grad():
+        soft = torch.softmax(torch.randn(x.size(0), y.size(1), module.sequence_model.vocabulary_size), dim=-1)
+        mapped = module._map(soft)
+
+    assert mapped.shape == (
+        x.size(0),
+        y.size(1),
+        module._classifier_vocabulary_size(),
+    )
+    assert torch.allclose(
+        mapped.sum(-1), torch.ones_like(mapped.sum(-1)), atol=1e-5
+    )
 
 
 @pytest.mark.lightweight
@@ -475,7 +509,7 @@ def test_bert_forward_with_class(bert_style_module, train_dataloader):
     with torch.no_grad():
         seq_logits, clf_out = module._forward(x, y)
 
-    assert module.use_mapping is True
+    assert module.use_mapping is False
     assert seq_logits.shape[-1] == module.sequence_model.vocabulary_size
     assert clf_out.shape == (x.size(0), 2)
 

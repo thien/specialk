@@ -1,10 +1,8 @@
 """Measure style transfer on generated translations.
 
-Training logs an accuracy on teacher-forced targets, which says how well the
-decoder fits its training text, not how its own output reads. This entry point
-generates translations from French sources, runs the frozen classifier on the
-generated English, and reports style accuracy and BLEU for the base checkpoint
-and the style-tuned one.
+Training logs teacher-forced accuracy, which says how well the decoder fits its
+training text, not how its own output reads. This generates translations,
+classifies the English, and reports style accuracy and BLEU.
 
 Example:
     python -m specialk.trainers.evaluate_style_transfer \\
@@ -173,11 +171,7 @@ def corpus_bleu(hypotheses: list[str], references: list[str]) -> float | None:
 
 
 def repetition_stats(texts: list[str]) -> tuple[float, float]:
-    """Return mean token repetition and the share of badly looping rows.
-
-    A token-level ratio near zero means ordinary prose. A ratio above 0.5 means
-    the decoder is repeating itself, which style accuracy alone will not show.
-    """
+    """Mean token repetition and the share of rows repeating more than half."""
     ratios = []
     for text in texts:
         tokens = text.split()

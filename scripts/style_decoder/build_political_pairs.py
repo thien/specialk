@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 """Build French-English political pairs from the local corpus.
 
-``datasets/political_data`` holds the English political sentences and the
-French files that ``scripts/scripts/setup_political_dataset.sh`` produced with
-an en-to-fr model. The English lines start with the party name; the style
-decoder wants that party as an integer label.
+The English lines start with the party name; the French ``.ts`` files are the
+en-to-fr output. The style decoder wants that party as an integer label.
 
 Example:
     python scripts/style_decoder/build_political_pairs.py

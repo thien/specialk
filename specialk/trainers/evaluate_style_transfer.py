@@ -38,9 +38,6 @@ from specialk.trainers.train_style_decoder import (
 SEQ2SEQ = ("transformer", "marian")
 
 
-# ----------------------------------------------------------------------
-# Generation
-# ----------------------------------------------------------------------
 def generate_texts(
     model: Any,
     sources: list[str],
@@ -82,9 +79,6 @@ def generate_texts(
     return generated
 
 
-# ----------------------------------------------------------------------
-# Classification of generated text
-# ----------------------------------------------------------------------
 def classifier_tokenizer(
     args: argparse.Namespace,
     mt_model: Any,
@@ -151,9 +145,6 @@ def classify_texts(
     return probabilities.argmax(dim=-1), probabilities[:, target_label]
 
 
-# ----------------------------------------------------------------------
-# Metrics
-# ----------------------------------------------------------------------
 def style_accuracy(predictions: Tensor, target_label: int) -> float:
     return float((predictions == target_label).float().mean())
 
@@ -236,9 +227,6 @@ def evaluate(
     }
 
 
-# ----------------------------------------------------------------------
-# Loading
-# ----------------------------------------------------------------------
 def load_style_weights(model: Any, checkpoint_path: Path) -> None:
     """Copy the fine-tuned seq2seq weights from a style-decoder checkpoint."""
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
@@ -278,9 +266,6 @@ def styled_model(args: argparse.Namespace) -> Any:
     return model
 
 
-# ----------------------------------------------------------------------
-# CLI
-# ----------------------------------------------------------------------
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(

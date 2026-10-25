@@ -130,3 +130,4 @@ def test_sentencepiece_bos_maps_to_the_classifier_cls():
     assert ids[seq.EOS].item() == 3
     assert ids[seq.UNK].item() == 1
     assert ids[seq.PAD].item() == 0
+

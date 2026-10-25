@@ -207,6 +207,9 @@ def train(args: argparse.Namespace) -> pl.Trainer:
         # one from its tokenizer before the style decoder builds its projections.
         mt_model.vocabulary_size = mt_model.tokenizer.vocab_size
         tokenizer, decoder_tokenizer = marian_tokenizers(mt_model)
+        # The style decoder maps the target distribution, so it needs the
+        # target tokenizer rather than the source one.
+        mt_model.decoder_tokenizer = decoder_tokenizer
         sequence_length = mt_model.sequence_length
     else:
         mt_model = load_seq2seq(args.mt_checkpoint)

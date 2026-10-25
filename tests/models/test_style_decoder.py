@@ -519,7 +519,7 @@ def test_cnn_different_vocab_without_tokenizer_raises(seq2seq):
         sequence_length=SEQUENCE_LENGTH,
     )
 
-    with pytest.raises(ValueError, match="fixed token map"):
+    with pytest.raises(ValueError, match="vocabularies differ"):
         StyleBackTranslationModelWithCNN(seq2seq, classifier)
 
 

@@ -102,6 +102,13 @@ class TextClassifier(pl.LightningModule):
     def criterion(y_hat: Tensor, y: Tensor) -> Tensor:
         return F.binary_cross_entropy(y_hat.squeeze(-1), y.float())
 
+    def calculate_classification_metrics(
+        self, output: Tensor, target: Tensor
+    ) -> float:
+        """Share correct at this classifier's threshold, not always 0.5."""
+        outputs = (output > self.decision_threshold).long()
+        return outputs.eq(target).sum().item() / outputs.size(0)
+
 
 class CNNClassifier(TextClassifier):
     """CNN Text Classifier. Operates on one-hot."""
@@ -116,6 +123,7 @@ class CNNClassifier(TextClassifier):
         optimizer: str = "adam",
         lr_decay: float = 1.0,
         decay_start: int = 0,
+        decision_threshold: float = 0.5,
     ):
         super().__init__(
             name=name,
@@ -124,6 +132,7 @@ class CNNClassifier(TextClassifier):
             tokenizer=tokenizer,
         )
         self.learning_rate = learning_rate
+        self.decision_threshold = decision_threshold
         self.optimizer = optimizer
         self.lr_decay = lr_decay
         self.decay_start = decay_start

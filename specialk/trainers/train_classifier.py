@@ -120,6 +120,7 @@ def get_model(
     lr_decay: float = 1.0,
     decay_start: int = 0,
     embedding_noise: float = 0.0,
+    decision_threshold: float = 0.5,
 ) -> TextClassifier:
     if model_option == "cnn":
         task = CNNClassifier(
@@ -132,6 +133,7 @@ def get_model(
             optimizer=optimizer,
             lr_decay=lr_decay,
             decay_start=decay_start,
+            decision_threshold=decision_threshold,
         )
     elif model_option == "bert":
         peft_config = LoraConfig(
@@ -306,6 +308,8 @@ def main_new(args):
             sequence_length = tokenizer.max_length
         elif args.tokenizer_path:
             tokenizer = WordVocabulary.from_file(args.tokenizer_path)
+            if args.max_seq_len:
+                tokenizer.max_length = args.max_seq_len
             sequence_length = tokenizer.max_length
         elif args.mt_checkpoint:
             if args.seq2seq == "marian":
@@ -337,6 +341,7 @@ def main_new(args):
         lr_decay=args.lr_decay,
         decay_start=args.decay_start,
         embedding_noise=args.embedding_noise,
+        decision_threshold=args.decision_threshold,
     )
 
     log.info("Loaded tokenizer", tokenizer=tokenizer)
@@ -406,6 +411,7 @@ def main_new(args):
         "lr_decay": args.lr_decay,
         "decay_start": args.decay_start,
         "embedding_noise": args.embedding_noise,
+        "decision_threshold": args.decision_threshold,
         "max_epochs": args.epochs,
         "resume_from": str(resume_from) if resume_from else None,
     }
@@ -521,6 +527,12 @@ def get_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         choices=["adam", "sgd"],
         default="adam",
         help="optimizer for the CNN",
+    )
+    parser.add_argument(
+        "--decision-threshold",
+        type=float,
+        default=0.5,
+        help="sigmoid threshold for the CNN's accuracy and style predictions",
     )
     parser.add_argument(
         "--embedding-noise",

@@ -153,6 +153,10 @@ def load_classifier(
                 f"{checkpoint_path} has no hyperparameters; pass "
                 "--classifier-tokenizer with the vocabulary it was trained on"
             )
+        if tokenizer is not None and hparams.get("sequence_length"):
+            # The vocabulary file records its own window; the classifier may
+            # have been trained with a longer one.
+            tokenizer.max_length = hparams["sequence_length"]
         model = CNNClassifier(
             name=hparams.get("name", Path(checkpoint_path).stem),
             vocabulary_size=hparams.get("vocabulary_size") or tokenizer.vocab_size,
@@ -162,6 +166,7 @@ def load_classifier(
             optimizer=hparams.get("optimizer", "adam"),
             lr_decay=hparams.get("lr_decay", 1.0),
             decay_start=hparams.get("decay_start", 0),
+            decision_threshold=hparams.get("decision_threshold", 0.5),
         )
         model.load_state_dict(checkpoint["state_dict"])
         return model
@@ -229,6 +234,8 @@ def train(args: argparse.Namespace) -> pl.Trainer:
     classifier = load_classifier(
         args.classifier, args.classifier_checkpoint, args.classifier_tokenizer
     )
+    if args.classifier_threshold is not None:
+        classifier.decision_threshold = args.classifier_threshold
 
     dataset_label = (
         args.dataset_label if args.dataset_label is not None else args.target_label
@@ -308,6 +315,7 @@ def train(args: argparse.Namespace) -> pl.Trainer:
         "mt_checkpoint": str(args.mt_checkpoint),
         "classifier_checkpoint": str(args.classifier_checkpoint),
         "classifier": args.classifier,
+        "classifier_threshold": args.classifier_threshold,
         "classifier_tokenizer": str(args.classifier_tokenizer)
         if args.classifier_tokenizer
         else None,
@@ -402,6 +410,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="trained style classifier checkpoint",
     )
     parser.add_argument("--classifier", choices=CLASSIFIERS, default="cnn")
+    parser.add_argument(
+        "--classifier-threshold",
+        type=float,
+        default=None,
+        help="override the CNN's sigmoid decision threshold",
+    )
     parser.add_argument(
         "--classifier-tokenizer",
         type=Path,

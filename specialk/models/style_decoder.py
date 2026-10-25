@@ -360,11 +360,12 @@ class StyleBackTranslationModelWithCNN(StyleBackTranslationModel):
         # A CNN trained on the seq2seq vocabulary needs no mapping. A CNN with
         # another vocabulary needs a tokenizer to build a fixed map; never a
         # trainable one, which could satisfy the classifier without the decoder.
+        seq_tokenizer = mt_model.decoder_tokenizer or mt_model.tokenizer
         if classifier.vocabulary_size != mt_model.vocabulary_size:
             if kwargs.get("use_mapping") is True:
                 # An explicit request for the learned map, used by experiments.
                 pass
-            elif classifier.tokenizer is None or mt_model.tokenizer is None:
+            elif classifier.tokenizer is None or seq_tokenizer is None:
                 raise ValueError(
                     "The classifier and seq2seq vocabularies differ, so they need "
                     "a fixed token map; attach the classifier's tokenizer or pass "
@@ -372,7 +373,7 @@ class StyleBackTranslationModelWithCNN(StyleBackTranslationModel):
                 )
             else:
                 token_map, coverage = build_token_map(
-                    mt_model.tokenizer,
+                    seq_tokenizer,
                     classifier.tokenizer,
                     mt_model.vocabulary_size,
                     classifier.vocabulary_size,
@@ -416,7 +417,8 @@ class StyleBackTranslationModelWithBERT(StyleBackTranslationModel):
         # BERT has its own vocabulary, so the distributions still need
         # translating. The map is fixed: a trained one can raise style accuracy
         # without the decoder improving.
-        if mt_model.tokenizer is None:
+        seq_tokenizer = mt_model.decoder_tokenizer or mt_model.tokenizer
+        if seq_tokenizer is None:
             raise ValueError(
                 "The BERT style decoder needs the seq2seq tokenizer to build a "
                 "fixed token map; load a checkpoint saved with one"
@@ -425,7 +427,7 @@ class StyleBackTranslationModelWithBERT(StyleBackTranslationModel):
             classifier.model.get_input_embeddings().weight.size(0)
         )
         token_map, coverage = build_token_map(
-            mt_model.tokenizer,
+            seq_tokenizer,
             classifier.tokenizer,
             mt_model.vocabulary_size,
             clf_vocab,

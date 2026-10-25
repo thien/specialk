@@ -45,7 +45,7 @@ def _token_strings(tokenizer: Any, size: int) -> list[str] | None:
 
     # HuggingFaceVocabulary keeps the real tokenizer one level down.
     inner = getattr(tokenizer, "tokenizer", None)
-    if inner is not None and hasattr(inner, "convert_ids_to_tokens"):
+    if inner is not None:
         tokenizer = inner
 
     if hasattr(tokenizer, "convert_ids_to_tokens"):

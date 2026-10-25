@@ -392,6 +392,38 @@ def test_bert_token_map_is_fixed(bert_style_module, train_dataloader):
     assert torch.allclose(mapped.sum(-1), torch.ones_like(mapped.sum(-1)), atol=1e-5)
 
 
+@pytest.mark.heavyweight
+def test_bert_prepends_cls_for_word_first_targets(bert_style_module, monkeypatch):
+    module = bert_style_module
+    module.eval()
+    vocab = module._classifier_vocabulary_size()
+    # The transformer target starts with <s>, which maps to [CLS]. A word
+    # first token, as Marian produces, should get a [CLS] prepended.
+    y = torch.full((2, 6), 7, dtype=torch.long)
+    soft = torch.softmax(torch.randn(2, 6, vocab), dim=-1)
+    cls_id = module.classifier.tokenizer.cls_token_id
+    embedding = module.classifier.model.get_input_embeddings().weight
+
+    captured = {}
+    original = module.classifier.model.forward
+
+    def forward(*args, **kwargs):
+        captured["inputs_embeds"] = kwargs.get("inputs_embeds")
+        captured["mask"] = kwargs.get("attention_mask")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(module.classifier.model, "forward", forward)
+    with torch.no_grad():
+        logits = module._classify(soft, y)
+
+    assert captured["inputs_embeds"].shape == (2, 7, embedding.size(1))
+    assert torch.allclose(
+        captured["inputs_embeds"][:, 0], embedding[cls_id].expand(2, -1)
+    )
+    assert captured["mask"][:, 0].eq(1).all()
+    assert logits.shape == (2, 2)
+
+
 @pytest.mark.lightweight
 def test_cnn_length_pad_truncate(cnn_style_module, monkeypatch):
     module = cnn_style_module

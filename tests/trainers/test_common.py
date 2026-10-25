@@ -121,7 +121,7 @@ def test_load_style_datasets_renames_and_encodes_the_fixture():
 
     assert train.column_names == [SOURCE, TARGET, "label"]
     assert eval_split.column_names == [SOURCE, TARGET, "label"]
-    # The fixture has a single split, so it serves as train and eval.
+    # The fixture has one split, which is both train and eval.
     assert train.num_rows == eval_split.num_rows == 10
     assert train[0][SOURCE].startswith("Merci")
     assert train[0][TARGET].startswith("thank you")

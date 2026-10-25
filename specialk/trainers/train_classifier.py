@@ -41,7 +41,7 @@ from specialk.models.tokenizer import (
     Vocabulary,
     WordVocabulary,
 )
-from specialk.trainers.common import _single_split
+from specialk.trainers.common import POLITICAL_LABELS, _single_split
 from specialk.trainers.train import _int_or_float
 from specialk.trainers.train_style_decoder import load_seq2seq
 
@@ -149,12 +149,31 @@ def get_model(
     return task
 
 
-def _encode_labels(dataset: Dataset) -> Dataset:
-    """Turn string labels into integer classes; leave integer labels alone."""
+def _encode_labels(dataset: Dataset, name: str | None = None) -> Dataset:
+    """Turn string labels into integer classes; leave integer labels alone.
+
+    The political dataset has to agree with ``load_style_datasets``: the plan
+    puts republican at 0 and democratic at 1, while ``class_encode_column``
+    would sort them the other way.
+    """
     feature = dataset.features["label"]
-    if isinstance(feature, Value) and feature.dtype == "string":
-        return dataset.class_encode_column("label")
-    return dataset
+    if not (isinstance(feature, Value) and feature.dtype == "string"):
+        return dataset
+    if name == "thien/political":
+        unknown = sorted(set(dataset.unique("label")) - set(POLITICAL_LABELS))
+        if unknown:
+            raise ValueError(
+                f"Unknown political labels {unknown}; expected one of "
+                f"{sorted(POLITICAL_LABELS)}"
+            )
+        dataset = dataset.map(
+            lambda batch: {
+                "label": [POLITICAL_LABELS[label] for label in batch["label"]]
+            },
+            batched=True,
+        )
+        return dataset.cast_column("label", Value("int64"))
+    return dataset.class_encode_column("label")
 
 
 def _read_labeled_text(path: Path, positive_label: str) -> Dataset:
@@ -314,9 +333,12 @@ def main_new(args):
         else:
             # publications uses the default config, political the ``classifier`` one.
             dataset = load_dataset(args.dataset_name, args.config)
-            train_dataset = _encode_labels(_single_split(dataset, "train"))
+            train_dataset = _encode_labels(
+                _single_split(dataset, "train"), args.dataset_name
+            )
             val_dataset = _encode_labels(
-                _single_split(dataset, "eval", "validation", "valid", "test")
+                _single_split(dataset, "eval", "validation", "valid", "test"),
+                args.dataset_name,
             )
             dataset_name = args.dataset_name
 

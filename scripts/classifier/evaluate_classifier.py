@@ -108,7 +108,10 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     checkpoints = (
-        sorted(args.checkpoint.glob("epoch=*.ckpt"))
+        sorted(
+            args.checkpoint.glob("epoch=*.ckpt"),
+            key=lambda path: int(path.stem.split("-")[0].split("=")[1]),
+        )
         if args.checkpoint.is_dir()
         else [args.checkpoint]
     )

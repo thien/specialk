@@ -298,7 +298,9 @@ def main(argv: Sequence[str] | None = None) -> dict:
     references = list(evaluation["target"])
     log.info("Loaded the evaluation set", rows=len(sources))
 
-    classifier = load_classifier(args.classifier, args.classifier_checkpoint)
+    classifier = load_classifier(
+        args.classifier, args.classifier_checkpoint, args.classifier_tokenizer
+    )
     classifier.to(device).eval()
 
     model = base_model(args).to(device).eval()

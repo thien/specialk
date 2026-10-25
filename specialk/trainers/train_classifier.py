@@ -489,9 +489,9 @@ def get_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--positive-label",
-        choices=["democratic", "republican"],
+        type=str,
         default="democratic",
-        help="label that the sigmoid output should predict",
+        help="label that the sigmoid output should predict, e.g. democratic or popular",
     )
     parser.add_argument(
         "--optimizer",

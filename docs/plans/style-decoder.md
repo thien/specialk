@@ -202,3 +202,11 @@ def load_style_datasets(name: str, target_label: Optional[int] = None,
 **Unconfirmed:**
 - The column name and config of the French text in political. It isn't in `style` on HF, so step 2 takes the column name as a parameter.
 - Whether `ConvNet`'s final layer outputs one value or two. The binary cross-entropy path assumes one.
+
+---
+
+## Follow-up: fixed maps and generated-text evaluation
+
+- The BERT and CNN paths translate vocabularies through a deterministic surface-form token map. The trainable projection remains only when a caller asks for it explicitly.
+- `specialk.trainers.evaluate_style_transfer` generates translations from French sources, classifies the generated English, and reports style accuracy and BLEU for the base and style-tuned checkpoints.
+- The French political sources are the `.ts` files that `scripts/scripts/setup_political_dataset.sh` produced beside the `.en` files.

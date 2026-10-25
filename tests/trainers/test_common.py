@@ -157,3 +157,27 @@ def test_load_style_datasets_class_encodes_publication_labels():
 def test_load_style_datasets_rejects_missing_source_column():
     with pytest.raises(ValueError, match="available columns"):
         load_style_datasets("political", path=STYLE_FIXTURE, source_column="text_de")
+
+
+@pytest.mark.lightweight
+def test_load_style_datasets_reads_a_separate_eval_file(tmp_path):
+    columns = {"text_fr": ["bonjour"], "text": ["hello"], "label": [1]}
+    train_path = tmp_path / "train.parquet"
+    eval_path = tmp_path / "dev.parquet"
+    pd.DataFrame(columns).to_parquet(train_path, index=False)
+    pd.DataFrame({"text_fr": ["salut"], "text": ["hi"], "label": [0]}).to_parquet(
+        eval_path, index=False
+    )
+
+    train, eval_split = load_style_datasets(
+        "political",
+        path=train_path,
+        eval_path=eval_path,
+        source_column="text_fr",
+    )
+
+    assert train.num_rows == 1
+    assert eval_split.num_rows == 1
+    assert train[0][SOURCE] == "bonjour"
+    assert eval_split[0][SOURCE] == "salut"
+    assert eval_split[0]["label"] == 0

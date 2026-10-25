@@ -263,14 +263,8 @@ class BERTClassifier(TextClassifier):
         vocabulary_size: Optional[int] = None,
         sequence_length: Optional[int] = None,
         tokenizer: Optional[Vocabulary] = None,
-        embedding_noise: float = 0.0,
     ):
-        """Uses Huggingface based BERT models.
-
-        ``embedding_noise`` perturbs the token embeddings during training. The
-        style decoder feeds expected embeddings rather than token ids, so this
-        makes the classifier less sensitive to mixtures it never saw.
-        """
+        """Uses Huggingface based BERT models."""
         if tokenizer:
             log.warn(
                 "You don't need to set a tokenizer, we're using HuggingFace's pre-trained models."
@@ -287,7 +281,6 @@ class BERTClassifier(TextClassifier):
             tokenizer=tokenizer,
         )
         self.model_base_name = model_base_name
-        self.embedding_noise = embedding_noise
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_base_name)
         self._load_base_model()
 
@@ -337,15 +330,7 @@ class BERTClassifier(TextClassifier):
         batch_size, _ = x.size()
 
         x_mask = x != self.tokenizer.pad_token_id
-        if self.embedding_noise > 0:
-            embeddings = self.model.get_input_embeddings()(x)
-            scale = embeddings.detach().std() * self.embedding_noise
-            embeddings = embeddings + torch.randn_like(embeddings) * scale
-            y_hat = self.model(
-                inputs_embeds=embeddings, attention_mask=x_mask, labels=y
-            )
-        else:
-            y_hat = self.model(x, attention_mask=x_mask, labels=y)
+        y_hat = self.model(x, attention_mask=x_mask, labels=y)
 
         loss: torch.Tensor = y_hat.loss
         accuracy = self.calculate_classification_metrics(y_hat.logits, y)

@@ -1,10 +1,9 @@
-import lightning.pytorch as pl
 import pytest
 import torch
 from peft import LoraConfig
 from peft.utils.peft_types import TaskType
 
-from specialk.core.utils import check_torch_device, log
+from specialk.core.utils import log
 from specialk.models.classifier.models import BERTClassifier
 from tests.models.fixtures import dataset  # noqa: F401; noqa: F402
 from tests.models.fixtures import hf_bert_dataloader  # noqa: F401; noqa: F402
@@ -123,21 +122,3 @@ def test_model_inference_peft_distilbert(
     y_hat = model.model(x, attention_mask=x_mask, labels=y)
     log.info(y_hat)
     output = y_hat.logits
-
-
-@pytest.mark.heavyweight
-def test_training_step_with_embedding_noise(
-    hf_distilbert_dataloader, pretrained_peft_distilbert
-):  # noqa: F811
-    model = pretrained_peft_distilbert
-    model.embedding_noise = 0.1
-    trainer = pl.Trainer(
-        max_epochs=1,
-        limit_train_batches=1,
-        logger=False,
-        enable_checkpointing=False,
-        enable_progress_bar=False,
-        accelerator=check_torch_device(),
-    )
-
-    trainer.fit(model, train_dataloaders=hf_distilbert_dataloader)

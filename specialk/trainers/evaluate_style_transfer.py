@@ -32,7 +32,6 @@ from specialk.models.tokenizer import Vocabulary, WordVocabulary
 from specialk.trainers.common import load_style_datasets
 from specialk.trainers.train_style_decoder import (
     DATASETS,
-    MarianTargetVocabulary,
     load_classifier,
     load_marian,
     load_seq2seq,
@@ -100,13 +99,6 @@ def classifier_tokenizer(
         return classifier.tokenizer
     if args.classifier_tokenizer is not None:
         return WordVocabulary.from_file(args.classifier_tokenizer)
-
-    if args.seq2seq == "marian":
-        return MarianTargetVocabulary(
-            name=mt_model.name,
-            pretrained_model_name_or_path=mt_model.model_base_name,
-            max_length=classifier.sequence_length,
-        )
 
     tokenizer = mt_model.tokenizer
     if tokenizer.vocab_size != classifier.vocabulary_size:

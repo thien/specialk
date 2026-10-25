@@ -43,11 +43,7 @@ from specialk.models.tokenizer import (
 )
 from specialk.trainers.common import POLITICAL_LABELS, _single_split
 from specialk.trainers.train import _int_or_float
-from specialk.trainers.train_style_decoder import (
-    MarianTargetVocabulary,
-    load_marian,
-    load_seq2seq,
-)
+from specialk.trainers.train_style_decoder import load_seq2seq
 
 DEVICE: str = check_torch_device()
 BERT_BASE_NAME = "distilbert/distilbert-base-cased"
@@ -119,7 +115,6 @@ def get_model(
     optimizer: str = "adam",
     lr_decay: float = 1.0,
     decay_start: int = 0,
-    embedding_noise: float = 0.0,
     decision_threshold: float = 0.5,
 ) -> TextClassifier:
     if model_option == "cnn":
@@ -149,7 +144,6 @@ def get_model(
             name=name,
             model_base_name=BERT_BASE_NAME,
             peft_config=peft_config,
-            embedding_noise=embedding_noise,
         )
     else:
         raise Exception("Model not chosen")
@@ -312,20 +306,11 @@ def main_new(args):
                 tokenizer.max_length = args.max_seq_len
             sequence_length = tokenizer.max_length
         elif args.mt_checkpoint:
-            if args.seq2seq == "marian":
-                mt_model = load_marian(args.mt_checkpoint, None)
-                tokenizer = MarianTargetVocabulary(
-                    name=mt_model.name,
-                    pretrained_model_name_or_path=mt_model.model_base_name,
-                    max_length=args.max_seq_len or 100,
-                )
-                sequence_length = tokenizer.max_length
-            else:
-                mt_model = load_seq2seq(args.mt_checkpoint)
-                tokenizer, sequence_length = (
-                    mt_model.tokenizer,
-                    mt_model.sequence_length,
-                )
+            mt_model = load_seq2seq(args.mt_checkpoint)
+            tokenizer, sequence_length = (
+                mt_model.tokenizer,
+                mt_model.sequence_length,
+            )
         else:
             tokenizer = get_tokenizer(args.tokenizer, args.max_seq_len or 72)
             sequence_length = tokenizer.max_length
@@ -340,7 +325,6 @@ def main_new(args):
         optimizer=args.optimizer,
         lr_decay=args.lr_decay,
         decay_start=args.decay_start,
-        embedding_noise=args.embedding_noise,
         decision_threshold=args.decision_threshold,
     )
 
@@ -404,13 +388,11 @@ def main_new(args):
         "tokenizer_path": str(args.tokenizer_path or args.mt_checkpoint)
         if args.tokenizer_path or args.mt_checkpoint
         else None,
-        "seq2seq": args.seq2seq,
         "tokenized_path": str(args.tokenized_path) if args.tokenized_path else None,
         "optimizer": args.optimizer,
         "learning_rate": args.lr,
         "lr_decay": args.lr_decay,
         "decay_start": args.decay_start,
-        "embedding_noise": args.embedding_noise,
         "decision_threshold": args.decision_threshold,
         "max_epochs": args.epochs,
         "resume_from": str(resume_from) if resume_from else None,
@@ -487,12 +469,6 @@ def get_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="seq2seq checkpoint whose tokenizer and sequence length the CNN shares",
     )
     parser.add_argument(
-        "--seq2seq",
-        choices=["transformer", "marian"],
-        default="transformer",
-        help="kind of checkpoint --mt-checkpoint points at",
-    )
-    parser.add_argument(
         "--tokenizer-path",
         type=Path,
         default=None,
@@ -533,15 +509,6 @@ def get_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=float,
         default=0.5,
         help="sigmoid threshold for the CNN's accuracy and style predictions",
-    )
-    parser.add_argument(
-        "--embedding-noise",
-        type=float,
-        default=0.0,
-        help=(
-            "relative Gaussian noise on BERT token embeddings during training; "
-            "the style decoder feeds expected embeddings rather than token ids"
-        ),
     )
     parser.add_argument(
         "--lr-decay",

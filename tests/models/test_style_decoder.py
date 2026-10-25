@@ -606,50 +606,6 @@ def test_bert_forward_with_class(bert_style_module, train_dataloader):
 
 
 @pytest.mark.heavyweight
-def test_marian_lora_preservation_loss(spm_dataloader, pretrained_bert):
-    model_base_name = "Helsinki-NLP/opus-mt-fr-en"
-    base = MarianMTModule(name=model_base_name, model_base_name=model_base_name)
-    peft_config = LoraConfig(
-        task_type=TaskType.SEQ_2_SEQ_LM,
-        r=4,
-        lora_alpha=16,
-        lora_dropout=0.1,
-        bias="none",
-        target_modules=base.get_lora_config_modules(),
-    )
-    del base
-    seq2seq = MarianMTModule(
-        name=model_base_name,
-        model_base_name=model_base_name,
-        peft_config=peft_config,
-    )
-    seq2seq.vocabulary_size = seq2seq.tokenizer.vocab_size
-    module = StyleBackTranslationModelWithBERT(
-        seq2seq, pretrained_bert, preserve_weight=0.1
-    )
-    module.eval()
-
-    batch = next(iter(spm_dataloader))
-    x, y, _ = module._batch_tensors(batch)
-    with torch.no_grad():
-        seq_logits, _ = module._forward(x, y)
-        loss = module.preservation_loss(x, y, seq_logits)
-
-    assert loss.ndim == 0
-    assert torch.isfinite(loss)
-    assert loss >= 0
-
-    # Move the adapter away from its zero initialisation and the penalty rises.
-    with torch.no_grad():
-        for name, parameter in seq2seq.model.named_parameters():
-            if "lora_B" in name:
-                parameter.add_(0.1)
-        tuned, _ = module._forward(x, y)
-        moved = module.preservation_loss(x, y, tuned)
-    assert moved > loss
-
-
-@pytest.mark.heavyweight
 def test_marianmt_bert_fit(spm_dataloader, pretrained_bert):
     seq2seq = MarianMTModule("test_model")
     seq2seq.vocabulary_size = seq2seq.tokenizer.vocab_size

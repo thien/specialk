@@ -452,9 +452,26 @@ class StyleBackTranslationModelWithBERT(StyleBackTranslationModel):
     ) -> Float[Tensor, "batch 2"]:
         # soft is a distribution over the classifier's vocabulary, so its
         # matrix product with the embedding table is the expected embedding.
-        embeddings = soft @ self.classifier.model.get_input_embeddings().weight
+        embedding = self.classifier.model.get_input_embeddings().weight
+        embeddings = soft @ embedding
+        mask = self._sequence_mask(y)
+
+        # BERT was trained with [CLS] at position 0 and pools that position.
+        # The transformer's target starts with <s>, which maps to [CLS], but
+        # Marian's target starts with the first word.
+        cls_id = self.classifier.tokenizer.cls_token_id
+        if cls_id is not None and y.size(1) > 0:
+            first = self.token_map[y[:, 0]]
+            if bool((first != cls_id).any()):
+                cls_embedding = embedding[cls_id].expand(embeddings.size(0), 1, -1)
+                embeddings = torch.cat([cls_embedding, embeddings], dim=1)
+                mask = torch.cat([mask.new_ones(mask.size(0), 1), mask], dim=1)
+                limit = self.classifier.sequence_length
+                embeddings = embeddings[:, :limit]
+                mask = mask[:, :limit]
+
         return self.classifier.model(
-            inputs_embeds=embeddings, attention_mask=self._sequence_mask(y)
+            inputs_embeds=embeddings, attention_mask=mask
         ).logits
 
     def classifier_loss(self, clf_out: Tensor, target: Tensor) -> Tensor:
